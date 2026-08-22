@@ -68,6 +68,55 @@ def extract_version_meta(snapshot: dict[str, Any]) -> dict[str, str]:
     }
 
 
+def project_context_for_hash(role_id: str, context: dict[str, Any]) -> dict[str, Any]:
+    """
+    Role-specific projection for cache/incremental hashing.
+    Prevents cross-role field drift (e.g. news timeline) from invalidating quant cache.
+    """
+    rid = (role_id or "").lower()
+    if rid == "chairman":
+        return {
+            "role_reports": context.get("role_reports") or context.get("opinions") or {},
+            "evidence_ids": context.get("evidence_ids") or [],
+            "debate": context.get("debate") or [],
+        }
+    keys_by_role: dict[str, tuple[str, ...]] = {
+        "quant": ("symbol", "quant_context", "factor_context", "risk_context", "news_context", "price_in_risk"),
+        "fundamental": (
+            "symbol",
+            "quant_context",
+            "profit_context",
+            "research_hypotheses",
+            "news_context",
+            "risk_context",
+            "price_in_risk",
+        ),
+        "event": (
+            "symbol",
+            "event_context",
+            "research_hypotheses",
+            "news_context",
+            "news_event_context",
+            "price_reaction",
+            "price_in_risk",
+        ),
+        "valuation": ("symbol", "quant_context", "profit_context", "data_availability"),
+        "bear": (
+            "symbol",
+            "quant_context",
+            "risk_context",
+            "price_reaction",
+            "research_hypotheses",
+            "news_context",
+            "price_in_risk",
+        ),
+    }
+    keys = keys_by_role.get(rid)
+    if not keys:
+        return context
+    return {k: context[k] for k in keys if k in context}
+
+
 def compute_context_hash(
     *,
     symbol: str,
@@ -81,6 +130,7 @@ def compute_context_hash(
     as_of: str = "",
     candidate_hash: str = "",
 ) -> str:
+    ctx_for_hash = project_context_for_hash(role_id, context)
     blob = json.dumps(
         {
             "symbol": symbol,
@@ -92,7 +142,7 @@ def compute_context_hash(
             "model_version": model_version,
             "as_of": as_of,
             "candidate_hash": candidate_hash,
-            "context": context,
+            "context": ctx_for_hash,
         },
         sort_keys=True,
         ensure_ascii=False,

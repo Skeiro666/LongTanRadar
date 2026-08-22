@@ -288,7 +288,11 @@ class ChairmanEngine:
             cache_key = compute_context_hash(
                 symbol=str(snapshot.get("symbol") or ""),
                 role_id="chairman",
-                context={"intel": payload.get("research_intelligence"), "opinions": opinion_sig, "debate": debate},
+                context={
+                    "role_reports": opinion_sig,
+                    "evidence_ids": (payload.get("evidence_ids") or [])[:40],
+                    "debate": debate,
+                },
                 prompt_version=ver,
                 model=str(getattr(client, "model", "") or ""),
                 factor_version=factor_version,

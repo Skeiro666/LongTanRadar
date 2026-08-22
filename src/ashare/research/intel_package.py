@@ -337,7 +337,6 @@ def build_chairman_context(
             "missing_roles": [k for k, v in opinions.items() if v.get("status") in {"failed", "unavailable"}],
         }
 
-    max_hy = int(cc["max_hypotheses"])
     slim_opinions = {}
     for rid, op in opinions.items():
         if not isinstance(op, dict):
@@ -347,33 +346,15 @@ def build_chairman_context(
             for k in ("role", "score", "stance", "points", "top_risks", "facts", "status", "source", "falsify")
             if op.get(k) is not None
         }
-    hyps = []
-    for h in intel.get("research_hypotheses") or []:
-        if not isinstance(h, dict):
-            continue
-        hyps.append(
-            {
-                "type": h.get("type"),
-                "layers": h.get("layers"),
-                "evidence_ids": h.get("evidence_ids"),
-            }
-        )
-        if len(hyps) >= max_hy:
-            break
 
     return {
-        "research_intelligence": {
-            "candidate_sources": intel.get("candidate_sources"),
-            "research_hypotheses": hyps,
-            "data_availability": intel.get("data_availability"),
-            "price_in_risk": intel.get("price_in_risk"),
-            "evidence_ids": intel.get("evidence_ids"),
-            "rules": intel.get("rules"),
-            "quant_summary": _slim_quant(intel.get("quant_context"), detail="score_only"),
-        },
-        "opinions": slim_opinions,
-        "debate": debate,
+        "role_reports": slim_opinions,
+        "evidence_ids": intel.get("evidence_ids") or [],
+        "candidate_sources": intel.get("candidate_sources"),
+        "price_in_risk": intel.get("price_in_risk"),
+        "rules": intel.get("rules"),
         "missing_roles": [k for k, v in opinions.items() if v.get("status") in {"failed", "unavailable"}],
+        "debate": debate,
     }
 
 

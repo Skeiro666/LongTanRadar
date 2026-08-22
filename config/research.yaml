@@ -99,3 +99,10 @@ snapshot:
 ab_test:
   quant_only_key: quant_only
   quant_ai_key: quant_plus_ai
+
+role_ablation:
+  enabled: true
+  top_k: 5
+
+model_benchmark:
+  enabled: true

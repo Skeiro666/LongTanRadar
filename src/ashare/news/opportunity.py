@@ -118,8 +118,8 @@ class NewsOpportunityEngine:
                     ev_dict["evidence_id"] = evidence_id
                     ev_dict["symbol"] = ent.symbol
                     hyp_obj = hypo_eng.from_event(ev, news=n)
-                    hyp = hyp_obj.to_dict()
-                    inv_hyp = hyp_obj.to_investment_hypothesis()
+                    hyp = hyp_obj.to_dict(ev)
+                    inv_hyp = hyp_obj.to_investment_hypothesis(ev)
                     news_score = float(ev.impact_score) * max(float(ent.confidence), 0.2)
                     cand = NewsCandidate(
                         symbol=ent.symbol,
@@ -148,6 +148,8 @@ class NewsOpportunityEngine:
                         related_symbols=[ent.symbol],
                         mapping_method=method,
                         status="REJECTED" if method == "llm_inference" else "DISCOVERED",
+                        lifecycle_status="NEW",
+                        lifecycle_reason="fresh_discovery",
                         reject_reason="LOW_CONFIDENCE" if method == "llm_inference" else "",
                     )
                     if method == "llm_inference":

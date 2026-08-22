@@ -38,17 +38,23 @@ class TrackingEngine:
         report: dict[str, Any],
         panel: dict[str, pd.DataFrame],
         benchmark_returns: dict[str, float] | None = None,
+        *,
+        market_benchmark_returns: dict[str, float] | None = None,
+        universe_benchmark_returns: dict[str, float] | None = None,
     ) -> dict[str, Any]:
         sym = to_symbol(report["symbol"])
         sources = list(report.get("candidate_sources") or [])
         base_meta = {
             "research_id": report.get("research_id"),
+            "snapshot_id": report.get("research_id"),
+            "decision_id": report.get("research_id"),
             "symbol": sym,
             "candidate_sources": sources,
             "discovery_sources": sources,
             "source_bucket": _source_bucket(sources),
             "rating": (report.get("chairman") or report.get("decision") or {}).get("rating")
             or (report.get("decision") or {}).get("research_rating"),
+            "signal_time": report.get("research_time") or report.get("as_of"),
         }
         df = panel.get(sym)
         if df is None or df.empty:
@@ -63,30 +69,32 @@ class TrackingEngine:
         entry = float(hist.iloc[-1]["close"])
         fut = df[df["date"] > as_of]
         out_h: dict[str, Any] = {}
-        has_bench = isinstance(benchmark_returns, dict) and bool(benchmark_returns)
+        mkt_map = market_benchmark_returns if market_benchmark_returns is not None else benchmark_returns
+        uni_map = universe_benchmark_returns
         for h in self.horizons:
             if len(fut) < h:
                 out_h[str(h)] = {"status": "pending"}
                 continue
             px = float(fut.iloc[h - 1]["close"])
             ret = px / entry - 1.0
-            # Do not pretend excess alpha when no real benchmark series
-            if has_bench and str(h) in benchmark_returns:
-                bench = float(benchmark_returns[str(h)])
-                out_h[str(h)] = {
-                    "actual_return": ret,
-                    "benchmark_return": bench,
-                    "excess_return": ret - bench,
-                    "hit": ret > 0,
-                }
-            else:
-                out_h[str(h)] = {
-                    "actual_return": ret,
-                    "benchmark_return": None,
-                    "excess_return": None,
-                    "hit": ret > 0,
-                    "note": "no_benchmark_excess_unavailable",
-                }
+            h_key = str(h)
+            mkt_b = float(mkt_map[h_key]) if isinstance(mkt_map, dict) and h_key in mkt_map else None
+            uni_b = float(uni_map[h_key]) if isinstance(uni_map, dict) and h_key in uni_map else None
+            primary_bench = mkt_b if mkt_b is not None else uni_b
+            cell: dict[str, Any] = {
+                "actual_return": ret,
+                "total_return": ret,
+                "market_benchmark_return": mkt_b,
+                "universe_benchmark_return": uni_b,
+                "market_alpha": (ret - mkt_b) if mkt_b is not None else None,
+                "selection_alpha": (ret - uni_b) if uni_b is not None else None,
+                "benchmark_return": primary_bench,
+                "excess_return": (ret - primary_bench) if primary_bench is not None else None,
+                "hit": ret > 0,
+            }
+            if primary_bench is None:
+                cell["note"] = "no_benchmark_excess_unavailable"
+            out_h[h_key] = cell
         return {**base_meta, "horizons": out_h, "status": "ok"}
 
 
@@ -136,7 +144,11 @@ class ReviewEngine:
                 by_tag.setdefault("unknown", []).append(ret)
             for t in tags:
                 by_tag.setdefault(str(t), []).append(ret)
-            ex = cell.get("excess_return")
+            ex = cell.get("selection_alpha")
+            if ex is None:
+                ex = cell.get("market_alpha")
+            if ex is None:
+                ex = cell.get("excess_return")
             if ex is not None:
                 by_bucket_ex.setdefault(bucket, []).append(float(ex))
                 tag_list = tags or ["unknown"]
@@ -175,7 +187,7 @@ class ReviewEngine:
             "rules": [
                 "Attribution is descriptive only — does not change trading weights",
                 "News ≠ BUY; source win-rate is not an auto-trade signal",
-                "Excess uses equal-weight universe at research as_of when benchmark_wired=true",
+                "market_alpha = stock - CSI300; selection_alpha = stock - equal-weight universe",
             ],
         }
 
@@ -186,10 +198,22 @@ class ReviewEngine:
         *,
         horizon: str = "5",
         benchmark_returns: dict[str, float] | None = None,
+        market_benchmark_returns: dict[str, float] | None = None,
+        universe_benchmark_returns: dict[str, float] | None = None,
+        benchmark_snapshot: dict[str, Any] | None = None,
         persist: bool = True,
     ) -> dict[str, Any]:
+        mkt = market_benchmark_returns if market_benchmark_returns is not None else benchmark_returns
+        uni = universe_benchmark_returns
         outcomes = [
-            self.tracking.outcomes_for_report(r, panel, benchmark_returns=benchmark_returns) for r in reports
+            self.tracking.outcomes_for_report(
+                r,
+                panel,
+                benchmark_returns=benchmark_returns,
+                market_benchmark_returns=mkt,
+                universe_benchmark_returns=uni,
+            )
+            for r in reports
         ]
         tracking_cfg = dict(load_yaml_config(self.cfg, "research").get("tracking") or {})
         if tracking_cfg.get("execution_tracking", True) and outcomes:
@@ -205,18 +229,27 @@ class ReviewEngine:
             self.persist_outcomes(outcomes)
         attr = self.summarize_by_source(outcomes, horizon=horizon)
         by_rating = self.summarize_by_rating(outcomes, horizon=horizon)
-        ai_alpha = self.compute_ai_incremental_alpha(outcomes, horizon=horizon)
+        legacy_alpha = self.compute_ai_incremental_alpha(outcomes, horizon=horizon)
         topk_alpha = self.compute_topk_ablation_alpha(reports, outcomes, horizon=horizon)
         discovery_attr = self.summarize_discovery_sources(outcomes, horizon=horizon)
+        # V5.2 P2-1: canonical ai_incremental_alpha = same-universe Top-K ablation
+        unified_alpha = dict(topk_alpha)
+        unified_alpha["canonical"] = True
+        if unified_alpha.get("available"):
+            unified_alpha["note"] = (
+                topk_alpha.get("note") or "Same-universe Top-K ablation (canonical V5.2 metric)"
+            )
         return {
             "available": True,
             "outcomes": outcomes,
             "attribution": attr,
             "by_rating": by_rating,
-            "ai_incremental_alpha": ai_alpha,
+            "ai_incremental_alpha": unified_alpha,
             "ai_topk_ablation": topk_alpha,
+            "ai_incremental_alpha_legacy": legacy_alpha,
             "discovery_attribution": discovery_attr,
             "horizon": str(horizon),
+            "benchmark_snapshot": benchmark_snapshot,
         }
 
     def compute_topk_ablation_alpha(
@@ -236,6 +269,10 @@ class ReviewEngine:
         def _return(sym: str) -> float | None:
             cell = (outcome_by_sym.get(sym) or {}).get("horizons") or {}
             c = cell.get(str(horizon)) or {}
+            if c.get("selection_alpha") is not None:
+                return float(c["selection_alpha"])
+            if c.get("market_alpha") is not None:
+                return float(c["market_alpha"])
             if c.get("excess_return") is not None:
                 return float(c["excess_return"])
             if c.get("actual_return") is not None:

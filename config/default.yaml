@@ -97,7 +97,9 @@ ai:
   use_openai_sdk: true
   review_backtest: true
   roundtable: true
-  roundtable_mode: benchmark  # benchmark | disabled — never controls paper trading (V5)
+  roundtable_mode: sampled  # benchmark | sampled | scheduled | disabled
+  roundtable_sample_every: 10
+  roundtable_max_per_day: 1
   trade_review: false
   cache_dir: data/cache/ai_decisions
   committee:

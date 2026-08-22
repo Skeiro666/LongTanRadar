@@ -89,15 +89,15 @@ class ResearchHypothesis:
     validation_questions: list[str] = field(default_factory=list)
     evidence_ids: list[str] = field(default_factory=list)
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self, ev: ExtractedEvent | dict[str, Any] | None = None) -> dict[str, Any]:
         d = asdict(self)
         d["type"] = "HYPOTHESIS"
         d["layers"] = {"FACT": self.fact, "INFERENCE": self.inference, "HYPOTHESIS": self.hypothesis}
-        d["investment_hypothesis"] = self.to_investment_hypothesis()
+        d["investment_hypothesis"] = self.to_investment_hypothesis(ev)
         return d
 
-    def to_investment_hypothesis(self) -> dict[str, Any]:
-        """V5 schema: mechanism + validation + invalidation."""
+    def to_investment_hypothesis(self, ev: ExtractedEvent | dict[str, Any] | None = None) -> dict[str, Any]:
+        """V5 schema: mechanism + validation + invalidation + expected_excess_return."""
         mechanism_map = {
             "ORDER": "订单 → 收入 → 毛利 → EPS",
             "EARNINGS_GUIDANCE": "业绩预告 → 一致预期修正 → 估值重定价",
@@ -109,6 +109,30 @@ class ResearchHypothesis:
             "EARNINGS_GUIDANCE": ["预告下修", "非经常性损益主导", "基数效应"],
             "PRICE_INCREASE": ["销量大幅下滑", "成本同步上涨", "竞争未跟涨"],
         }
+        eer: dict[str, Any] = {
+            "available": False,
+            "value": None,
+            "horizon": self.event_type,
+            "confidence": 0.0,
+            "note": "无一致预期/模型预测，未伪造 expected_excess_return",
+        }
+        if ev is not None:
+            if isinstance(ev, ExtractedEvent):
+                exp_avail = bool(ev.expectation_available)
+                exp_gap = ev.expectation_gap
+                horizon = ev.time_horizon or self.event_type
+            else:
+                exp_avail = bool(ev.get("expectation_available"))
+                exp_gap = ev.get("expectation_gap")
+                horizon = str(ev.get("time_horizon") or self.event_type)
+            if exp_avail and exp_gap is not None:
+                eer = {
+                    "available": True,
+                    "value": round(float(exp_gap), 4),
+                    "horizon": horizon,
+                    "confidence": 0.55,
+                    "note": "来自 expectation_gap（有数据时才可用）",
+                }
         return {
             "hypothesis": self.hypothesis,
             "mechanism": mechanism_map.get(self.event_type, "事件 → 经营变量 → 盈利/估值"),
@@ -116,6 +140,7 @@ class ResearchHypothesis:
             "invalidation": invalidation.get(self.event_type, ["证伪条件未定义"]),
             "confidence": min(0.95, max(0.1, 0.35 + 0.1 * len(self.evidence_ids))),
             "evidence_ids": list(self.evidence_ids),
+            "expected_excess_return": eer,
             "layers": {
                 "FACT": self.fact,
                 "INFERENCE": self.inference,

@@ -122,6 +122,9 @@ class NewsCandidate:
     time_horizon: str = "SHORT_TERM"
     price_reaction: dict[str, Any] = field(default_factory=lambda: {"available": False})
     price_in_risk: str = "UNKNOWN"
+    price_in_score: float = 0.0
+    lifecycle_status: str = "NEW"
+    lifecycle_reason: str = ""
     reason: str = ""
     evidence_ids: list[str] = field(default_factory=list)
     research_hypotheses: list[dict[str, Any]] = field(default_factory=list)

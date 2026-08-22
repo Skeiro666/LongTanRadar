@@ -21,6 +21,13 @@ type CostSummary = {
 };
 
 type AlphaDash = {
+  ai_incremental_alpha?: {
+    available?: boolean;
+    ai_incremental_alpha?: number | null;
+    insufficient_sample?: boolean;
+    baseline_topk?: { mean_return?: number | null };
+    ai_topk?: { mean_return?: number | null };
+  };
   ai_topk_ablation?: {
     available?: boolean;
     ai_incremental_alpha?: number | null;
@@ -125,7 +132,7 @@ export default function Agent() {
   const ret = st?.last_result?.metrics?.paper_return;
   const cycle = cost?.cycle_cost || cost?.cycle;
   const eff = cost?.efficiency;
-  const topk = alpha?.ai_topk_ablation;
+  const topk = alpha?.ai_incremental_alpha || alpha?.ai_topk_ablation;
 
   return (
     <PageShell
@@ -246,7 +253,7 @@ export default function Agent() {
             </dl>
             {topk?.available && (
               <div className="panel compact">
-                <h3>AI Incremental Alpha</h3>
+                <h3>AI Incremental Alpha (Top-K)</h3>
                 <p style={{ margin: 0 }}>
                   {topk.insufficient_sample
                     ? "样本不足"

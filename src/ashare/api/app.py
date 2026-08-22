@@ -457,6 +457,9 @@ def create_app(config_path: str | None = None) -> FastAPI:
                 "by_rating": pack.get("by_rating"),
                 "ai_incremental_alpha": pack.get("ai_incremental_alpha"),
                 "ai_topk_ablation": pack.get("ai_topk_ablation"),
+                "ai_incremental_alpha_legacy": pack.get("ai_incremental_alpha_legacy"),
+                "role_ablation": pack.get("role_ablation"),
+                "model_benchmark": pack.get("model_benchmark"),
                 "discovery_attribution": pack.get("discovery_attribution"),
                 "benchmark": pack.get("benchmark"),
             }
@@ -493,8 +496,9 @@ def create_app(config_path: str | None = None) -> FastAPI:
         )
         eff = cost.get("efficiency") or {}
         cycle = cost.get("cycle_cost") or cost.get("cycle") or {}
-        topk = pack.get("ai_topk_ablation") or {}
+        topk = pack.get("ai_topk_ablation") or pack.get("ai_incremental_alpha") or {}
         incr = topk.get("ai_incremental_alpha")
+        legacy = pack.get("ai_incremental_alpha_legacy") or {}
         total_tokens = int(cycle.get("total_tokens") or 0)
         alpha_per_100k = None
         if incr is not None and total_tokens > 0:
@@ -510,16 +514,49 @@ def create_app(config_path: str | None = None) -> FastAPI:
                 "alpha_per_100k_tokens": alpha_per_100k,
             },
             "discovery_attribution": pack.get("discovery_attribution"),
+            "ai_incremental_alpha": topk,
             "ai_topk_ablation": topk,
-            "ai_incremental_alpha_legacy": pack.get("ai_incremental_alpha"),
+            "ai_incremental_alpha_legacy": legacy,
+            "role_ablation": pack.get("role_ablation"),
+            "model_benchmark": pack.get("model_benchmark"),
             "attribution": pack.get("attribution"),
             "benchmark": pack.get("benchmark"),
+            "benchmark_snapshot": pack.get("benchmark_snapshot"),
             "decision_chain": research.get("decision_chain"),
             "decision_consistency": research.get("decision_consistency"),
             "gate": uni.get("gate"),
             "n_candidates": uni.get("n_union"),
             "n_research": len(research.get("platform_reports") or []),
             "n_buys": n_buys,
+        }
+
+    @app.get("/api/research/role-ablation")
+    def api_research_role_ablation(horizon: str = "5") -> dict[str, Any]:
+        from ashare.services.research import latest_research
+
+        data = latest_research(get_cfg()) or {}
+        pack = data.get("research_outcomes") or {}
+        ab = pack.get("role_ablation")
+        if ab:
+            return {"available": True, "as_of": data.get("as_of"), "role_ablation": ab}
+        return {"available": False, "note": "run_research first"}
+
+    @app.get("/api/research/model-benchmark")
+    def api_research_model_benchmark() -> dict[str, Any]:
+        from ashare.ai.cost_tracker import get_cost_tracker
+        from ashare.research.model_benchmark import build_model_benchmark
+        from ashare.services.research import latest_research
+
+        cfg = get_cfg()
+        data = latest_research(cfg) or {}
+        pack = data.get("research_outcomes") or {}
+        mb = pack.get("model_benchmark")
+        if mb:
+            return {"available": True, "as_of": data.get("as_of"), "model_benchmark": mb}
+        cycle = get_cost_tracker(cfg).summary().get("cycle_cost") or {}
+        return {
+            "available": bool(cycle.get("by_model")),
+            "model_benchmark": build_model_benchmark(cfg, cycle_summary=cycle, ai_incremental_alpha=pack.get("ai_incremental_alpha")),
         }
 
     @app.get("/api/optimizer/experiments")

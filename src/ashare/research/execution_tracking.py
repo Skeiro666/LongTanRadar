@@ -116,8 +116,16 @@ def attach_paper_execution(
     outcome["execution"] = {
         "available": True,
         "entry_source": "paper_fill",
+        "decision_id": report.get("research_id"),
+        "research_session_id": report.get("research_id"),
+        "snapshot_id": report.get("research_id"),
+        "symbol": sym,
+        "signal_time": str(research_time)[:19] if research_time else None,
+        "order_time": fill.get("traded_at"),
+        "fill_time": fill.get("traded_at"),
         "fill_price": fill_px,
         "fill_qty": fill.get("quantity"),
+        "quantity": fill.get("quantity"),
         "traded_at": fill.get("traded_at"),
         "signal_close": signal_close,
         "slippage_vs_signal_close": slippage,
@@ -145,7 +153,16 @@ def attach_paper_execution(
             bench = cell.get("benchmark_return")
             fill_horizons[h_str] = {
                 "actual_return": fill_ret,
+                "total_return": fill_ret,
                 "benchmark_return": bench,
+                "market_benchmark_return": cell.get("market_benchmark_return"),
+                "universe_benchmark_return": cell.get("universe_benchmark_return"),
+                "market_alpha": (fill_ret - float(cell["market_benchmark_return"]))
+                if cell.get("market_benchmark_return") is not None
+                else None,
+                "selection_alpha": (fill_ret - float(cell["universe_benchmark_return"]))
+                if cell.get("universe_benchmark_return") is not None
+                else None,
                 "excess_return": (fill_ret - float(bench)) if bench is not None else None,
                 "entry_source": "paper_fill",
             }

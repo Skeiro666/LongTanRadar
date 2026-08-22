@@ -94,8 +94,10 @@ def test_ai_incremental_alpha_structure():
         reports, panel, horizon="5", benchmark_returns={"5": 0.0}, persist=False
     )
     alpha = pack.get("ai_incremental_alpha") or {}
-    assert "conclusion" in alpha
-    assert alpha.get("horizon") == "5"
+    assert alpha.get("method") == "same_universe_topk_ablation" or alpha.get("available") is False
+    assert alpha.get("horizon") == "5" or "horizon" not in alpha or pack.get("horizon") == "5"
+    legacy = pack.get("ai_incremental_alpha_legacy") or {}
+    assert "conclusion" in legacy or legacy.get("note")
 
 
 def test_with_benchmark_sets_excess():

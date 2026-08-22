@@ -203,13 +203,20 @@ export default function Research() {
             ) : (
               (data.news_discovery?.news_candidates || []).map((c, i) => {
                 const risk = (c.price_in_risk || "UNKNOWN").toUpperCase();
+                const lc = (c.lifecycle_status || "NEW").toUpperCase();
                 return (
                   <div key={`${c.symbol}-${i}`} className="verdict-row">
                     <span className={`badge badge-${risk === "HIGH" ? "pass" : risk === "MEDIUM" ? "watch" : "buy"}`}>
                       {risk}
                     </span>{" "}
+                    <span className="badge badge-watch" style={{ marginLeft: "0.25rem" }}>
+                      {lc}
+                    </span>{" "}
                     <strong>{c.name || c.symbol}</strong>{" "}
                     <span className="muted">{c.symbol}</span>
+                    {c.price_in_score != null && (
+                      <span className="muted"> · Price-In {(c.price_in_score * 100).toFixed(0)}%</span>
+                    )}
                     <p style={{ margin: "0.3rem 0 0", fontSize: "0.9rem" }}>{c.reason || "—"}</p>
                   </div>
                 );
@@ -269,6 +276,23 @@ export default function Research() {
         {tab === "alpha" && data?.research_outcomes?.available && (
           <div className="persona-panel compact">
             <h3>Alpha · Cost</h3>
+            {(data.research_outcomes.benchmark_snapshot || data.research_outcomes.benchmark?.snapshot) && (
+              <p className="persona-muted" style={{ marginTop: 0 }}>
+                Benchmark:{" "}
+                <strong>
+                  {(data.research_outcomes.benchmark_snapshot || data.research_outcomes.benchmark?.snapshot)?.actual ===
+                  "csi300"
+                    ? "CSI300"
+                    : "Equal-weight Universe"}
+                </strong>
+                {(data.research_outcomes.benchmark_snapshot || data.research_outcomes.benchmark?.snapshot)?.fallback && (
+                  <>
+                    {" "}
+                    (Fallback: CSI300 unavailable)
+                  </>
+                )}
+              </p>
+            )}
             {data.ai_cost && (
               <dl className="metrics">
                 <div className="metric">
@@ -285,14 +309,58 @@ export default function Research() {
                 </div>
               </dl>
             )}
-            {data.research_outcomes.ai_topk_ablation?.available && (
+            {(data.research_outcomes.ai_incremental_alpha?.available ||
+              data.research_outcomes.ai_topk_ablation?.available) && (
               <p className="muted">
-                AI Δ{" "}
-                {data.research_outcomes.ai_topk_ablation.ai_incremental_alpha != null
-                  ? `${(data.research_outcomes.ai_topk_ablation.ai_incremental_alpha * 100).toFixed(2)}%`
+                AI Δ (Top-K 同宇宙){" "}
+                {(data.research_outcomes.ai_incremental_alpha || data.research_outcomes.ai_topk_ablation)
+                  ?.ai_incremental_alpha != null
+                  ? `${(
+                      ((data.research_outcomes.ai_incremental_alpha || data.research_outcomes.ai_topk_ablation)
+                        ?.ai_incremental_alpha ?? 0) * 100
+                    ).toFixed(2)}%`
                   : "—"}
+                {" · 样本 "}
+                {(data.research_outcomes.ai_incremental_alpha || data.research_outcomes.ai_topk_ablation)
+                  ?.sample_count ?? "—"}
               </p>
             )}
+            {data.research_outcomes.role_ablation?.available && (
+              <div style={{ marginTop: "0.5rem" }}>
+                <h4 style={{ margin: "0 0 0.35rem", fontSize: "0.9rem" }}>Role Ablation (实验)</h4>
+                {Object.entries(data.research_outcomes.role_ablation.by_role || {}).map(([role, row]) => (
+                  <div key={role} className="muted" style={{ fontSize: "0.82rem" }}>
+                    −{role}: Δ{" "}
+                    {row.delta_vs_full_council != null
+                      ? `${(row.delta_vs_full_council * 100).toFixed(2)}%`
+                      : "—"}
+                  </div>
+                ))}
+              </div>
+            )}
+            {data.research_outcomes.model_benchmark?.available && (
+              <div style={{ marginTop: "0.5rem" }}>
+                <h4 style={{ margin: "0 0 0.35rem", fontSize: "0.9rem" }}>Model × Token</h4>
+                {(data.research_outcomes.model_benchmark.models || []).slice(0, 4).map((m) => (
+                  <div key={m.model} className="muted" style={{ fontSize: "0.82rem" }}>
+                    {m.model}: {m.tokens ?? 0} tok · ${Number(m.cost_usd ?? 0).toFixed(4)}
+                  </div>
+                ))}
+              </div>
+            )}
+            {(data.research_outcomes.outcomes || []).slice(0, 5).map((o, i) => {
+              const h = (o.horizons as Record<string, Record<string, number>> | undefined)?.[
+                String(data.research_outcomes?.horizon || 5)
+              ];
+              if (!h?.actual_return) return null;
+              return (
+                <div key={i} className="muted" style={{ fontSize: "0.85rem" }}>
+                  {o.symbol}: 总收益 {(h.actual_return * 100).toFixed(2)}%
+                  {h.market_alpha != null ? ` · Market α ${(h.market_alpha * 100).toFixed(2)}%` : ""}
+                  {h.selection_alpha != null ? ` · Selection α ${(h.selection_alpha * 100).toFixed(2)}%` : ""}
+                </div>
+              );
+            })}
           </div>
         )}
 

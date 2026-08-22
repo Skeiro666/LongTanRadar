@@ -202,26 +202,31 @@ def run_research(cfg: dict[str, Any], top_n: int | None = None) -> dict[str, Any
     n = int(top_n or cfg.get("strategy", {}).get("top_n", 5))
     shortlist = scored[: max(1, n)]
     rt_cfg = (cfg.get("ai") or {})
-    roundtable_mode = str(rt_cfg.get("roundtable_mode") or "benchmark").lower()
-    run_rt = bool(rt_cfg.get("roundtable", True)) and roundtable_mode != "disabled"
+    roundtable_mode = str(rt_cfg.get("roundtable_mode") or "sampled").lower()
+    from ashare.research.benchmark import should_run_roundtable
+
+    run_rt, rt_reason = should_run_roundtable(cfg, as_of=as_of.date() if hasattr(as_of, "date") else None)
+    run_rt = run_rt and bool(rt_cfg.get("roundtable", True)) and roundtable_mode != "disabled"
     if run_rt and shortlist:
-        with progress.step("roundtable", "圆桌 Benchmark", note="~5 次 LLM，不驱动交易"):
+        with progress.step("roundtable", "圆桌 Benchmark", note=rt_reason):
             roundtable = run_roundtable(cfg, shortlist)
         roundtable["benchmark_only"] = True
         roundtable["controls_trading"] = False
+        roundtable["schedule_reason"] = rt_reason
         progress.log(
             "roundtable",
-            f"来源 {roundtable.get('source')} · 角色 {len(roundtable.get('roles') or [])}",
+            f"来源 {roundtable.get('source')} · 角色 {len(roundtable.get('roles') or [])} · {rt_reason}",
             detail=roundtable.get("models_used"),
         )
     else:
         roundtable = {
             "source": "disabled",
-            "summary": "圆桌关闭（benchmark-only 或未启用）",
+            "summary": f"圆桌跳过（{rt_reason}）",
             "roles": [],
             "debate": [],
             "benchmark_only": True,
             "controls_trading": False,
+            "schedule_reason": rt_reason,
         }
     # Legacy roundtable never drives trading — canonical decisions only (V5 Phase 1).
     picks: list[dict[str, Any]] = []
@@ -238,7 +243,12 @@ def run_research(cfg: dict[str, Any], top_n: int | None = None) -> dict[str, Any
         try:
             cand_eng = CandidateEngine(cfg)
             with progress.step("candidate", "候选 Union + 逐股新闻", note="最多 20 只 × 3 源"):
-                uni = cand_eng.build_research_universe(panel=panel, pool=pool, news_discovery=news_discovery)
+                uni = cand_eng.build_research_universe(
+                    panel=panel,
+                    pool=pool,
+                    news_discovery=news_discovery,
+                    as_of=as_of_dt.isoformat(),
+                )
             progress.log(
                 "candidate",
                 f"Union {uni.get('n_union')} → 研究池 {len(uni.get('research_universe') or [])}",
@@ -287,24 +297,38 @@ def run_research(cfg: dict[str, Any], top_n: int | None = None) -> dict[str, Any
             progress.log("decision", f"买入 {sum(1 for d in canonical_decisions if d.get('committee_approve'))} 只")
             # Phase 7: outcome attribution by discovery source (descriptive only)
             try:
-                from ashare.research.benchmark import resolve_benchmark_pack
+                from ashare.research.benchmark import resolve_dual_benchmark_pack
                 from ashare.research.tracking import ReviewEngine
 
                 horizon = str(((research_yaml.get("tracking") or {}).get("attribution_horizon") or 5))
                 horizons = list((research_yaml.get("tracking") or {}).get("horizons_days") or [1, 3, 5, 10, 20, 60])
-                with progress.step("outcome", "归因 + CSI300 基准", note="Top-K ablation + outcomes"):
-                    bench_pack = resolve_benchmark_pack(cfg, panel, as_of, horizons=horizons)
-                    bench_returns = {
-                        k: v for k, v in (bench_pack.get("returns") or {}).items() if v is not None
-                    }
+                with progress.step("outcome", "归因 + 双基准 Alpha", note="Market + Selection"):
+                    bench_pack = resolve_dual_benchmark_pack(cfg, panel, as_of, horizons=horizons)
                     outcome_pack = ReviewEngine(cfg).attribution_report(
                         platform_reports,
                         panel,
                         horizon=horizon,
-                        benchmark_returns=bench_returns or None,
+                        market_benchmark_returns=bench_pack.get("market_returns") or None,
+                        universe_benchmark_returns=bench_pack.get("universe_returns") or None,
+                        benchmark_snapshot=bench_pack.get("snapshot"),
                         persist=True,
                     )
                     outcome_pack["benchmark"] = bench_pack
+                    try:
+                        from ashare.research.model_benchmark import build_model_benchmark
+                        from ashare.research.role_ablation import compute_role_ablation
+
+                        outcome_pack["role_ablation"] = compute_role_ablation(
+                            platform_reports,
+                            outcome_pack.get("outcomes") or [],
+                            horizon=horizon,
+                        )
+                        outcome_pack["model_benchmark"] = build_model_benchmark(
+                            cfg,
+                            ai_incremental_alpha=outcome_pack.get("ai_incremental_alpha"),
+                        )
+                    except Exception as sub_exc:  # noqa: BLE001
+                        logger.debug("role ablation / model benchmark skipped: %s", sub_exc)
             except Exception as exc:  # noqa: BLE001
                 logger.warning("outcome attribution skipped: %s", exc)
                 outcome_pack = {"available": False, "error": str(exc)[:300]}
@@ -428,8 +452,12 @@ def run_research(cfg: dict[str, Any], top_n: int | None = None) -> dict[str, Any
             "by_rating": outcome_pack.get("by_rating"),
             "ai_incremental_alpha": outcome_pack.get("ai_incremental_alpha"),
             "ai_topk_ablation": outcome_pack.get("ai_topk_ablation"),
+            "ai_incremental_alpha_legacy": outcome_pack.get("ai_incremental_alpha_legacy"),
+            "role_ablation": outcome_pack.get("role_ablation"),
+            "model_benchmark": outcome_pack.get("model_benchmark"),
             "discovery_attribution": outcome_pack.get("discovery_attribution"),
             "benchmark": outcome_pack.get("benchmark"),
+            "benchmark_snapshot": outcome_pack.get("benchmark_snapshot"),
             "note": outcome_pack.get("note") or outcome_pack.get("error"),
         },
         "roundtable": {
@@ -440,6 +468,7 @@ def run_research(cfg: dict[str, Any], top_n: int | None = None) -> dict[str, Any
             "replay_notes": roundtable.get("replay_notes"),
             "models_used": roundtable.get("models_used") or [],
             "chair_model": roundtable.get("chair_model"),
+            "schedule_reason": roundtable.get("schedule_reason"),
             "roles": roundtable.get("roles") or [],
             "debate": roundtable.get("debate") or [],
             "reviews": [

@@ -56,6 +56,7 @@ class CandidateEngine:
         *,
         pool: dict[str, Any] | None = None,
         news_discovery: dict[str, Any] | None = None,
+        as_of: str | None = None,
     ) -> dict[str, Any]:
         pool = pool or build_leader_pool(self.cfg)
         ncfg = load_yaml_config(self.cfg, "news")
@@ -114,6 +115,7 @@ class CandidateEngine:
             scored.append(item)
 
         panel = panel or {}
+        as_of_str = as_of or str((news_discovery or {}).get("as_of") or "")
         from ashare.research.price_reaction import annotate_news_candidate_price
 
         for nc_raw in (news_discovery or {}).get("news_candidates") or []:
@@ -130,7 +132,7 @@ class CandidateEngine:
                 rejected.append({**nc_raw, "symbol": sym, "reject_reason": "FACTOR_VALIDATION_FAIL"})
                 continue
             # Price-In: research warning only — never reject for HIGH price_in_risk
-            nc = annotate_news_candidate_price(nc_raw, panel)
+            nc = annotate_news_candidate_price(nc_raw, panel, as_of=as_of_str or None)
             last = df.iloc[-1]
             if bool(last.get("is_st")) or bool(last.get("is_halt")):
                 rejected.append({**nc, "symbol": sym, "reject_reason": "RISK_FILTER"})
@@ -229,12 +231,25 @@ class CandidateEngine:
                 }
             )
 
+        from datetime import datetime as _dt
+
         from ashare.news.engine import NewsIntelligenceEngine
 
         news_eng = NewsIntelligenceEngine(self.cfg)
+        as_of_dt = None
+        if as_of_str:
+            try:
+                as_of_dt = _dt.fromisoformat(str(as_of_str).replace("Z", "+00:00"))
+            except Exception:  # noqa: BLE001
+                as_of_dt = None
         for r in research:
             try:
-                pkg = news_eng.collect_stock(r["symbol"], name=str(r.get("name") or ""), persist=True)
+                pkg = news_eng.collect_stock(
+                    r["symbol"],
+                    name=str(r.get("name") or ""),
+                    as_of=as_of_dt,
+                    persist=True,
+                )
             except Exception:  # noqa: BLE001
                 pkg = {"news_data_incomplete": True, "net_event_score": 0.0, "legacy_headlines": []}
             r["news_package"] = pkg

@@ -83,9 +83,10 @@ def test_chairman_context_slimmer_than_full():
         "bear": {"role": "bear", "score": -0.1, "stance": "neutral", "status": "ok"},
     }
     payload = build_chairman_context(snap, opinions, [], cfg=_cfg())
-    assert "snapshot_quant" not in payload
-    assert "quant_summary" in payload["research_intelligence"]
-    assert "model" not in payload["opinions"]["quant"]
+    assert "research_intelligence" not in payload
+    assert "role_reports" in payload
+    assert "evidence_ids" in payload
+    assert "quant_summary" not in payload
     full_len = len(json.dumps(build_research_intelligence(snap), ensure_ascii=False))
     slim_len = len(json.dumps(payload, ensure_ascii=False))
     assert slim_len < full_len

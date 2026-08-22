@@ -163,7 +163,9 @@ def annotate_news_candidate_price(
     *,
     as_of: str | None = None,
 ) -> dict[str, Any]:
-    """Fill price_reaction / price_in_risk on a NewsCandidate dict. No trading side effects."""
+    """Fill price_reaction / price_in_risk / lifecycle on a NewsCandidate dict. No trading side effects."""
+    from ashare.news.event_lifecycle import apply_event_lifecycle
+
     out = dict(nc)
     sym = to_symbol(out.get("symbol") or "")
     df = (panel or {}).get(sym)
@@ -175,5 +177,6 @@ def annotate_news_candidate_price(
     )
     out["price_reaction"] = rx
     out["price_in_risk"] = rx.get("price_in_risk") or "UNKNOWN"
+    out = apply_event_lifecycle(out, as_of=as_of)
     # never auto-reject solely for HIGH price-in
     return out

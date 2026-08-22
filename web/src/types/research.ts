@@ -52,6 +52,9 @@ export type NewsCandidate = {
   novelty_available?: boolean;
   novelty_score?: number;
   price_in_risk?: string;
+  price_in_score?: number;
+  lifecycle_status?: string;
+  lifecycle_reason?: string;
   reject_reason?: string;
   research_hypotheses?: { layers?: { HYPOTHESIS?: string }; hypothesis?: string }[];
   price_reaction?: { available?: boolean; news_signal?: string; price_signal?: string };
@@ -166,6 +169,28 @@ export type RoundtableData = {
   }[];
 };
 
+export type BenchmarkSnapshot = {
+  requested?: string;
+  actual?: string;
+  index?: string;
+  fallback?: boolean;
+  fallback_reason?: string | null;
+  as_of?: string;
+};
+
+export type OutcomeRow = {
+  symbol?: string;
+  horizons?: Record<
+    string,
+    {
+      actual_return?: number;
+      market_alpha?: number;
+      selection_alpha?: number;
+      excess_return?: number;
+    }
+  >;
+};
+
 export type ResearchPayload = {
   as_of?: string;
   strategy?: string;
@@ -195,13 +220,45 @@ export type ResearchPayload = {
     available?: boolean;
     horizon?: string;
     n?: number;
-    benchmark?: { available?: boolean };
+    benchmark?: {
+      available?: boolean;
+      snapshot?: BenchmarkSnapshot;
+      primary?: string;
+    };
+    benchmark_snapshot?: BenchmarkSnapshot;
+    outcomes?: OutcomeRow[];
+    ai_incremental_alpha?: {
+      available?: boolean;
+      canonical?: boolean;
+      method?: string;
+      insufficient_sample?: boolean;
+      ai_incremental_alpha?: number;
+      sample_count?: number;
+      baseline_topk?: { mean_return?: number };
+      ai_topk?: { mean_return?: number };
+    };
     ai_topk_ablation?: {
       available?: boolean;
       insufficient_sample?: boolean;
       ai_incremental_alpha?: number;
+      sample_count?: number;
       baseline_topk?: { mean_return?: number };
       ai_topk?: { mean_return?: number };
+    };
+    ai_incremental_alpha_legacy?: { note?: string; conclusion?: string };
+    role_ablation?: {
+      available?: boolean;
+      experimental?: boolean;
+      by_role?: Record<
+        string,
+        { delta_vs_full_council?: number | null; topk_mean_return?: number | null }
+      >;
+    };
+    model_benchmark?: {
+      available?: boolean;
+      alpha_per_100k_tokens?: number | null;
+      models?: { model?: string; tokens?: number; cost_usd?: number }[];
+      roles?: { role?: string; tokens?: number; cost_usd?: number }[];
     };
     discovery_attribution?: { sources?: Record<string, AttributionBucket> };
     attribution?: { by_source_bucket?: Record<string, AttributionBucket> };

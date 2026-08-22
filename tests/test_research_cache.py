@@ -11,17 +11,27 @@ def _cfg(tmp_path: Path) -> dict:
 
 
 def test_context_hash_stable():
+    ctx1 = {
+        "symbol": "600000.SH",
+        "quant_context": {"leader_score": 0.5},
+        "factor_context": {"momentum_20d": 0.1},
+    }
+    ctx2 = {
+        "symbol": "600000.SH",
+        "quant_context": {"leader_score": 0.6},
+        "factor_context": {"momentum_20d": 0.1},
+    }
     h1 = compute_context_hash(
         symbol="600000.SH",
         role_id="quant",
-        context={"a": 1},
+        context=ctx1,
         prompt_version="quant_v1",
         model="m1",
     )
     h2 = compute_context_hash(
         symbol="600000.SH",
         role_id="quant",
-        context={"a": 1},
+        context=ctx1,
         prompt_version="quant_v1",
         model="m1",
     )
@@ -29,7 +39,7 @@ def test_context_hash_stable():
     h3 = compute_context_hash(
         symbol="600000.SH",
         role_id="quant",
-        context={"a": 2},
+        context=ctx2,
         prompt_version="quant_v1",
         model="m1",
     )

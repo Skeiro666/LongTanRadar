@@ -65,6 +65,25 @@ body {
   z-index: 10;
 }
 
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.brand-logo {
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+  filter: drop-shadow(2px 2px 0 var(--p-red));
+}
+
+.brand-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+}
+
 .brand-title {
   font-family: var(--p-font-display);
   font-weight: 400;

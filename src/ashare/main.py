@@ -202,7 +202,7 @@ def cmd_serve(cfg: dict[str, Any], host: str = "127.0.0.1", port: int = 8000) ->
     from ashare.api.app import create_app
 
     app = create_app(cfg.get("_config_path"))
-    print(f"龙探雷达 API http://{host}:{port}  (web: cd web && npm run dev)")
+    print(f"寻龙尺 API http://{host}:{port}  (web: cd web && npm run dev)")
     uvicorn.run(app, host=host, port=port, log_level="info")
     return 0
 

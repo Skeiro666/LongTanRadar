@@ -224,7 +224,7 @@ def test_formatter_no_llm(tmp_path):
         snapshot=_snapshot(),
         cfg=_cfg(tmp_path),
     )
-    assert "LongTanRadar" in text
+    assert "寻龙尺" in text
     assert "600000.SH" in text
     assert "E1001" in text
 

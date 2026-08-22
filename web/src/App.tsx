@@ -10,8 +10,11 @@ export default function App() {
     <div className="app-shell">
       <header className="topnav">
         <div className="brand">
-          <span className="brand-title">LONGTAN RADAR</span>
-          <span className="brand-sub">龙探雷达 · STRIKE BACK</span>
+          <img className="brand-logo" src="/logo.png" alt="寻龙尺" width={40} height={40} />
+          <div className="brand-text">
+            <span className="brand-title">寻龙尺</span>
+            <span className="brand-sub">XUN LONG CHI · 大A龙头探查</span>
+          </div>
         </div>
         <nav className="nav-links">
           <NavLink to="/" end>

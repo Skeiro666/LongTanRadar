@@ -1,6 +1,6 @@
 # V5.4 Implementation Summary
 
-**Project:** LongTan Radar  
+**Project:** 寻龙尺 (XunLongChi)  
 **Version:** V5.4 — Alpha Validation & Ablation Framework  
 **Baseline:** V5.3 @ `e62e2e9`
 

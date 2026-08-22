@@ -1,10 +1,10 @@
-# 龙探雷达 LongTan Radar — 大A龙头智能探查台
+# 寻龙尺 — 大A龙头智能探查台
 
 **机器找候选 → 新闻/事件规则打分 → AI 多角色研究 → 人做决策。**
 
 面向中国 A 股（日频）的龙头/事件探查、研报生成与纸面交易闭环。默认 **paper 模式**，不会向 QMT/券商下实盘单。
 
-> 开发者说明：Python 包名仍为 `ashare`（`python -m ashare.main`），与产品名「龙探雷达」并存。  
+> 开发者说明：Python 包名仍为 `ashare`（`python -m ashare.main`），与产品名「寻龙尺」并存。  
 > 东方财富 PC 客户端（如 `D:\eastmoney\dfcf`）仅用于人工看盘，**不是**本项目的行情/新闻 SDK。
 
 ---

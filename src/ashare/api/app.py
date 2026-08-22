@@ -79,7 +79,7 @@ def create_app(config_path: str | None = None) -> FastAPI:
 
         stop_agent()
 
-    app = FastAPI(title="龙探雷达 API", version="0.2.0", lifespan=lifespan)
+    app = FastAPI(title="寻龙尺 API", version="0.2.0", lifespan=lifespan)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],

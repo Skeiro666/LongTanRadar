@@ -72,11 +72,11 @@ def format_notification(
     rid = canonical.get("research_session_id") or rep.get("research_id") or ""
     url = research_url(cfg, rid)
 
-    title = "🚨 LongTanRadar 买入机会"
+    title = "🚨 寻龙尺 买入机会"
     if level == "STRONG_BUY":
-        title = "🔥 LongTanRadar 强买入机会"
+        title = "🔥 寻龙尺 强买入机会"
     elif level == "RISK_EXIT":
-        title = "⚠️ LongTanRadar 风险退出提醒"
+        title = "⚠️ 寻龙尺 风险退出提醒"
 
     lines = [
         title,

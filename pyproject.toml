@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "ashare"
 version = "0.1.0"
-description = "LongTan Radar (龙探雷达): A-share leader & event discovery, research council, paper trading"
+description = "寻龙尺 (XunLongChi): A-share leader & event discovery, research council, paper trading"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [

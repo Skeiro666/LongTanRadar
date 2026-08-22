@@ -133,7 +133,7 @@ def evaluate_cycle(
                 "inp": inp,
                 "gate": gr,
                 "text": text,
-                "subject": f"LongTanRadar {gr.level} — {inp.canonical.get('name') or inp.canonical.get('symbol')}",
+                "subject": f"寻龙尺 {gr.level} — {inp.canonical.get('name') or inp.canonical.get('symbol')}",
             }
         )
 

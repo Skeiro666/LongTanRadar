@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from ashare.news.models import ExtractedEvent, RawNews
+from ashare.news.cluster import cluster_timeline_events, compact_news_headlines
 from ashare.news.score import _parse_dt
 
 
@@ -77,6 +78,20 @@ def build_package(
         key=lambda x: x.get("event_time") or "",
         reverse=True,
     )
+    event_clusters = cluster_timeline_events(timeline)
+    compact_timeline = [
+        {
+            "cluster_id": c.get("cluster_id"),
+            "event_type": c.get("event_type"),
+            "direction": c.get("direction"),
+            "title": c.get("title"),
+            "event_time": c.get("event_time"),
+            "impact_score": c.get("impact_score"),
+            "n_sources": c.get("n_sources"),
+            "evidence_ids": c.get("evidence_ids"),
+        }
+        for c in event_clusters
+    ]
     conflicts = []
     dirs = {e.direction for e in events if e.event_type != "OTHER"}
     if "BULLISH" in dirs or "VERY_BULLISH" in dirs:
@@ -110,10 +125,12 @@ def build_package(
             "last_30d": len(buckets["last_30d"]),
         },
         "last_24h": buckets["last_24h"][:8],
-        "last_7d": buckets["last_7d"][:15],
+        "last_7d": compact_news_headlines(buckets["last_7d"], max_items=12),
         "last_30d": buckets["last_30d"][:40],
         "events": [e.to_dict() for e in events],
-        "timeline": timeline[:30],
+        "timeline": compact_timeline[:12],
+        "event_clusters": event_clusters[:12],
+        "timeline_raw_count": len(timeline),
         "conflicts": conflicts,
         "net_event_score": net_score,
         "expectation": exp,

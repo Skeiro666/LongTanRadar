@@ -89,6 +89,12 @@ def _last_bar_date(df: pd.DataFrame) -> date | None:
     return pd.to_datetime(df["date"]).max().date()
 
 
+def _first_bar_date(df: pd.DataFrame) -> date | None:
+    if df is None or df.empty:
+        return None
+    return pd.to_datetime(df["date"]).min().date()
+
+
 def _needs_refresh(df: pd.DataFrame | None, end: str, *, max_lag_days: int = 5) -> bool:
     """True if cache missing or last bar is older than end by more than a weekend buffer."""
     last = _last_bar_date(df) if df is not None else None
@@ -101,17 +107,28 @@ def _needs_refresh(df: pd.DataFrame | None, end: str, *, max_lag_days: int = 5) 
     return (target - last) > timedelta(days=max_lag_days)
 
 
+def _needs_backfill(df: pd.DataFrame | None, start: str, *, slack_days: int = 30) -> bool:
+    """True if cached bars do not reach back to the requested start (e.g. leader pool 420d vs ML train)."""
+    first = _first_bar_date(df) if df is not None else None
+    if first is None:
+        return True
+    target = date.fromisoformat(start)
+    return first > target + timedelta(days=slack_days)
+
+
 def ensure_panel(
     cfg: dict[str, Any],
     symbols: list[str] | None = None,
     *,
     force_refresh: bool = False,
+    start: str | None = None,
+    end: str | None = None,
 ) -> dict:
     data_cfg = cfg.get("data", {})
     store = ParquetStore(data_cfg.get("cache_dir", "data/cache"))
     symbols = [to_symbol(s) for s in (symbols or resolve_universe(cfg))]
-    start = resolve_data_start(cfg)
-    end = resolve_data_end(cfg)
+    start = start or resolve_data_start(cfg)
+    end = end or resolve_data_end(cfg)
     provider = str(data_cfg.get("provider", "akshare")).lower()
     max_lag = int(data_cfg.get("refresh_lag_days", 5))
 
@@ -119,7 +136,9 @@ def ensure_panel(
     stale = [
         s
         for s in symbols
-        if force_refresh or _needs_refresh(panel.get(s), end, max_lag_days=max_lag)
+        if force_refresh
+        or _needs_refresh(panel.get(s), end, max_lag_days=max_lag)
+        or _needs_backfill(panel.get(s), start)
     ]
     missing = [s for s in symbols if s not in panel]
 

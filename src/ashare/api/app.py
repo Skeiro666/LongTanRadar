@@ -283,6 +283,26 @@ def create_app(config_path: str | None = None) -> FastAPI:
         except Exception as exc:  # noqa: BLE001
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+    @app.post("/api/research/refresh-news")
+    def api_research_refresh_news() -> dict[str, Any]:
+        """Refresh platform report news only (no LLM). Use after news filter upgrades."""
+        from ashare.services.research import refresh_report_news
+
+        try:
+            return refresh_report_news(get_cfg())
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.get("/api/ai/cost")
+    def api_ai_cost() -> dict[str, Any]:
+        from ashare.ai.cost_tracker import get_cost_tracker
+
+        cfg = get_cfg()
+        tracker = get_cost_tracker(cfg)
+        out = tracker.summary()
+        out["recent"] = tracker.load_recent(limit=30)
+        return out
+
     @app.get("/api/factors")
     def api_factors() -> dict[str, Any]:
         from ashare.factors import FactorEngine, list_factors

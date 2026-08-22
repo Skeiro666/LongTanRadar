@@ -1,5 +1,11 @@
 import { useEffect, useState } from "react";
-import { api } from "../api";
+import { api, num } from "../api";
+
+type CostSummary = {
+  enabled?: boolean;
+  cycle?: { n_calls?: number; total_tokens?: number; estimated_usd?: number; cache_saved_tokens?: number };
+  daily?: { n_calls?: number; total_tokens?: number; estimated_usd?: number };
+};
 
 type LogRow = { ts?: string; message?: string; phase?: string };
 type AgentState = {
@@ -20,12 +26,18 @@ type AgentState = {
 
 export default function Agent() {
   const [st, setSt] = useState<AgentState | null>(null);
+  const [cost, setCost] = useState<CostSummary | null>(null);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
 
   async function refresh() {
     try {
       setSt(await api.agent());
+      try {
+        setCost(await api.aiCost());
+      } catch {
+        setCost(null);
+      }
       setErr("");
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
@@ -117,6 +129,35 @@ export default function Agent() {
           <dd>龙头/事件</dd>
         </div>
       </dl>
+
+      {cost && (
+        <div className="panel" style={{ marginTop: "1.25rem" }}>
+          <h3 style={{ fontFamily: "var(--font-display)", marginTop: 0 }}>AI Token 成本</h3>
+          <dl className="metrics">
+            <div className="metric">
+              <dt>本轮调用</dt>
+              <dd>{cost.cycle?.n_calls ?? 0}</dd>
+            </div>
+            <div className="metric">
+              <dt>本轮 tokens</dt>
+              <dd>{cost.cycle?.total_tokens ?? 0}</dd>
+            </div>
+            <div className="metric">
+              <dt>本轮估算 USD</dt>
+              <dd>${num(cost.cycle?.estimated_usd, 4)}</dd>
+            </div>
+            <div className="metric">
+              <dt>今日累计 USD</dt>
+              <dd>${num(cost.daily?.estimated_usd, 4)}</dd>
+            </div>
+            <div className="metric">
+              <dt>缓存节省 tokens</dt>
+              <dd>{cost.cycle?.cache_saved_tokens ?? 0}</dd>
+            </div>
+          </dl>
+          <p className="muted">来自 /api/ai/cost · 含 Council/圆桌/优化器 LLM 调用</p>
+        </div>
+      )}
 
       {(st?.last_result?.roundtable?.summary || st?.last_result?.proposal?.rationale) && (
         <div className="panel">

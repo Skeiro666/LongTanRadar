@@ -150,19 +150,27 @@ def llm_inference_entities(
 def link_entities(news: RawNews, *, symbol: str, name: str = "") -> list[NewsEntity]:
     """
     Do not assume search hits belong to the queried stock.
-    Confidence from title/content mention of name or 6-digit code.
+    For collect_stock display, prefer title hit — body-only mentions (涨停复盘列表等) are weak.
     """
     sym = to_symbol(symbol)
     code = bare_code(sym)
-    blob = f"{news.title}\n{news.summary}\n{news.content}"
-    name_hit = bool(name) and name in blob
-    code_hit = bool(re.search(rf"(?<!\d){re.escape(code)}(?!\d)", blob))
-    if name_hit and code_hit:
+    title = news.title or ""
+    blob = f"{title}\n{news.summary}\n{news.content}"
+    name_hit_title = bool(name) and name in title
+    name_hit_body = bool(name) and name in blob
+    code_re = re.compile(rf"(?<!\d){re.escape(code)}(?!\d)")
+    code_hit_title = bool(code_re.search(title))
+    code_hit_body = bool(code_re.search(blob))
+
+    if name_hit_title and code_hit_title:
         conf, src = 0.97, "title+code"
-    elif name_hit:
-        conf, src = 0.88, "title"
-    elif code_hit:
-        conf, src = 0.82, "code"
+    elif name_hit_title:
+        conf, src = 0.92, "title_name"
+    elif code_hit_title:
+        conf, src = 0.88, "title_code"
+    elif name_hit_body or code_hit_body:
+        # 正文/摘要命中但标题未提 — 多为板块复盘、多股列表，不算个股新闻
+        conf, src = 0.38, "body_only"
     else:
         conf, src = 0.35, "query_weak"
     return [

@@ -15,6 +15,8 @@ fetch:
   latest_limit: 40
   # Stock→News: drop items with no name/code hit in title/body (query_weak)
   min_link_confidence: 0.5
+  # 个股新闻：标题必须含公司名或代码；正文命中（body_only）会被丢弃
+  stock_news_title_required: true
 
 # Parallel discovery (News → events). Does not emit BUY. Union is Phase 3.
 discovery:

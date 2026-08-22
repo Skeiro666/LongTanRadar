@@ -2,18 +2,33 @@ from __future__ import annotations
 
 import itertools
 import logging
+from datetime import timedelta
 from typing import Any
 
 import lightgbm as lgb
 import numpy as np
 import pandas as pd
 
-from ashare.data.provider import ensure_panel
+from ashare.data.provider import ensure_panel, resolve_universe
 from ashare.ml.dataset import build_dataset, time_split, xy
 from ashare.ml.features import FEATURE_COLS
 from ashare.ml.registry import save_run
 
 logger = logging.getLogger("ashare.ml.train")
+
+# Rolling features (ma60) need history before the first train label date.
+_TRAIN_WARMUP_DAYS = 120
+
+
+def _training_fetch_window(ml: dict[str, Any], cfg: dict[str, Any]) -> tuple[str, str, str, str]:
+    """Return train_start, train_end, panel fetch start/end (with warmup + label tail)."""
+    label_h = int(ml.get("label_horizon", 5))
+    train_start = str(ml.get("train_start", cfg.get("data", {}).get("start", "2021-01-01")))
+    train_end = str(ml.get("train_end", cfg.get("backtest", {}).get("end", "2024-12-31")))
+    warmup = int(ml.get("train_warmup_days", _TRAIN_WARMUP_DAYS))
+    fetch_start = (pd.Timestamp(train_start) - timedelta(days=warmup)).strftime("%Y-%m-%d")
+    fetch_end = (pd.Timestamp(train_end) + timedelta(days=max(label_h * 3, 15))).strftime("%Y-%m-%d")
+    return train_start, train_end, fetch_start, fetch_end
 
 
 def _ic(y_true: np.ndarray, y_pred: np.ndarray) -> float:
@@ -41,15 +56,26 @@ def train_model(
     overrides: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     ml = {**cfg.get("ml", {}), **(overrides or {})}
-    panel = ensure_panel(cfg)
+    label_h = int(ml.get("label_horizon", 5))
+    train_start, train_end, fetch_start, fetch_end = _training_fetch_window(ml, cfg)
+    # Leader/event pools only keep ~420d for screening; ML train must pull the full window.
+    symbols = resolve_universe(cfg)
+    panel = ensure_panel(cfg, symbols, start=fetch_start, end=fetch_end)
     if not panel:
         raise RuntimeError("No market data for training")
 
-    label_h = int(ml.get("label_horizon", 5))
-    train_start = str(ml.get("train_start", cfg.get("data", {}).get("start", "2021-01-01")))
-    train_end = str(ml.get("train_end", cfg.get("backtest", {}).get("end", "2024-12-31")))
     data = build_dataset(panel, label_horizon=label_h, start=train_start, end=train_end)
     if len(data) < 100:
+        if panel:
+            mins = [pd.to_datetime(df["date"]).min() for df in panel.values() if df is not None and not df.empty]
+            maxs = [pd.to_datetime(df["date"]).max() for df in panel.values() if df is not None and not df.empty]
+            span = (
+                f"bars {min(mins).date()}..{max(maxs).date()}" if mins and maxs else "bars unknown"
+            )
+            raise RuntimeError(
+                f"Not enough training rows: {len(data)} "
+                f"(train window {train_start}..{train_end}, fetched {fetch_start}..{fetch_end}, {span})"
+            )
         raise RuntimeError(f"Not enough training rows: {len(data)}")
 
     train_df, valid_df = time_split(data, valid_ratio=float(ml.get("valid_ratio", 0.2)))

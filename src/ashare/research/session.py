@@ -4,10 +4,12 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 from ashare.config_loaders import load_yaml_config
 from ashare.ml.ranking import MLRankingEngine
 from ashare.research.council import AICouncilEngine, ChairmanEngine, DebateEngine
+from ashare.research.gate import apply_research_gate
 from ashare.research.snapshot import SnapshotStore, build_snapshot
 from ashare.symbols import to_symbol
 
@@ -25,10 +27,28 @@ class ResearchSessionEngine:
         self.ml = MLRankingEngine(self.cfg)
 
     def run_session(self, candidate: dict[str, Any]) -> dict[str, Any]:
+        prior = self.store.load_latest_for_symbol(str(candidate.get("symbol") or ""))
         snap = build_snapshot(candidate, self.cfg)
-        opinions = self.council.run_parallel(snap)
+        opinions = self.council.run_parallel(
+            snap,
+            prior_snapshot=prior,
+            prior_opinions=(prior or {}).get("council"),
+        )
+        incremental_reused = sum(1 for v in opinions.values() if v.get("source") == "incremental_reuse")
         debate = self.debate.run(snap, opinions)
-        chairman = self.chair.summarize(snap, opinions, debate)
+        from ashare.research.incremental import roles_to_refresh, _incremental_cfg
+
+        reuse_chair = (
+            prior
+            and _incremental_cfg(self.cfg).get("enabled", True)
+            and not roles_to_refresh(snap, prior, self.cfg)
+            and (prior.get("chairman") or {}).get("rating")
+        )
+        if reuse_chair:
+            chairman = dict(prior["chairman"])
+            chairman["source"] = "incremental_reuse"
+        else:
+            chairman = self.chair.summarize(snap, opinions, debate)
         report = {
             "research_id": snap["research_id"],
             "symbol": snap["symbol"],
@@ -57,6 +77,7 @@ class ResearchSessionEngine:
             "candidate_sources": snap.get("candidate_sources") or [],
             "research_hypotheses": snap.get("research_hypotheses") or [],
             "research_intelligence": snap.get("research_intelligence") or {},
+            "incremental_reused_roles": incremental_reused,
         }
         # persist full snapshot including AI outputs for replay
         full = {**snap, "council": opinions, "debate": debate, "chairman": chairman, "report": report}
@@ -68,15 +89,60 @@ class ResearchSessionEngine:
         ranked = list(candidates)
         if panel is not None:
             try:
-                # ensure factors present; ML optional
                 ranked = self.ml.predict_rows(ranked)
             except Exception:  # noqa: BLE001
                 pass
+
         max_n = int((self.research_cfg.get("funnel") or {}).get("max_council", 12))
-        reports = []
-        for c in ranked[:max_n]:
+        gate_batch = apply_research_gate(ranked, self.cfg)
+        council_candidates = gate_batch.passed[:max_n]
+
+        reports: list[dict[str, Any]] = []
+        for c in council_candidates:
             reports.append(self.run_session(c))
+        for c in gate_batch.rejected:
+            reports.append(self._gate_skip_report(c))
+        self._last_gate_summary = gate_batch.summary()
         return reports
+
+    def gate_summary(self) -> dict[str, Any]:
+        return getattr(self, "_last_gate_summary", {})
+
+    def _gate_skip_report(self, candidate: dict[str, Any]) -> dict[str, Any]:
+        gate = dict(candidate.get("gate") or {})
+        rid = f"G{datetime.now(timezone.utc).strftime('%Y%m%d')}{uuid4().hex[:6].upper()}"
+        reason = str(gate.get("reason") or "GATE_REJECT")
+        return {
+            "research_id": rid,
+            "symbol": candidate.get("symbol"),
+            "name": candidate.get("name"),
+            "research_time": datetime.now(timezone.utc).isoformat(),
+            "trigger": candidate.get("trigger"),
+            "quant": {
+                "leader_score": candidate.get("leader_score"),
+                "ml_prediction": candidate.get("ml_prediction"),
+                "factor_score": candidate.get("candidate_score"),
+            },
+            "profit_inflection": candidate.get("profit_inflection") or {},
+            "event": candidate.get("event") or {},
+            "gate": gate,
+            "candidate_sources": candidate.get("candidate_sources") or [],
+            "research_hypotheses": candidate.get("research_hypotheses") or [],
+            "council": {},
+            "debate": [],
+            "chairman": {
+                "source": "research_gate",
+                "rating": "SKIP",
+                "status": "skipped",
+                "rationale": reason,
+            },
+            "decision": {
+                "research_rating": "GATE_SKIP",
+                "action": "NO_ACTION",
+                "position_suggestion": 0,
+            },
+            "news_package": candidate.get("news_package") or {},
+        }
 
     def _append_index(self, report: dict[str, Any]) -> None:
         root = Path(self.cfg.get("_root") or Path(__file__).resolve().parents[2])

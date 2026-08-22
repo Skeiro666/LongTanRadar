@@ -47,6 +47,14 @@ def test_entity_linking_not_assumed():
     n2 = _news("北新建材000786获得重大订单")
     ents2 = link_entities(n2, symbol="000786.SZ", name="北新建材")
     assert ents2[0].confidence > 0.9
+    # body-only: code in summary but not title — sector recap noise
+    n3 = _news(
+        "A股复盘：58只涨停",
+        summary="其中包括北新建材000786、维峰电子等",
+    )
+    ents3 = link_entities(n3, symbol="000786.SZ", name="北新建材")
+    assert ents3[0].link_source == "body_only"
+    assert ents3[0].confidence < 0.5
 
 
 def test_collect_stock_filters_query_weak(monkeypatch):

@@ -66,9 +66,36 @@ def test_attribution_by_source_descriptive_only():
     assert "news_only" in attr["by_source_bucket"]
     assert "quant_only" in attr["by_source_bucket"]
     assert "News ≠ BUY" in " ".join(attr["rules"])
-    # attribution must not invent trading action
     assert "trading_action" not in pack
     assert "trading_weights" not in attr
+
+
+def test_ai_incremental_alpha_structure():
+    sym_a, sym_b = "000001.SZ", "600000.SH"
+    dates = pd.bdate_range("2024-01-02", periods=15)
+    panel = {}
+    panel.update(_panel(sym_a, [10.0] * 3 + [11.0] * 12))
+    panel.update(_panel(sym_b, [20.0] * 3 + [19.0] * 12))
+    reports = [
+        {
+            "symbol": sym_a,
+            "research_time": str(dates[2].date()),
+            "candidate_sources": ["news"],
+            "decision": {"research_rating": "WATCH"},
+        },
+        {
+            "symbol": sym_b,
+            "research_time": str(dates[2].date()),
+            "candidate_sources": ["quant"],
+            "decision": {"research_rating": "GATE_SKIP"},
+        },
+    ]
+    pack = ReviewEngine({"_root": "."}).attribution_report(
+        reports, panel, horizon="5", benchmark_returns={"5": 0.0}, persist=False
+    )
+    alpha = pack.get("ai_incremental_alpha") or {}
+    assert "conclusion" in alpha
+    assert alpha.get("horizon") == "5"
 
 
 def test_with_benchmark_sets_excess():

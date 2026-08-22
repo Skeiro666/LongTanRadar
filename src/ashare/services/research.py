@@ -96,11 +96,15 @@ def _to_markdown(payload: dict[str, Any]) -> str:
 
 def run_research(cfg: dict[str, Any], top_n: int | None = None) -> dict[str, Any]:
     """因子库打分 + 事件/利润断层池 + AI 圆桌，输出可复盘研报。"""
+    from ashare.ai.cost_tracker import get_cost_tracker
     from ashare.ai.roundtable import run_roundtable
     from ashare.candidate import CandidateEngine
     from ashare.config_loaders import load_yaml_config
     from ashare.portfolio import PortfolioEngine, RiskFilterEngine, market_regime
     from ashare.research.session import ResearchSessionEngine
+
+    cycle_id = f"research_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    get_cost_tracker(cfg).begin_cycle(cycle_id)
 
     pool = build_leader_pool(cfg)
     cfg["_last_screen"] = pool
@@ -208,6 +212,7 @@ def run_research(cfg: dict[str, Any], top_n: int | None = None) -> dict[str, Any
     platform_reports: list[dict[str, Any]] = []
     uni: dict[str, Any] = {}
     outcome_pack: dict[str, Any] = {"available": False, "note": "no_platform_reports"}
+    gate_summary: dict[str, Any] = {}
     research_yaml = load_yaml_config(cfg, "research")
     use_platform = bool(research_yaml.get("enabled", True))
     if use_platform:
@@ -224,6 +229,7 @@ def run_research(cfg: dict[str, Any], top_n: int | None = None) -> dict[str, Any
                 r["market_regime"] = regime
             session = ResearchSessionEngine(cfg)
             platform_reports = session.run_pool(uni.get("research_universe") or [], panel=panel)
+            gate_summary = session.gate_summary()
             # map BUY ratings to watch by default for trading (rating ≠ action)
             risk = RiskFilterEngine(cfg)
             port = PortfolioEngine(cfg)
@@ -279,12 +285,23 @@ def run_research(cfg: dict[str, Any], top_n: int | None = None) -> dict[str, Any
                     p["weight"] = float(wmap.get(p["symbol"]) or 0.0) if p.get("committee_approve") else 0.0
             # Phase 7: outcome attribution by discovery source (descriptive only)
             try:
+                from ashare.research.benchmark import equal_weight_benchmark_returns
                 from ashare.research.tracking import ReviewEngine
 
                 horizon = str(((research_yaml.get("tracking") or {}).get("attribution_horizon") or 5))
+                horizons = list((research_yaml.get("tracking") or {}).get("horizons_days") or [1, 3, 5, 10, 20, 60])
+                bench_pack = equal_weight_benchmark_returns(panel, as_of, horizons=horizons)
+                bench_returns = {
+                    k: v for k, v in (bench_pack.get("returns") or {}).items() if v is not None
+                }
                 outcome_pack = ReviewEngine(cfg).attribution_report(
-                    platform_reports, panel, horizon=horizon, persist=True
+                    platform_reports,
+                    panel,
+                    horizon=horizon,
+                    benchmark_returns=bench_returns or None,
+                    persist=True,
                 )
+                outcome_pack["benchmark"] = bench_pack
             except Exception as exc:  # noqa: BLE001
                 logger.warning("outcome attribution skipped: %s", exc)
                 outcome_pack = {"available": False, "error": str(exc)[:300]}
@@ -357,12 +374,14 @@ def run_research(cfg: dict[str, Any], top_n: int | None = None) -> dict[str, Any
                     "candidate_sources": r.get("candidate_sources"),
                     "candidate_score": r.get("candidate_score"),
                     "in_council": r.get("in_council"),
+                    "gate": r.get("gate"),
                     "trigger": r.get("trigger"),
                     "research_hypotheses": r.get("research_hypotheses") or [],
                 }
                 for r in (uni.get("research_universe") or [])
             ],
             "rejected": (uni.get("rejected") or [])[:80],
+            "gate": gate_summary,
         },
         "platform_reports": [
             {
@@ -371,6 +390,7 @@ def run_research(cfg: dict[str, Any], top_n: int | None = None) -> dict[str, Any
                 "name": r.get("name"),
                 "rating": (r.get("decision") or {}).get("research_rating"),
                 "action": (r.get("decision") or {}).get("action"),
+                "gate": r.get("gate"),
                 "candidate_sources": r.get("candidate_sources") or [],
                 "research_hypotheses": r.get("research_hypotheses") or [],
                 "chairman": {
@@ -378,15 +398,7 @@ def run_research(cfg: dict[str, Any], top_n: int | None = None) -> dict[str, Any
                     "base_case": (r.get("chairman") or {}).get("base_case"),
                     "risks": (r.get("chairman") or {}).get("risks"),
                 },
-                "news": {
-                    "counts": (r.get("news_package") or {}).get("counts"),
-                    "net_event_score": (r.get("news_package") or {}).get("net_event_score"),
-                    "incomplete": (r.get("news_package") or {}).get("news_data_incomplete"),
-                    "last_7d": (r.get("news_package") or {}).get("last_7d") or [],
-                    "timeline": (r.get("news_package") or {}).get("timeline") or [],
-                    "conflicts": (r.get("news_package") or {}).get("conflicts") or [],
-                    "expectation": (r.get("news_package") or {}).get("expectation"),
-                },
+                "news": _news_from_package(r.get("news_package") or {}),
             }
             for r in platform_reports
         ],
@@ -397,6 +409,8 @@ def run_research(cfg: dict[str, Any], top_n: int | None = None) -> dict[str, Any
             "outcomes": (outcome_pack.get("outcomes") or [])[:40],
             "attribution": outcome_pack.get("attribution"),
             "by_rating": outcome_pack.get("by_rating"),
+            "ai_incremental_alpha": outcome_pack.get("ai_incremental_alpha"),
+            "benchmark": outcome_pack.get("benchmark"),
             "note": outcome_pack.get("note") or outcome_pack.get("error"),
         },
         "roundtable": {
@@ -424,6 +438,10 @@ def run_research(cfg: dict[str, Any], top_n: int | None = None) -> dict[str, Any
         },
         "generated_at": datetime.now(timezone.utc).isoformat(),
     }
+    try:
+        payload["ai_cost"] = get_cost_tracker(cfg).cycle_summary(cycle_id)
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("research cost summary skipped: %s", exc)
     persist_report(cfg, payload)
     _persist_picks_compat(cfg, payload)
     return payload
@@ -465,6 +483,75 @@ def _persist_picks_compat(cfg: dict[str, Any], payload: dict[str, Any]) -> None:
     except Exception as exc:  # noqa: BLE001
         logger.warning("PG persist research failed: %s", exc)
         payload["persist_warning"] = str(exc)
+
+
+def _news_from_package(pkg: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "counts": pkg.get("counts"),
+        "net_event_score": pkg.get("net_event_score"),
+        "incomplete": pkg.get("news_data_incomplete"),
+        "last_7d": pkg.get("last_7d") or [],
+        "timeline": pkg.get("timeline") or [],
+        "conflicts": pkg.get("conflicts") or [],
+        "expectation": pkg.get("expectation"),
+        "link_filter": pkg.get("link_filter"),
+    }
+
+
+def refresh_report_news(cfg: dict[str, Any]) -> dict[str, Any]:
+    """Re-fetch per-stock news for cached platform_reports — no LLM, no council."""
+    from ashare.news.engine import NewsIntelligenceEngine
+
+    payload = latest_research(cfg)
+    if not payload:
+        raise RuntimeError("No research report to refresh — run research first")
+
+    reports = list(payload.get("platform_reports") or [])
+    if not reports:
+        raise RuntimeError("No platform_reports in latest research")
+
+    eng = NewsIntelligenceEngine(cfg)
+    updated: list[dict[str, Any]] = []
+    for rep in reports:
+        sym = str(rep.get("symbol") or "")
+        name = str(rep.get("name") or "")
+        if not sym:
+            updated.append(rep)
+            continue
+        try:
+            pkg = eng.collect_stock(sym, name=name, persist=True)
+            rep = {**rep, "news": _news_from_package(pkg)}
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("refresh news failed for %s: %s", sym, exc)
+            rep = {
+                **rep,
+                "news": {
+                    **(rep.get("news") or {}),
+                    "incomplete": True,
+                    "link_filter": {"error": str(exc)},
+                },
+            }
+        updated.append(rep)
+
+    payload["platform_reports"] = updated
+    payload["generated_at"] = datetime.now(timezone.utc).isoformat()
+    payload["news_refreshed_at"] = payload["generated_at"]
+    persist_report(cfg, payload)
+    _persist_picks_compat(cfg, payload)
+    return {
+        "ok": True,
+        "n_reports": len(updated),
+        "generated_at": payload["generated_at"],
+        "samples": [
+            {
+                "symbol": r.get("symbol"),
+                "name": r.get("name"),
+                "last_7d": (r.get("news") or {}).get("counts", {}).get("last_7d"),
+                "filtered": ((r.get("news") or {}).get("link_filter") or {}).get("n_weak_dropped"),
+            }
+            for r in updated[:6]
+        ],
+    }
 
 
 def latest_research(cfg: dict[str, Any]) -> dict[str, Any] | None:

@@ -122,7 +122,7 @@ def propose_updates(cfg: dict[str, Any], context: dict[str, Any]) -> dict[str, A
         return heuristic_proposal(context.get("metrics") or {}, cfg)
     user = json.dumps(context, ensure_ascii=False, default=str)[:8000]
     try:
-        text = client.chat(SYSTEM, user, json_mode=True)
+        text = client.chat(SYSTEM, user, json_mode=True, role="optimizer", call_site="agent.optimize")
         raw = parse_json_object(text)
         proposal = sanitize_proposal(raw)
         if not proposal.get("rationale"):

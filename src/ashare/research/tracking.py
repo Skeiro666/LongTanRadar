@@ -120,6 +120,8 @@ class ReviewEngine:
         """Group by source_bucket and by individual discovery tags."""
         by_bucket: dict[str, list[float]] = {}
         by_tag: dict[str, list[float]] = {}
+        by_bucket_ex: dict[str, list[float]] = {}
+        by_tag_ex: dict[str, list[float]] = {}
         pending = 0
         for o in outcomes:
             cell = (o.get("horizons") or {}).get(str(horizon)) or {}
@@ -134,28 +136,46 @@ class ReviewEngine:
                 by_tag.setdefault("unknown", []).append(ret)
             for t in tags:
                 by_tag.setdefault(str(t), []).append(ret)
+            ex = cell.get("excess_return")
+            if ex is not None:
+                by_bucket_ex.setdefault(bucket, []).append(float(ex))
+                tag_list = tags or ["unknown"]
+                for t in tag_list:
+                    by_tag_ex.setdefault(str(t), []).append(float(ex))
 
-        def _stats(rets: list[float]) -> dict[str, Any]:
+        def _stats(rets: list[float], excess: list[float] | None = None) -> dict[str, Any]:
             s = pd.Series(rets)
-            return {
+            out: dict[str, Any] = {
                 "n": int(len(rets)),
                 "mean_return": float(s.mean()),
                 "median_return": float(s.median()),
                 "win_rate": float((s > 0).mean()),
-                "excess_available": False,
-                "note": "stock return only; excess requires real benchmark",
             }
+            if excess:
+                ex = pd.Series(excess)
+                out["mean_excess_return"] = float(ex.mean())
+                out["excess_available"] = True
+            else:
+                out["excess_available"] = False
+                out["note"] = "stock return only; excess requires real benchmark"
+            return out
 
+        has_excess = bool(by_bucket_ex)
         return {
             "horizon": str(horizon),
             "n_outcomes": len(outcomes),
             "n_pending_or_missing": pending,
-            "by_source_bucket": {k: _stats(v) for k, v in sorted(by_bucket.items())},
-            "by_discovery_source": {k: _stats(v) for k, v in sorted(by_tag.items())},
+            "by_source_bucket": {
+                k: _stats(v, by_bucket_ex.get(k)) for k, v in sorted(by_bucket.items())
+            },
+            "by_discovery_source": {
+                k: _stats(v, by_tag_ex.get(k)) for k, v in sorted(by_tag.items())
+            },
+            "benchmark_wired": has_excess,
             "rules": [
                 "Attribution is descriptive only — does not change trading weights",
                 "News ≠ BUY; source win-rate is not an auto-trade signal",
-                "Do not treat mean_return as alpha without a real benchmark",
+                "Excess uses equal-weight universe at research as_of when benchmark_wired=true",
             ],
         }
 
@@ -175,13 +195,71 @@ class ReviewEngine:
             self.persist_outcomes(outcomes)
         attr = self.summarize_by_source(outcomes, horizon=horizon)
         by_rating = self.summarize_by_rating(outcomes, horizon=horizon)
+        ai_alpha = self.compute_ai_incremental_alpha(outcomes, horizon=horizon)
         return {
             "available": True,
             "outcomes": outcomes,
             "attribution": attr,
             "by_rating": by_rating,
+            "ai_incremental_alpha": ai_alpha,
             "horizon": str(horizon),
         }
+
+    def compute_ai_incremental_alpha(
+        self,
+        outcomes: list[dict[str, Any]],
+        *,
+        horizon: str = "5",
+    ) -> dict[str, Any]:
+        """
+        Descriptive compare: quant-only discovery bucket vs council-reviewed (non GATE_SKIP).
+        Uses excess_return when benchmark wired; else actual_return with note.
+        """
+        quant_rets: list[float] = []
+        council_rets: list[float] = []
+        use_excess = False
+        for o in outcomes:
+            rating = str(o.get("rating") or "")
+            if rating in {"GATE_SKIP", "SKIP"}:
+                continue
+            cell = (o.get("horizons") or {}).get(str(horizon)) or {}
+            val = cell.get("excess_return")
+            if val is not None:
+                use_excess = True
+            else:
+                val = cell.get("actual_return")
+            if val is None:
+                continue
+            ret = float(val)
+            bucket = str(o.get("source_bucket") or _source_bucket(o.get("candidate_sources")))
+            if bucket == "quant_only":
+                quant_rets.append(ret)
+            else:
+                council_rets.append(ret)
+
+        def _pack(rets: list[float]) -> dict[str, float]:
+            if not rets:
+                return {"n": 0.0, "mean_return": 0.0, "win_rate": 0.0}
+            s = pd.Series(rets)
+            return {
+                "n": float(len(rets)),
+                "mean_return": float(s.mean()),
+                "win_rate": float((s > 0).mean()),
+            }
+
+        qm = _pack(quant_rets)
+        cm = _pack(council_rets)
+        metric_key = "mean_excess" if use_excess else "mean_return"
+        ab = self.ab_compare(
+            {metric_key: qm["mean_return"], "win_rate": qm["win_rate"], "n": qm["n"]},
+            {metric_key: cm["mean_return"], "win_rate": cm["win_rate"], "n": cm["n"]},
+        )
+        ab["horizon"] = str(horizon)
+        ab["metric"] = metric_key
+        ab["quant_only_bucket"] = qm
+        ab["council_reviewed_bucket"] = cm
+        ab["note"] = "descriptive cohort compare; not OOS proof of AI alpha"
+        return ab
 
     def ab_compare(self, quant_only: dict[str, float], quant_ai: dict[str, float]) -> dict[str, Any]:
         """Caller supplies metric dicts (CAGR/Sharpe/...). No fabrication."""

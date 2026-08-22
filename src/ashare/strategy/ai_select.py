@@ -79,6 +79,16 @@ class AISelectStrategy(Strategy):
         if path.exists():
             try:
                 data = json.loads(path.read_text(encoding="utf-8"))
+                try:
+                    from ashare.ai.cost_tracker import estimate_tokens, get_cost_tracker
+
+                    get_cost_tracker(self.cfg).record_cache_save(
+                        estimated_tokens=estimate_tokens(json.dumps(features, ensure_ascii=False)),
+                        call_site="strategy.ai_select",
+                        role="ai_select",
+                    )
+                except Exception:  # noqa: BLE001
+                    pass
                 return self._sanitize(data.get("picks") or [], allowed)
             except Exception:  # noqa: BLE001
                 pass
@@ -90,7 +100,13 @@ class AISelectStrategy(Strategy):
             f"候选（已滤 ST/停牌）:\n{json.dumps(features, ensure_ascii=False)}"
         )
         try:
-            text = client.chat(SYSTEM, user, json_mode=True)
+            text = client.chat(
+                SYSTEM,
+                user,
+                json_mode=True,
+                role="ai_select",
+                call_site="strategy.ai_select",
+            )
             data = parse_json_object(text)
         except Exception as exc:  # noqa: BLE001
             logger.warning("AI select failed: %s", exc)

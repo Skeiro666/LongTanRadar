@@ -21,7 +21,20 @@ class SnapshotStore:
         rid = snapshot.get("research_id") or f"R{datetime.now().strftime('%Y%m%d%H%M%S')}"
         path = self.dir / f"{rid}.json"
         path.write_text(json.dumps(snapshot, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
+        sym = snapshot.get("symbol")
+        if sym:
+            sym_path = self.dir / f"_latest_{sym}.json"
+            sym_path.write_text(json.dumps(snapshot, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
         return path
+
+    def load_latest_for_symbol(self, symbol: str) -> dict[str, Any] | None:
+        sym_path = self.dir / f"_latest_{symbol}.json"
+        if sym_path.exists():
+            try:
+                return json.loads(sym_path.read_text(encoding="utf-8"))
+            except Exception:  # noqa: BLE001
+                pass
+        return None
 
 
 def build_snapshot(candidate: dict[str, Any], cfg: dict[str, Any] | None = None) -> dict[str, Any]:

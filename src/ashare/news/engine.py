@@ -112,7 +112,7 @@ class NewsIntelligenceEngine:
             "n_linked": len(linked),
             "n_weak_dropped": len(weak_dropped),
             "weak_dropped_sample": weak_dropped[:8],
-            "note": "query_weak items excluded from display and event score",
+            "note": "仅保留标题含公司名/代码的新闻；正文列表命中(body_only)与 query_weak 均丢弃",
         }
         pkg["versions"] = {
             "news_data_version": self.version,

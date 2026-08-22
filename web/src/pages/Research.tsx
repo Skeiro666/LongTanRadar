@@ -70,6 +70,7 @@ type ResearchPayload = {
       }[];
       conflicts?: string[];
       expectation?: { available?: boolean; note?: string };
+      link_filter?: { n_weak_dropped?: number; n_linked?: number; n_fetched?: number; note?: string };
     };
   }[];
   news_discovery?: {
@@ -99,7 +100,7 @@ type ResearchPayload = {
       research_hypotheses?: { type?: string; layers?: Record<string, string>; hypothesis?: string }[];
       candidate_source?: string;
     }[];
-    rejected?: { symbol?: string; reject_reason?: string; event_type?: string; title?: string }[];
+    rejected?: { symbol?: string; reject_reason?: string; event_type?: string; title?: string; reason?: string }[];
   };
   candidate_union?: {
     n_union?: number;
@@ -149,6 +150,7 @@ export default function Research() {
   const [data, setData] = useState<ResearchPayload | null>(null);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
+  const [newsBusy, setNewsBusy] = useState(false);
 
   async function load() {
     try {
@@ -171,6 +173,19 @@ export default function Research() {
     }
   }
 
+  async function refreshNews() {
+    setNewsBusy(true);
+    try {
+      await api.researchRefreshNews();
+      await load();
+      setErr("");
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setNewsBusy(false);
+    }
+  }
+
   useEffect(() => {
     load();
   }, []);
@@ -188,8 +203,11 @@ export default function Research() {
         <button className="btn btn-primary" disabled={busy} onClick={run}>
           {busy ? "研究中…" : "跑一轮研究"}
         </button>
-        <button className="btn btn-ink" disabled={busy} onClick={load}>
+        <button className="btn btn-ink" disabled={busy || newsBusy} onClick={load}>
           刷新最新
+        </button>
+        <button className="btn btn-ink" disabled={busy || newsBusy} onClick={refreshNews}>
+          {newsBusy ? "刷新新闻…" : "仅刷新新闻"}
         </button>
       </div>
       {err && <p className="status error">{err}</p>}
@@ -436,7 +454,15 @@ export default function Research() {
                         {r.news.counts?.last_30d ?? "—"}
                         {r.news.net_event_score != null ? ` · 事件净分 ${r.news.net_event_score.toFixed(2)}` : ""}
                         {r.news.incomplete ? " · 新闻不完整" : ""}
+                        {r.news.link_filter
+                          ? ` · 已过滤 ${r.news.link_filter.n_weak_dropped ?? 0} 条非标题命中（保留 ${r.news.link_filter.n_linked ?? "—"}）`
+                          : " · ⚠ 旧缓存新闻，请点「仅刷新新闻」"}
                       </p>
+                      {(r.news.last_7d || []).length === 0 && (
+                        <p className="muted" style={{ fontSize: "0.85rem" }}>
+                          标题未出现「{r.name || r.symbol}」或股票代码的条目已丢弃（板块复盘/他股新闻不会显示）。
+                        </p>
+                      )}
                       {(r.news.conflicts || []).map((c, i) => (
                         <p key={i} className="muted" style={{ fontSize: "0.85rem" }}>
                           冲突：{c}

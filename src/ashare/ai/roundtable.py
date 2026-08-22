@@ -262,6 +262,8 @@ def build_roundtable_payload(cfg: dict[str, Any], candidates: list[dict[str, Any
 
 
 def _ask_role(cfg: dict[str, Any], role: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]:
+    from ashare.research.intel_package import slim_roundtable_candidate
+
     client = client_for_role(cfg, str(role["id"]))
     if not client.configured:
         out = _heuristic_role(role, payload)
@@ -273,17 +275,27 @@ def _ask_role(cfg: dict[str, Any], role: dict[str, Any], payload: dict[str, Any]
         focus=role.get("focus"),
         stance_hint=role.get("stance_hint") or "",
     )
+    role_id = str(role.get("id") or "")
+    slim_candidates = [
+        slim_roundtable_candidate(c, role_id, cfg=cfg) for c in (payload.get("candidates") or [])
+    ]
     user = json.dumps(
         {
             "your_role": role,
-            "candidates": payload.get("candidates"),
+            "candidates": slim_candidates,
             "other_roles": payload.get("roles"),
         },
         ensure_ascii=False,
         default=str,
     )[:12000]
     try:
-        text = client.chat(system, user, json_mode=True)
+        text = client.chat(
+            system,
+            user,
+            json_mode=True,
+            role=str(role.get("id") or ""),
+            call_site="roundtable.role",
+        )
         data = parse_json_object(text)
         data["id"] = role.get("id")
         data["name"] = data.get("name") or role.get("name")
@@ -305,6 +317,8 @@ def _ask_risk_rebuttal(
     prior: list[dict[str, Any]],
 ) -> dict[str, Any]:
     """Risk sees other analysts then issues challenges (second call, same risk model)."""
+    from ashare.research.intel_package import slim_roundtable_candidate
+
     client = client_for_role(cfg, str(role["id"]))
     if not client.configured:
         return _ask_role(cfg, role, payload)
@@ -314,17 +328,26 @@ def _ask_risk_rebuttal(
         focus=role.get("focus") + "；你已看到其他委员意见，必须点名反驳",
         stance_hint="优先否决不可交易/催化证伪的标的",
     )
+    slim_candidates = [
+        slim_roundtable_candidate(c, "risk", cfg=cfg) for c in (payload.get("candidates") or [])
+    ]
     user = json.dumps(
         {
             "your_role": role,
-            "candidates": payload.get("candidates"),
+            "candidates": slim_candidates,
             "other_opinions": prior,
         },
         ensure_ascii=False,
         default=str,
     )[:12000]
     try:
-        text = client.chat(system, user, json_mode=True)
+        text = client.chat(
+            system,
+            user,
+            json_mode=True,
+            role=str(role.get("id") or ""),
+            call_site="roundtable.risk_rebuttal",
+        )
         data = parse_json_object(text)
         data["id"] = role.get("id")
         data["name"] = data.get("name") or role.get("name")
@@ -341,6 +364,8 @@ def _ask_chair(
     payload: dict[str, Any],
     role_opinions: list[dict[str, Any]],
 ) -> dict[str, Any]:
+    from ashare.research.intel_package import slim_roundtable_candidate
+
     role = chair_role(cfg)
     client = client_for_role(cfg, "chair")
     if not client.configured:
@@ -350,9 +375,12 @@ def _ask_chair(
         out = _heuristic_chair(payload, role_opinions)
         out["model"] = "unconfigured"
         return out
+    slim_candidates = [
+        slim_roundtable_candidate(c, "chair", cfg=cfg) for c in (payload.get("candidates") or [])
+    ]
     user = json.dumps(
         {
-            "candidates": payload.get("candidates"),
+            "candidates": slim_candidates,
             "committee_opinions": role_opinions,
             "chair_role": role,
         },
@@ -360,7 +388,13 @@ def _ask_chair(
         default=str,
     )[:14000]
     try:
-        text = client.chat(CHAIR_SYSTEM, user, json_mode=True)
+        text = client.chat(
+            CHAIR_SYSTEM,
+            user,
+            json_mode=True,
+            role="chair",
+            call_site="roundtable.chair",
+        )
         data = parse_json_object(text)
         data["source"] = "llm"
         data["model"] = client.model
@@ -472,6 +506,8 @@ def _run_single_model(
             system + "\n" + CHAIR_SYSTEM,
             json.dumps(payload, ensure_ascii=False, default=str)[:14000],
             json_mode=True,
+            role="all",
+            call_site="roundtable.single_model",
         )
         raw = parse_json_object(text)
         raw["source"] = "llm_single"

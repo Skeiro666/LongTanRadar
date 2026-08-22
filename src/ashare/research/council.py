@@ -9,7 +9,10 @@ from typing import Any
 
 from ashare.ai.client import client_for_role, client_from_cfg, parse_json_object
 from ashare.config_loaders import load_yaml_config
-from ashare.research.intel_package import build_research_intelligence
+from ashare.research.cache import compute_context_hash, get_research_cache
+from ashare.research.dynamic_council import select_council_roles, skipped_role_opinion
+from ashare.research.incremental import roles_to_refresh
+from ashare.research.intel_package import build_chairman_context, build_role_context
 
 logger = logging.getLogger("ashare.research.council")
 
@@ -37,13 +40,15 @@ class AICouncilEngine:
 
     def _call_role(self, role_id: str, snapshot: dict[str, Any]) -> dict[str, Any]:
         ver, system = self._prompt_for(role_id)
+        if role_id == "valuation" and not snapshot.get("value_available", False):
+            return self._heuristic(role_id, snapshot, ver, "unavailable")
         # map new roles onto existing client role keys when possible
         alias = {"fundamental": "dragon", "quant": "dragon", "valuation": "event", "bear": "risk"}.get(role_id, role_id)
         try:
             client = client_for_role(self.cfg, alias)
         except Exception:  # noqa: BLE001
             client = client_from_cfg(self.cfg)
-        intel = build_research_intelligence(snapshot, role_id=role_id)
+        intel = build_role_context(snapshot, role_id, cfg=self.cfg)
         payload = {
             "symbol": snapshot.get("symbol"),
             "name": snapshot.get("name"),
@@ -56,14 +61,53 @@ class AICouncilEngine:
         }
         if not getattr(client, "configured", False):
             return self._heuristic(role_id, snapshot, ver, "unconfigured")
+
+        factor_version = str((self.research_cfg.get("snapshot") or {}).get("factor_version") or "factor_v1")
+        payload_json = json.dumps(payload, ensure_ascii=False, default=str)[:10000]
+        cache = get_research_cache(self.cfg)
+        cache_key = compute_context_hash(
+            symbol=str(snapshot.get("symbol") or ""),
+            role_id=role_id,
+            context=intel,
+            prompt_version=ver,
+            model=str(getattr(client, "model", "") or ""),
+            factor_version=factor_version,
+        )
+        cached = cache.get(cache_key)
+        if cached:
+            out = dict(cached)
+            out.setdefault("role", role_id)
+            out["source"] = "cache"
+            try:
+                from ashare.ai.cost_tracker import estimate_tokens, get_cost_tracker
+
+                get_cost_tracker(self.cfg).record_cache_save(
+                    estimated_tokens=estimate_tokens(system + payload_json),
+                    call_site="council.role",
+                    role=role_id,
+                    symbol=str(snapshot.get("symbol") or "") or None,
+                    model=str(getattr(client, "model", "") or ""),
+                )
+            except Exception:  # noqa: BLE001
+                pass
+            return out
+
         try:
-            text = client.chat(system, json.dumps(payload, ensure_ascii=False, default=str)[:10000], json_mode=True)
+            text = client.chat(
+                system,
+                payload_json,
+                json_mode=True,
+                role=role_id,
+                symbol=str(snapshot.get("symbol") or "") or None,
+                call_site="council.role",
+            )
             data = parse_json_object(text)
             data["role"] = role_id
             data["prompt_version"] = ver
             data["model"] = getattr(client, "model", "")
             data["status"] = data.get("status") or "ok"
             data["source"] = "llm"
+            cache.set(cache_key, data, {"symbol": snapshot.get("symbol"), "role": role_id})
             return data
         except Exception as exc:  # noqa: BLE001
             logger.warning("council role %s failed: %s", role_id, exc)
@@ -117,17 +161,42 @@ class AICouncilEngine:
             "source": "heuristic",
         }
 
-    def run_parallel(self, snapshot: dict[str, Any]) -> dict[str, Any]:
+    def run_parallel(
+        self,
+        snapshot: dict[str, Any],
+        *,
+        prior_snapshot: dict[str, Any] | None = None,
+        prior_opinions: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         opinions: dict[str, Any] = {}
+        active = select_council_roles(snapshot, self.cfg)
+        from ashare.research.incremental import _incremental_cfg
+
+        inc_on = bool(_incremental_cfg(self.cfg).get("enabled", True)) and prior_snapshot is not None
+        if inc_on:
+            to_call = list(roles_to_refresh(snapshot, prior_snapshot, self.cfg))
+        else:
+            to_call = list(active)
+
+        for rid in self.ROLE_IDS:
+            if rid not in active:
+                opinions[rid] = skipped_role_opinion(rid, "dynamic_council: 信号不足，跳过 LLM")
+
+        for rid in active:
+            if rid not in to_call and prior_opinions and rid in prior_opinions:
+                reused = dict(prior_opinions[rid])
+                reused["source"] = "incremental_reuse"
+                opinions[rid] = reused
+
         parallel = bool((self.research_cfg.get("council") or {}).get("parallel_roles", True))
         if parallel:
             with ThreadPoolExecutor(max_workers=5) as ex:
-                futs = {ex.submit(self._call_role, rid, snapshot): rid for rid in self.ROLE_IDS}
+                futs = {ex.submit(self._call_role, rid, snapshot): rid for rid in to_call}
                 for fut in as_completed(futs):
                     rid = futs[fut]
                     opinions[rid] = fut.result()
         else:
-            for rid in self.ROLE_IDS:
+            for rid in to_call:
                 opinions[rid] = self._call_role(rid, snapshot)
         return opinions
 
@@ -182,41 +251,58 @@ class ChairmanEngine:
         ver = "chairman_v1"
         system = (self.prompts.get("roles") or {}).get(ver) or "Chairman. Output JSON."
         missing = [k for k, v in opinions.items() if v.get("status") in {"failed", "unavailable"}]
-        intel = snapshot.get("research_intelligence") or build_research_intelligence(snapshot)
-        payload = {
-            "research_intelligence": {
-                "candidate_sources": intel.get("candidate_sources"),
-                "research_hypotheses": intel.get("research_hypotheses"),
-                "data_availability": intel.get("data_availability"),
-                "price_in_risk": intel.get("price_in_risk"),
-                "evidence_ids": intel.get("evidence_ids"),
-                "rules": intel.get("rules"),
-                "quant_context": intel.get("quant_context"),
-            },
-            "snapshot_quant": snapshot.get("quant"),
-            "opinions": opinions,
-            "debate": debate,
-            "missing_roles": missing,
-        }
+        payload = build_chairman_context(snapshot, opinions, debate, cfg=self.cfg)
         try:
             client = client_for_role(self.cfg, "chair")
         except Exception:  # noqa: BLE001
             client = client_from_cfg(self.cfg)
         if getattr(client, "configured", False):
+            factor_version = str((load_yaml_config(self.cfg, "research").get("snapshot") or {}).get("factor_version") or "factor_v1")
+            cache = get_research_cache(self.cfg)
+            opinion_sig = {
+                k: {"score": v.get("score"), "stance": v.get("stance"), "status": v.get("status")}
+                for k, v in opinions.items()
+                if isinstance(v, dict)
+            }
+            cache_key = compute_context_hash(
+                symbol=str(snapshot.get("symbol") or ""),
+                role_id="chairman",
+                context={"intel": payload.get("research_intelligence"), "opinions": opinion_sig, "debate": debate},
+                prompt_version=ver,
+                model=str(getattr(client, "model", "") or ""),
+                factor_version=factor_version,
+            )
+            cached = cache.get(cache_key)
+            if cached:
+                out = dict(cached)
+                out["source"] = "cache"
+                return out
             try:
-                text = client.chat(system, json.dumps(payload, ensure_ascii=False, default=str)[:12000], json_mode=True)
+                text = client.chat(
+                    system,
+                    json.dumps(payload, ensure_ascii=False, default=str)[:12000],
+                    json_mode=True,
+                    role="chairman",
+                    symbol=str(snapshot.get("symbol") or "") or None,
+                    call_site="council.chairman",
+                )
                 data = parse_json_object(text)
                 data["prompt_version"] = ver
                 data["model"] = getattr(client, "model", "")
                 data["source"] = "llm"
                 data.setdefault("trading_action", "WATCH")
+                cache.set(cache_key, data, {"symbol": snapshot.get("symbol"), "role": "chairman"})
                 return data
             except Exception as exc:  # noqa: BLE001
                 logger.warning("chairman failed: %s", exc)
         return self._heuristic(opinions, missing, ver)
 
     def _heuristic(self, opinions: dict[str, Any], missing: list[str], ver: str) -> dict[str, Any]:
-        scores = [float(v.get("score") or 0) for k, v in opinions.items() if k != "bear" and v.get("status") != "unavailable"]
+        scores = [
+            float(v.get("score") or 0)
+            for k, v in opinions.items()
+            if k != "bear" and v.get("status") not in {"unavailable", "skipped", "failed"}
+        ]
         bear = float((opinions.get("bear") or {}).get("score") or 0)
         avg = float(sum(scores) / len(scores)) if scores else 0.0
         if avg > 0.4 and bear > -0.5:

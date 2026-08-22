@@ -42,6 +42,39 @@ council:
       name: Chairman
       prompt_version: chairman_v1
 
+context_compression:
+  enabled: true
+  max_news_headlines: 5
+  max_timeline_events: 6
+  max_hypotheses: 8
+
+research_cache:
+  enabled: true
+  dir: data/cache/research
+  ttl_hours: 24
+
+dynamic_council:
+  enabled: true
+  min_profit_score: 0.2
+  min_leader_score: 0.15
+  min_ml_prediction: 0.005
+  min_event_score: 0.1
+
+research_gate:
+  enabled: true
+  always_pass_top_n: 3
+  min_candidate_score: 0.12
+  min_leader_score: 0.10
+  min_ml_prediction: 0.003
+  min_profit_score: 0.15
+  min_event_score: 0.08
+  min_news_score: 0.12
+  boost_sources: [news, profit, event]
+  boost_score_floor: 0.08
+
+incremental_research:
+  enabled: true
+
 tracking:
   horizons_days: [1, 3, 5, 10, 20, 60]
   attribution_horizon: 5

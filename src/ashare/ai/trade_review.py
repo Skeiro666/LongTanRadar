@@ -175,7 +175,13 @@ def review_trade_candidates(cfg: dict[str, Any], picks: list[dict[str, Any]]) ->
     raw_decision: dict[str, Any]
     if client.configured:
         try:
-            text = client.chat(SYSTEM, json.dumps(payload, ensure_ascii=False, default=str)[:12000], json_mode=True)
+            text = client.chat(
+                SYSTEM,
+                json.dumps(payload, ensure_ascii=False, default=str)[:12000],
+                json_mode=True,
+                role="trade_review",
+                call_site="trade.review",
+            )
             raw_decision = parse_json_object(text)
             raw_decision["source"] = "llm"
         except Exception as exc:  # noqa: BLE001

@@ -42,7 +42,7 @@ def review_backtest(cfg: dict[str, Any], metrics: dict[str, Any]) -> str | None:
     slim["strategy"] = cfg.get("strategy", {}).get("name")
     slim["execute_at"] = cfg.get("trading", {}).get("execute_at")
     try:
-        text = client.chat(SYSTEM, f"回测摘要 JSON:\n{slim}")
+        text = client.chat(SYSTEM, f"回测摘要 JSON:\n{slim}", role="review", call_site="backtest.review")
     except Exception as exc:  # noqa: BLE001
         logger.warning("AI review failed: %s", exc)
         return None

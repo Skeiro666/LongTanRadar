@@ -79,6 +79,7 @@ export const api = {
   researchLatest: () => req<any>("/api/research/latest"),
   researchRun: (body?: { top_n?: number }) =>
     req<any>("/api/research/run", { method: "POST", body: JSON.stringify(body || {}) }),
+  researchRefreshNews: () => req<any>("/api/research/refresh-news", { method: "POST", body: "{}" }),
   researchSessions: (limit = 50) => req<any>(`/api/research/sessions?limit=${limit}`),
   researchSession: (id: string) => req<any>(`/api/research/session/${id}`),
   researchCandidates: (candidateSource = "") =>
@@ -94,6 +95,7 @@ export const api = {
     req<any>(`/api/news/${encodeURIComponent(symbol)}?name=${encodeURIComponent(name)}`),
   factors: () => req<any>("/api/factors"),
   mlRankTrain: () => req<any>("/api/ml/rank/train", { method: "POST", body: "{}" }),
+  aiCost: () => req<any>("/api/ai/cost"),
 };
 
 export function pct(n: number | undefined) {

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import time
 from typing import Any
 from urllib.parse import urlparse
 
@@ -138,7 +139,18 @@ class LLMClient:
         key = self.api_key.lower()
         return bool(self.api_key) and key not in {"", "none", "null", "sk-在此填写你的密钥", "sk-你的密钥"}
 
-    def chat(self, system: str, user: str, *, json_mode: bool = False) -> str:
+    def chat(
+        self,
+        system: str,
+        user: str,
+        *,
+        json_mode: bool = False,
+        role: str | None = None,
+        symbol: str | None = None,
+        call_site: str | None = None,
+        cache_hit: bool = False,
+        cycle_id: str | None = None,
+    ) -> str:
         if not self.configured:
             raise RuntimeError(
                 f"LLM[{self.provider}] not configured: set the vendor API key "
@@ -168,10 +180,20 @@ class LLMClient:
         if self.extra_body:
             kwargs["extra_body"] = dict(self.extra_body)
 
+        meta = {
+            "role": role,
+            "symbol": symbol,
+            "call_site": call_site,
+            "cache_hit": cache_hit,
+            "cycle_id": cycle_id,
+            "prompt_text": f"{system_msg}\n{user_msg}",
+        }
+        t0 = time.perf_counter()
         try:
             if self.use_sdk:
-                return self._chat_via_openai_sdk(kwargs)
-            return self._chat_via_http(kwargs)
+                content, usage = self._chat_via_openai_sdk(kwargs)
+            else:
+                content, usage = self._chat_via_http(kwargs)
         except Exception as first_exc:
             if not json_mode:
                 raise
@@ -183,10 +205,52 @@ class LLMClient:
             )
             kwargs.pop("response_format", None)
             if self.use_sdk:
-                return self._chat_via_openai_sdk(kwargs)
-            return self._chat_via_http(kwargs)
+                content, usage = self._chat_via_openai_sdk(kwargs)
+            else:
+                content, usage = self._chat_via_http(kwargs)
+        latency_ms = (time.perf_counter() - t0) * 1000.0
+        self._record_usage(content, usage, latency_ms, meta)
+        return content
 
-    def _chat_via_openai_sdk(self, kwargs: dict[str, Any]) -> str:
+    @staticmethod
+    def _normalize_usage(raw: dict[str, Any] | None, prompt_text: str, output_text: str) -> tuple[int, int, str]:
+        if raw:
+            inp = int(raw.get("input_tokens") or raw.get("prompt_tokens") or 0)
+            out = int(raw.get("output_tokens") or raw.get("completion_tokens") or 0)
+            if inp or out:
+                return inp, out, "actual"
+        from ashare.ai.cost_tracker import estimate_tokens
+
+        return estimate_tokens(prompt_text), estimate_tokens(output_text), "estimated"
+
+    def _record_usage(
+        self,
+        content: str,
+        usage: dict[str, Any] | None,
+        latency_ms: float,
+        meta: dict[str, Any],
+    ) -> None:
+        try:
+            from ashare.ai.cost_tracker import get_cost_tracker
+
+            inp, out, source = self._normalize_usage(usage, meta["prompt_text"], content)
+            get_cost_tracker().record(
+                model=self.model,
+                provider=self.provider,
+                input_tokens=inp,
+                output_tokens=out,
+                latency_ms=latency_ms,
+                usage_source=source,
+                symbol=meta.get("symbol"),
+                role=meta.get("role"),
+                call_site=meta.get("call_site"),
+                cache_hit=bool(meta.get("cache_hit")),
+                cycle_id=meta.get("cycle_id"),
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("usage record skipped: %s", exc)
+
+    def _chat_via_openai_sdk(self, kwargs: dict[str, Any]) -> tuple[str, dict[str, Any] | None]:
         try:
             from openai import OpenAI
         except ImportError:
@@ -202,9 +266,17 @@ class LLMClient:
         content = resp.choices[0].message.content
         if content is None or str(content).strip() == "":
             raise RuntimeError(f"{self.provider} empty content (model={self.model})")
-        return str(content)
+        usage = None
+        u = getattr(resp, "usage", None)
+        if u is not None:
+            usage = {
+                "input_tokens": getattr(u, "prompt_tokens", None),
+                "output_tokens": getattr(u, "completion_tokens", None),
+                "total_tokens": getattr(u, "total_tokens", None),
+            }
+        return str(content), usage
 
-    def _chat_via_http(self, kwargs: dict[str, Any]) -> str:
+    def _chat_via_http(self, kwargs: dict[str, Any]) -> tuple[str, dict[str, Any] | None]:
         url = chat_completions_url(self.base_url, provider=self.provider)
         headers = {
             "Authorization": f"Bearer {self.api_key or 'ollama'}",
@@ -224,7 +296,8 @@ class LLMClient:
             raise RuntimeError(f"Unexpected response: {json.dumps(data, ensure_ascii=False)[:500]}") from exc
         if content is None or str(content).strip() == "":
             raise RuntimeError(f"{self.provider} empty content")
-        return str(content)
+        usage = data.get("usage") if isinstance(data.get("usage"), dict) else None
+        return str(content), usage
 
 
 def _resolve_api_key(cfg: dict[str, Any], prof: dict[str, Any], ai: dict[str, Any]) -> str:

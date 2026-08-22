@@ -108,6 +108,13 @@ def run_cycle(cfg: dict[str, Any], *, reset_paper: bool = False, do_retrain: boo
     with _lock:
         _state["cycle"] = int(_state.get("cycle") or 0) + 1
         cycle = _state["cycle"]
+    cycle_id = f"agent_{cycle}"
+    try:
+        from ashare.ai.cost_tracker import get_cost_tracker
+
+        get_cost_tracker(cfg).begin_cycle(cycle_id)
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("cost tracker begin_cycle skipped: %s", exc)
     _log("开始第 %d 轮" % cycle, phase="start", cycle=cycle)
 
     picks: dict[str, Any] = {}
@@ -253,6 +260,12 @@ def run_cycle(cfg: dict[str, Any], *, reset_paper: bool = False, do_retrain: boo
         "roundtable": (traded.get("picks") or {}).get("roundtable") if isinstance(traded.get("picks"), dict) else None,
         "ai_review": traded.get("ai_review") or (traded.get("picks") or {}).get("ai_review"),
     }
+    try:
+        from ashare.ai.cost_tracker import get_cost_tracker
+
+        result["ai_cost"] = get_cost_tracker(cfg).cycle_summary(cycle_id)
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("cost summary skipped: %s", exc)
     with _lock:
         _state["last_result"] = result
         _state["last_error"] = ""

@@ -2,54 +2,82 @@ from __future__ import annotations
 
 from typing import Any
 
-
-def _cluster_key(event: dict[str, Any]) -> tuple[str, str]:
-    return (
-        str(event.get("event_type") or "OTHER"),
-        str(event.get("direction") or "NEUTRAL"),
-    )
+from ashare.news.models import normalize_title
 
 
-def cluster_timeline_events(events: list[dict[str, Any]], *, max_clusters: int = 12) -> list[dict[str, Any]]:
+def _cluster_key(event: dict[str, Any], *, by_symbol: bool = True) -> tuple:
+    sym = str(event.get("symbol") or "") if by_symbol else ""
+    etype = str(event.get("event_type") or "OTHER")
+    direction = str(event.get("direction") or event.get("event_direction") or "NEUTRAL")
+    # Same event across republished headlines: type + direction + symbol
+    return (sym, etype, direction)
+
+
+def cluster_timeline_events(
+    events: list[dict[str, Any]],
+    *,
+    max_clusters: int = 12,
+    by_symbol: bool = True,
+) -> list[dict[str, Any]]:
     """
-    Merge multiple articles/events sharing (event_type, direction) into compact clusters.
-    Preserves evidence_ids for audit; drops duplicate headline bodies from LLM path.
+    Merge republished / multi-headline coverage into one Event + N Evidence refs.
     """
-    groups: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    groups: dict[tuple, list[dict[str, Any]]] = {}
     for ev in events or []:
         if not isinstance(ev, dict):
             continue
-        groups.setdefault(_cluster_key(ev), []).append(ev)
+        groups.setdefault(_cluster_key(ev, by_symbol=by_symbol), []).append(ev)
 
     clusters: list[dict[str, Any]] = []
-    for (etype, direction), items in groups.items():
-        items.sort(key=lambda x: float(x.get("impact_score") or 0), reverse=True)
+    for key, items in groups.items():
+        sym, etype, direction = key if by_symbol else ("", key[0], key[1])
+        items.sort(key=lambda x: float(x.get("impact_score") or x.get("event_impact") or 0), reverse=True)
         rep = items[0]
-        evidence: list[str] = []
+        evidence_ids: list[str] = []
+        facts: list[str] = []
+        headlines: list[str] = []
         for it in items:
-            for eid in (it.get("event_id"), it.get("news_id"), it.get("evidence_id")):
-                if eid and str(eid) not in evidence:
-                    evidence.append(str(eid))
+            for eid in (it.get("evidence_id"), it.get("event_id"), it.get("news_id")):
+                if eid and str(eid) not in evidence_ids:
+                    evidence_ids.append(str(eid))
+            title = str(it.get("title") or it.get("description") or "")[:200]
+            if title and title not in headlines:
+                headlines.append(title)
+            for f in it.get("facts") or []:
+                if f and f not in facts:
+                    facts.append(str(f)[:300])
+            if title and not facts:
+                facts.append(title)
+
+        impact = max(float(x.get("impact_score") or x.get("event_impact") or 0) for x in items)
+        conf = max(float(x.get("confidence") or 0) for x in items)
+        cluster_id = f"CL_{etype}_{direction}_{sym or 'NA'}"[:48]
         clusters.append(
             {
-                "cluster_id": f"{etype}:{direction}",
+                "event_id": rep.get("event_id") or cluster_id,
+                "cluster_id": cluster_id,
+                "symbol": sym or rep.get("symbol"),
                 "event_type": etype,
                 "direction": direction,
+                "impact": impact,
+                "impact_score": impact,
+                "confidence": conf,
+                "novelty": rep.get("novelty") or rep.get("novelty_score"),
+                "published_at": rep.get("event_time") or rep.get("published_at"),
+                "available_at": rep.get("discovery_time") or rep.get("event_time"),
                 "n_sources": len(items),
-                "impact_score": max(float(x.get("impact_score") or 0) for x in items),
-                "confidence": max(float(x.get("confidence") or 0) for x in items),
-                "title": rep.get("title") or rep.get("description", "")[:120],
+                "facts": facts[:5],
+                "evidence_ids": evidence_ids[:12],
+                "headlines": headlines[:6],
+                "title": rep.get("title") or (headlines[0] if headlines else ""),
                 "event_time": rep.get("event_time"),
-                "evidence_ids": evidence[:10],
-                "headlines": [str(x.get("title") or "")[:120] for x in items[:5] if x.get("title")],
+                "inferences": list(rep.get("inferences") or [])[:3],
+                "hypotheses": list(rep.get("hypotheses") or [])[:3],
             }
         )
 
     clusters.sort(key=lambda x: float(x.get("impact_score") or 0), reverse=True)
     return clusters[:max_clusters]
-
-
-from ashare.news.models import normalize_title
 
 
 def compact_news_headlines(news: list[dict[str, Any]], *, max_items: int = 8) -> list[dict[str, Any]]:
@@ -70,6 +98,7 @@ def compact_news_headlines(news: list[dict[str, Any]], *, max_items: int = 8) ->
                 "date": row.get("published_at") or row.get("date"),
                 "classification": row.get("classification"),
                 "news_id": row.get("id") or row.get("news_id"),
+                "evidence_id": row.get("evidence_id"),
             }
         )
         if len(out) >= max_items:

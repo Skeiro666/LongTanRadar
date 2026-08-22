@@ -8,8 +8,8 @@ export default function App() {
     <div className="app-shell">
       <header className="topnav">
         <div className="brand">
-          <span className="brand-title">龙探雷达</span>
-          <span className="brand-sub">大A龙头探查</span>
+          <span className="brand-title">LONGTAN RADAR</span>
+          <span className="brand-sub">龙探雷达 · STRIKE BACK</span>
         </div>
         <nav className="nav-links">
           <NavLink to="/" end>

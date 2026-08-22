@@ -150,6 +150,7 @@ class LLMClient:
         call_site: str | None = None,
         cache_hit: bool = False,
         cycle_id: str | None = None,
+        research_session_id: str | None = None,
     ) -> str:
         if not self.configured:
             raise RuntimeError(
@@ -186,6 +187,7 @@ class LLMClient:
             "call_site": call_site,
             "cache_hit": cache_hit,
             "cycle_id": cycle_id,
+            "research_session_id": research_session_id,
             "prompt_text": f"{system_msg}\n{user_msg}",
         }
         t0 = time.perf_counter()
@@ -246,6 +248,7 @@ class LLMClient:
                 call_site=meta.get("call_site"),
                 cache_hit=bool(meta.get("cache_hit")),
                 cycle_id=meta.get("cycle_id"),
+                research_session_id=meta.get("research_session_id"),
             )
         except Exception as exc:  # noqa: BLE001
             logger.debug("usage record skipped: %s", exc)

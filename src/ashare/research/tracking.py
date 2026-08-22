@@ -191,18 +191,127 @@ class ReviewEngine:
         outcomes = [
             self.tracking.outcomes_for_report(r, panel, benchmark_returns=benchmark_returns) for r in reports
         ]
+        tracking_cfg = dict(load_yaml_config(self.cfg, "research").get("tracking") or {})
+        if tracking_cfg.get("execution_tracking", True) and outcomes:
+            from ashare.research.execution_tracking import attach_paper_execution, load_paper_fills
+
+            syms = [str(r.get("symbol") or "") for r in reports]
+            fills_by_sym = load_paper_fills(self.cfg, symbols=syms)
+            report_by_sym = {str(r.get("symbol")): r for r in reports}
+            for o in outcomes:
+                rep = report_by_sym.get(str(o.get("symbol"))) or {}
+                attach_paper_execution(o, rep, fills_by_sym, panel=panel)
         if persist and outcomes:
             self.persist_outcomes(outcomes)
         attr = self.summarize_by_source(outcomes, horizon=horizon)
         by_rating = self.summarize_by_rating(outcomes, horizon=horizon)
         ai_alpha = self.compute_ai_incremental_alpha(outcomes, horizon=horizon)
+        topk_alpha = self.compute_topk_ablation_alpha(reports, outcomes, horizon=horizon)
+        discovery_attr = self.summarize_discovery_sources(outcomes, horizon=horizon)
         return {
             "available": True,
             "outcomes": outcomes,
             "attribution": attr,
             "by_rating": by_rating,
             "ai_incremental_alpha": ai_alpha,
+            "ai_topk_ablation": topk_alpha,
+            "discovery_attribution": discovery_attr,
             "horizon": str(horizon),
+        }
+
+    def compute_topk_ablation_alpha(
+        self,
+        reports: list[dict[str, Any]],
+        outcomes: list[dict[str, Any]],
+        *,
+        horizon: str = "5",
+        top_k: int = 5,
+    ) -> dict[str, Any]:
+        """
+        V5 AI Incremental Alpha: same universe, same as_of rules — only variable is ranking.
+        Baseline Top-K by candidate_score vs AI Top-K by council rating/confidence.
+        """
+        outcome_by_sym = {str(o.get("symbol")): o for o in outcomes}
+
+        def _return(sym: str) -> float | None:
+            cell = (outcome_by_sym.get(sym) or {}).get("horizons") or {}
+            c = cell.get(str(horizon)) or {}
+            if c.get("excess_return") is not None:
+                return float(c["excess_return"])
+            if c.get("actual_return") is not None:
+                return float(c["actual_return"])
+            return None
+
+        eligible: list[dict[str, Any]] = []
+        for r in reports:
+            rating = str((r.get("decision") or {}).get("research_rating") or (r.get("chairman") or {}).get("rating") or "")
+            if rating in {"GATE_SKIP", "SKIP"}:
+                continue
+            sym = str(r.get("symbol") or "")
+            if _return(sym) is None:
+                continue
+            eligible.append(r)
+
+        if len(eligible) < 2:
+            return {
+                "available": False,
+                "insufficient_sample": True,
+                "sample_count": len(eligible),
+                "note": "need >=2 symbols with realized horizon returns",
+            }
+
+        def baseline_score(r: dict[str, Any]) -> float:
+            q = r.get("quant") or {}
+            return float(q.get("factor_score") or q.get("leader_score") or r.get("candidate_score") or 0)
+
+        def ai_score(r: dict[str, Any]) -> float:
+            rating = str((r.get("decision") or {}).get("research_rating") or (r.get("chairman") or {}).get("rating") or "WATCH")
+            weights = {"STRONG_BUY": 3.0, "BUY": 2.0, "WATCH": 1.0, "PASS": 0.0, "SELL": -1.0}
+            conf = float((r.get("chairman") or {}).get("confidence") or 0)
+            return weights.get(rating, 0.5) + conf
+
+        k = min(top_k, len(eligible))
+        baseline_top = sorted(eligible, key=baseline_score, reverse=True)[:k]
+        ai_top = sorted(eligible, key=ai_score, reverse=True)[:k]
+
+        def _mean(reps: list[dict[str, Any]]) -> dict[str, Any]:
+            rets = [_return(str(r["symbol"])) for r in reps]
+            rets = [x for x in rets if x is not None]
+            if not rets:
+                return {"n": 0, "mean_return": None, "hit_rate": None}
+            s = pd.Series(rets)
+            return {"n": len(rets), "mean_return": float(s.mean()), "hit_rate": float((s > 0).mean())}
+
+        bm = _mean(baseline_top)
+        am = _mean(ai_top)
+        incremental = None
+        if bm.get("mean_return") is not None and am.get("mean_return") is not None:
+            incremental = float(am["mean_return"]) - float(bm["mean_return"])
+
+        use_excess = any(
+            ((outcome_by_sym.get(str(r["symbol"])) or {}).get("horizons") or {}).get(str(horizon), {}).get("excess_return")
+            is not None
+            for r in eligible
+        )
+
+        return {
+            "available": True,
+            "insufficient_sample": k < 2,
+            "method": "same_universe_topk_ablation",
+            "horizon": str(horizon),
+            "top_k": k,
+            "sample_count": len(eligible),
+            "metric": "mean_excess_return" if use_excess else "mean_return",
+            "baseline_topk": {
+                "symbols": [r.get("symbol") for r in baseline_top],
+                **bm,
+            },
+            "ai_topk": {
+                "symbols": [r.get("symbol") for r in ai_top],
+                **am,
+            },
+            "ai_incremental_alpha": incremental,
+            "note": "Same candidate universe; only ranking differs (score vs council rating)",
         }
 
     def compute_ai_incremental_alpha(
@@ -258,8 +367,37 @@ class ReviewEngine:
         ab["metric"] = metric_key
         ab["quant_only_bucket"] = qm
         ab["council_reviewed_bucket"] = cm
-        ab["note"] = "descriptive cohort compare; not OOS proof of AI alpha"
+        ab["note"] = "legacy cohort compare; see ai_topk_ablation for same-universe Top-K"
         return ab
+
+    def summarize_discovery_sources(self, outcomes: list[dict[str, Any]], horizon: str = "5") -> dict[str, Any]:
+        """Per discovery tag (quant/news/event/profit/ml) excess return stats."""
+        tags = ("quant", "news", "event", "profit", "ml")
+        by_tag: dict[str, list[float]] = {t: [] for t in tags}
+        for o in outcomes:
+            cell = (o.get("horizons") or {}).get(str(horizon)) or {}
+            val = cell.get("excess_return")
+            if val is None:
+                val = cell.get("actual_return")
+            if val is None:
+                continue
+            srcs = set(str(s).lower() for s in (o.get("candidate_sources") or []))
+            for t in tags:
+                if t in srcs:
+                    by_tag[t].append(float(val))
+        out: dict[str, Any] = {"horizon": str(horizon), "sources": {}}
+        for t, rets in by_tag.items():
+            if not rets:
+                out["sources"][t] = {"n": 0, "mean_return": None, "insufficient_sample": True}
+            else:
+                s = pd.Series(rets)
+                out["sources"][t] = {
+                    "n": len(rets),
+                    "mean_return": float(s.mean()),
+                    "hit_rate": float((s > 0).mean()),
+                    "insufficient_sample": len(rets) < 3,
+                }
+        return out
 
     def ab_compare(self, quant_only: dict[str, float], quant_ai: dict[str, float]) -> dict[str, Any]:
         """Caller supplies metric dicts (CAGR/Sharpe/...). No fabrication."""

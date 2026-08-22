@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from ashare.ai.optimizer import apply_proposal, persist_runtime_overrides, propose_updates
+from ashare.ai.optimizer import propose_updates
 from ashare.config import load_config
 
 logger = logging.getLogger("ashare.services.agent")
@@ -226,9 +226,24 @@ def run_cycle(cfg: dict[str, Any], *, reset_paper: bool = False, do_retrain: boo
             "ml": {k: cfg.get("ml", {}).get(k) for k in ("top_n", "label_horizon", "n_estimators")},
         },
     )
-    persist_runtime_overrides(cfg["_root"], proposal)
-    cfg = apply_proposal(cfg, proposal)
-    _log(str(proposal.get("rationale") or "已更新参数"), phase="optimize", proposal=proposal)
+    from ashare.ai.optimizer_experiment import create_experiment
+
+    oc = dict(cfg.get("optimizer") or {})
+    auto_apply = bool(oc.get("auto_apply", False))
+    experiment = create_experiment(cfg, proposal, baseline_config={"strategy": cfg.get("strategy"), "pool": cfg.get("pool")}, context={"metrics": metrics})
+    if auto_apply:
+        from ashare.ai.optimizer_experiment import approve_experiment
+
+        applied = approve_experiment(cfg, experiment)
+        cfg = applied.get("cfg") or cfg
+        _log("实验已自动批准并应用（optimizer.auto_apply=true）", phase="optimize", experiment_id=experiment.get("experiment_id"))
+    else:
+        _log(
+            str(proposal.get("rationale") or "已生成实验提案，未直接改生产"),
+            phase="optimize",
+            proposal=proposal,
+            experiment_id=experiment.get("experiment_id"),
+        )
 
     should_train = do_retrain if do_retrain is not None else bool(proposal.get("retrain"))
     train_meta = None
@@ -253,6 +268,7 @@ def run_cycle(cfg: dict[str, Any], *, reset_paper: bool = False, do_retrain: boo
         "cycle": cycle,
         "metrics": metrics,
         "proposal": proposal,
+        "optimizer_experiment": experiment,
         "train": {k: train_meta.get(k) for k in ("run_id", "ic", "mse") if train_meta} if train_meta else None,
         "account": acc,
         "picks": traded.get("picks"),

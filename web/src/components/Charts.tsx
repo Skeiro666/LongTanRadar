@@ -35,21 +35,22 @@ export function EquityLineChart({
     <div className="chart-wrap">
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={rows} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
-          <CartesianGrid stroke="rgba(26,35,50,0.1)" strokeDasharray="3 6" />
-          <XAxis dataKey="date" tick={{ fontSize: 11 }} minTickGap={32} />
-          <YAxis tick={{ fontSize: 11 }} width={64} domain={["auto", "auto"]} />
+          <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 6" />
+          <XAxis dataKey="date" tick={{ fontSize: 11, fill: "#a8a8a8" }} minTickGap={32} />
+          <YAxis tick={{ fontSize: 11, fill: "#a8a8a8" }} width={64} domain={["auto", "auto"]} />
           <Tooltip
             formatter={(v: number) => [Number(v).toFixed(2), label]}
             contentStyle={{
-              background: "#f0f2f5",
-              border: "1px solid rgba(26,35,50,0.12)",
-              borderRadius: 8,
+              background: "#121212",
+              border: "1px solid rgba(230,0,18,0.45)",
+              borderRadius: 0,
+              color: "#f5f5f5",
             }}
           />
           <Line
             type="monotone"
             dataKey="value"
-            stroke={valueKey === "pnl_day" ? "#c9a227" : "#c62828"}
+            stroke={valueKey === "pnl_day" ? "#ffb347" : "#ff2244"}
             strokeWidth={2}
             dot={{ r: 3 }}
             isAnimationActive

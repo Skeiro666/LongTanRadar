@@ -105,12 +105,17 @@ class NewsCandidate:
 
     symbol: str
     candidate_source: str = "news"
+    candidate_sources: list[str] = field(default_factory=lambda: ["news"])
     event_id: str = ""
+    news_event_id: str = ""
     event_type: str = "OTHER"
     event_direction: str = "NEUTRAL"
+    direction: str = "NEUTRAL"
     event_impact: float = 0.0
+    news_score: float = 0.0
     relevance_score: float = 0.0
     novelty_score: float | None = None
+    novelty: float | None = None
     novelty_available: bool = False
     source_quality: str = "C"
     confidence: float = 0.0
@@ -120,12 +125,21 @@ class NewsCandidate:
     reason: str = ""
     evidence_ids: list[str] = field(default_factory=list)
     research_hypotheses: list[dict[str, Any]] = field(default_factory=list)
+    investment_hypothesis: dict[str, Any] = field(default_factory=dict)
+    related_symbols: list[str] = field(default_factory=list)
     mapping_method: str = "none"
     status: str = "DISCOVERED"
     reject_reason: str = ""
 
     def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
+        d = asdict(self)
+        d["direction"] = d.get("event_direction") or d.get("direction") or "NEUTRAL"
+        d["novelty"] = d.get("novelty_score") if d.get("novelty") is None else d.get("novelty")
+        if not d.get("news_event_id"):
+            d["news_event_id"] = d.get("event_id") or ""
+        if not d.get("news_score"):
+            d["news_score"] = float(d.get("event_impact") or 0) * max(float(d.get("confidence") or 0), 0.2)
+        return d
 
 
 def dump_json(obj: Any) -> str:

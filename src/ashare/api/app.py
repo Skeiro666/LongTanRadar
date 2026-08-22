@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import threading
 from pathlib import Path
 from typing import Any, Optional
 
@@ -274,14 +275,40 @@ def create_app(config_path: str | None = None) -> FastAPI:
             raise HTTPException(status_code=404, detail="No research yet — POST /api/research/run")
         return data
 
+    @app.get("/api/research/progress")
+    def api_research_progress() -> dict[str, Any]:
+        from ashare.research.progress import get_research_progress
+
+        snap = get_research_progress().snapshot()
+        if snap.get("status") == "done" and get_research_progress().result:
+            snap["result"] = get_research_progress().result
+        return snap
+
     @app.post("/api/research/run")
-    def api_research_run(body: PicksBody = PicksBody()) -> dict[str, Any]:
+    def api_research_run(body: PicksBody = PicksBody(), sync: bool = False) -> dict[str, Any]:
+        from ashare.research.progress import get_research_progress
         from ashare.services.research import run_research
 
+        progress = get_research_progress()
+        if progress.running:
+            raise HTTPException(status_code=409, detail="Research already running — poll /api/research/progress")
+
+        cfg = get_cfg()
+
         try:
-            return run_research(get_cfg(), top_n=body.top_n)
-        except Exception as exc:  # noqa: BLE001
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
+            run_id = progress.begin()
+        except RuntimeError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+        def _wrapped() -> None:
+            try:
+                result = run_research(cfg, top_n=body.top_n)
+                progress.finish(result)
+            except Exception as exc:  # noqa: BLE001
+                progress.fail(str(exc))
+
+        threading.Thread(target=_wrapped, daemon=True).start()
+        return {"status": "running", "run_id": run_id, "poll": "/api/research/progress"}
 
     @app.post("/api/research/refresh-news")
     def api_research_refresh_news() -> dict[str, Any]:
@@ -296,10 +323,21 @@ def create_app(config_path: str | None = None) -> FastAPI:
     @app.get("/api/ai/cost")
     def api_ai_cost() -> dict[str, Any]:
         from ashare.ai.cost_tracker import get_cost_tracker
+        from ashare.services.research import latest_research
 
         cfg = get_cfg()
         tracker = get_cost_tracker(cfg)
-        out = tracker.summary()
+        research = latest_research(cfg) or {}
+        uni = research.get("candidate_union") or {}
+        canonical = list(research.get("canonical_decisions") or [])
+        n_buys = sum(1 for d in canonical if d.get("committee_approve"))
+        context = {
+            "n_candidates": uni.get("n_union") or len(uni.get("universe") or []),
+            "n_research": len(research.get("platform_reports") or []),
+            "n_council": len([r for r in (uni.get("universe") or []) if r.get("in_council")]),
+            "n_buys": n_buys,
+        }
+        out = tracker.summary(context=context)
         out["recent"] = tracker.load_recent(limit=30)
         return out
 
@@ -417,6 +455,10 @@ def create_app(config_path: str | None = None) -> FastAPI:
                 "horizon": pack.get("horizon") or horizon,
                 "attribution": pack.get("attribution"),
                 "by_rating": pack.get("by_rating"),
+                "ai_incremental_alpha": pack.get("ai_incremental_alpha"),
+                "ai_topk_ablation": pack.get("ai_topk_ablation"),
+                "discovery_attribution": pack.get("discovery_attribution"),
+                "benchmark": pack.get("benchmark"),
             }
         eng = ReviewEngine(cfg)
         outcomes = eng.load_outcomes()
@@ -428,6 +470,64 @@ def create_app(config_path: str | None = None) -> FastAPI:
             "attribution": eng.summarize_by_source(outcomes, horizon=horizon),
             "by_rating": eng.summarize_by_rating(outcomes, horizon=horizon),
         }
+
+    @app.get("/api/research/alpha-dashboard")
+    def api_research_alpha_dashboard(horizon: str = "5") -> dict[str, Any]:
+        from ashare.ai.cost_tracker import get_cost_tracker
+        from ashare.services.research import latest_research
+
+        cfg = get_cfg()
+        research = latest_research(cfg) or {}
+        pack = research.get("research_outcomes") or {}
+        uni = research.get("candidate_union") or {}
+        canonical = list(research.get("canonical_decisions") or [])
+        n_buys = sum(1 for d in canonical if d.get("committee_approve"))
+        tracker = get_cost_tracker(cfg)
+        cost = tracker.summary(
+            context={
+                "n_candidates": uni.get("n_union") or len(uni.get("universe") or []),
+                "n_research": len(research.get("platform_reports") or []),
+                "n_council": len([r for r in (uni.get("universe") or []) if r.get("in_council")]),
+                "n_buys": n_buys,
+            }
+        )
+        eff = cost.get("efficiency") or {}
+        cycle = cost.get("cycle_cost") or cost.get("cycle") or {}
+        topk = pack.get("ai_topk_ablation") or {}
+        incr = topk.get("ai_incremental_alpha")
+        total_tokens = int(cycle.get("total_tokens") or 0)
+        alpha_per_100k = None
+        if incr is not None and total_tokens > 0:
+            alpha_per_100k = float(incr) / (total_tokens / 100_000.0)
+        return {
+            "available": bool(research),
+            "as_of": research.get("as_of"),
+            "horizon": pack.get("horizon") or horizon,
+            "cost": {
+                "cycle": cycle,
+                "daily": cost.get("daily_cost") or cost.get("daily"),
+                "efficiency": eff,
+                "alpha_per_100k_tokens": alpha_per_100k,
+            },
+            "discovery_attribution": pack.get("discovery_attribution"),
+            "ai_topk_ablation": topk,
+            "ai_incremental_alpha_legacy": pack.get("ai_incremental_alpha"),
+            "attribution": pack.get("attribution"),
+            "benchmark": pack.get("benchmark"),
+            "decision_chain": research.get("decision_chain"),
+            "decision_consistency": research.get("decision_consistency"),
+            "gate": uni.get("gate"),
+            "n_candidates": uni.get("n_union"),
+            "n_research": len(research.get("platform_reports") or []),
+            "n_buys": n_buys,
+        }
+
+    @app.get("/api/optimizer/experiments")
+    def api_optimizer_experiments(limit: int = 20) -> dict[str, Any]:
+        from ashare.ai.optimizer_experiment import list_experiments
+
+        rows = list_experiments(get_cfg(), limit=limit)
+        return {"n": len(rows), "experiments": rows}
 
     @app.get("/api/research/sessions")
     def api_research_sessions(limit: int = 50) -> dict[str, Any]:
@@ -466,6 +566,25 @@ def create_app(config_path: str | None = None) -> FastAPI:
         try:
             panel = ensure_panel(cfg)
             return MLRankingEngine(cfg).train(panel)
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.get("/api/ml/weight-experiments")
+    def api_ml_weight_experiments(limit: int = 20) -> dict[str, Any]:
+        from ashare.ml.weight_experiment import list_weight_experiments
+
+        rows = list_weight_experiments(get_cfg(), limit=limit)
+        return {"n": len(rows), "experiments": rows}
+
+    @app.post("/api/ml/weight-experiment")
+    def api_ml_weight_experiment() -> dict[str, Any]:
+        from ashare.data.provider import ensure_panel
+        from ashare.ml.weight_experiment import run_ml_weight_experiment
+
+        cfg = get_cfg()
+        try:
+            panel = ensure_panel(cfg)
+            return run_ml_weight_experiment(panel, cfg, persist=True)
         except Exception as exc:  # noqa: BLE001
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 

@@ -179,21 +179,29 @@ class CandidateEngine:
                 scored.append(stub)
 
         for item in scored:
-            leader = float(item.get("leader_score") or 0)
-            pi_score = float((item.get("profit_inflection") or {}).get("score") or 0)
-            ev_score = float(item.get("event_score") or 0)
-            ml = float(item.get("ml_prediction") or 0)
-            item["candidate_score"] = (
-                float(cw.get("leader", 0.35)) * leader
-                + float(cw.get("profit_inflection", 0.25)) * pi_score
-                + float(cw.get("event", 0.15)) * ev_score
-                + float(cw.get("news", 0.15)) * float(item.get("news_score") or 0)
-                + float(cw.get("ml", 0.10)) * (ml * 10.0)
-            )
             if "news" in (item.get("candidate_sources") or []) and "新闻" not in str((item.get("trigger") or {}).get("type") or ""):
                 tr = dict(item.get("trigger") or {})
                 tr["type"] = ((tr.get("type") or "") + "+新闻").strip("+")
                 item["trigger"] = tr
+
+        from ashare.ml.candidate_ranking import (
+            apply_ml_rank_scores,
+            compute_candidate_score,
+            resolve_ml_weight,
+        )
+
+        ml_weight = resolve_ml_weight(self.cfg, cw)
+        ml_enabled = bool((self.research_cfg.get("ml_ranking") or {}).get("enabled", True))
+        if panel and ml_enabled and scored:
+            from ashare.ml.ranking import MLRankingEngine
+
+            try:
+                scored = MLRankingEngine(self.cfg).predict_rows(scored)
+                scored = apply_ml_rank_scores(scored)
+            except Exception:  # noqa: BLE001
+                pass
+        for item in scored:
+            item["candidate_score"] = compute_candidate_score(item, cw, ml_weight=ml_weight)
 
         scored.sort(key=lambda x: x["candidate_score"], reverse=True)
         union = scored[:max_union]
@@ -234,17 +242,7 @@ class CandidateEngine:
             net = float(pkg.get("net_event_score") or 0)
             if net:
                 r["news_score"] = net
-            leader = float(r.get("leader_score") or 0)
-            pi_score = float((r.get("profit_inflection") or {}).get("score") or 0)
-            ev_score = float(r.get("event_score") or 0)
-            ml = float(r.get("ml_prediction") or 0)
-            r["candidate_score"] = (
-                float(cw.get("leader", 0.35)) * leader
-                + float(cw.get("profit_inflection", 0.25)) * pi_score
-                + float(cw.get("event", 0.15)) * ev_score
-                + float(cw.get("news", 0.15)) * float(r.get("news_score") or 0)
-                + float(cw.get("ml", 0.10)) * (ml * 10.0)
-            )
+            r["candidate_score"] = compute_candidate_score(r, cw, ml_weight=ml_weight)
             r["in_council"] = True
         research.sort(key=lambda x: x["candidate_score"], reverse=True)
         return {

@@ -78,16 +78,17 @@ def test_phase10_research_cycle_offline(monkeypatch, tmp_path):
     # Heuristic council (no LLM)
     monkeypatch.setattr(
         "ashare.research.council.AICouncilEngine.run_parallel",
-        lambda self, snap: [
-            {
+        lambda self, snap, **kw: {
+            "quant": {
                 "role_id": "quant",
                 "stance": "WATCH",
                 "confidence": 0.5,
                 "points": ["fixture"],
                 "challenges": [],
                 "falsify": "",
-            }
-        ],
+            },
+            "_meta": {"call_reasons": {"quant": "default"}, "skip_reasons": {}},
+        },
     )
     monkeypatch.setattr(
         "ashare.research.council.DebateEngine.run",

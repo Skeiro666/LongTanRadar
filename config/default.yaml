@@ -97,6 +97,7 @@ ai:
   use_openai_sdk: true
   review_backtest: true
   roundtable: true
+  roundtable_mode: benchmark  # benchmark | disabled — never controls paper trading (V5)
   trade_review: false
   cache_dir: data/cache/ai_decisions
   committee:
@@ -106,13 +107,13 @@ ai:
     roles:
       - id: dragon
         name: 龙头研究员
-        model: Qwen/Qwen3.8-Max
+        model: Qwen/Qwen3.5-122B-A10B
       - id: event
         name: 事件/业绩研究员
         model: deepseek-ai/DeepSeek-V4-Flash
       - id: risk
         name: 风控官
-        model: moonshotai/Kimi-K3
+        model: Pro/moonshotai/Kimi-K2.6
       - id: chair
         name: 投委会主席
         model: deepseek-ai/DeepSeek-V4-Flash
@@ -127,7 +128,7 @@ ai:
         deepseek-ai/DeepSeek-V4-Flash:
           input_per_1m: 0.14
           output_per_1m: 0.28
-        Qwen/Qwen3.8-Max:
+        Qwen/Qwen3.5-122B-A10B:
           input_per_1m: 0.86
           output_per_1m: 3.44
         moonshotai/Kimi-K3:
@@ -213,3 +214,6 @@ agent:
   autostart: false
   interval_sec: 1800
   paper_only: true
+
+optimizer:
+  auto_apply: false  # V5: proposals go to experiments; never direct prod by default

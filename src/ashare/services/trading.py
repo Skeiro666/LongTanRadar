@@ -322,23 +322,33 @@ def execute_picks(
         raise RuntimeError("Live trading blocked. Set BROKER_MODE=live, I_UNDERSTAND_LIVE=1, and confirm in UI.")
 
     picks_payload = run_picks(cfg) if regenerate else (latest_picks(cfg) or run_picks(cfg))
-    picks = list(picks_payload.get("picks") or [])
-    if not picks:
+    from ashare.research.canonical_decision import extract_trading_decisions
+
+    canonical_approved = extract_trading_decisions(picks_payload)
+    all_display_picks = list(picks_payload.get("picks") or [])
+    if not all_display_picks and picks_payload.get("canonical_decisions") is None:
         raise RuntimeError("No picks available")
 
     ai_review: dict[str, Any] | None = None
-    # Prefer投委会圆桌结论；兼容旧 trade_review
-    if picks_payload.get("roundtable") or any(p.get("committee_verdict") for p in picks):
-        approved = [
-            p
-            for p in picks
-            if p.get("committee_approve") or str(p.get("committee_verdict") or "").lower() == "buy"
-        ]
-        rejected = [p for p in picks if p not in approved]
+    decision_chain = picks_payload.get("decision_chain") or {}
+    canonical_source = decision_chain.get("canonical_source") or "platform_council"
+    if picks_payload.get("canonical_decisions") is not None or any(
+        p.get("committee_verdict") for p in all_display_picks
+    ):
+        approved = (
+            canonical_approved
+            if picks_payload.get("canonical_decisions") is not None
+            else [
+                p
+                for p in all_display_picks
+                if p.get("committee_approve") or str(p.get("committee_verdict") or "").lower() == "buy"
+            ]
+        )
+        rejected = [p for p in all_display_picks if p not in approved]
         ai_review = {
-            "summary": (picks_payload.get("roundtable") or {}).get("summary") or "投委会圆桌结论",
-            "source": (picks_payload.get("roundtable") or {}).get("source") or "roundtable",
-            "reviews": picks,
+            "summary": f"Canonical Decision ({canonical_source})",
+            "source": canonical_source,
+            "reviews": all_display_picks,
             "rejected": rejected,
             "approved": approved,
         }
@@ -353,7 +363,7 @@ def execute_picks(
                     {
                         "symbol": r.get("symbol"),
                         "name": r.get("name"),
-                        "ai_approve": r.get("ai_approve") or r.get("committee_approve"),
+                        "ai_approve": r.get("committee_approve") or r.get("ai_approve"),
                         "ai_confidence": r.get("ai_confidence"),
                         "ai_rationale": r.get("ai_rationale") or r.get("committee_thesis"),
                         "committee_verdict": r.get("committee_verdict"),
@@ -388,7 +398,7 @@ def execute_picks(
                 "skipped_buy": True,
                 "ai_rejected_all": True,
                 "ai_review": picks_payload.get("ai_review"),
-                "message": ai_review.get("summary") or "投委会未给出 buy，本轮不买入",
+                "message": ai_review.get("summary") or "Canonical Decision 未给出 buy，本轮不买入",
             }
     elif not skip_ai_review and bool((cfg.get("ai") or {}).get("trade_review", True)):
         from ashare.ai.trade_review import review_trade_candidates
@@ -445,6 +455,8 @@ def execute_picks(
                 "ai_review": picks_payload.get("ai_review"),
                 "message": ai_review.get("summary") or "AI 审查全部拒绝，本轮不买入",
             }
+    else:
+        picks = all_display_picks
 
     broker = build_live_or_paper(cfg)
     broker.connect()

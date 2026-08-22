@@ -39,6 +39,7 @@ class LLMUsageRecord:
     request_id: str
     timestamp: str
     cycle_id: str | None
+    research_session_id: str | None
     symbol: str | None
     role: str | None
     call_site: str | None
@@ -49,7 +50,7 @@ class LLMUsageRecord:
     total_tokens: int
     latency_ms: float
     cache_hit: bool
-    usage_source: str  # actual | estimated
+    usage_source: str  # actual | estimated | cache
     estimated_cost_usd: float
     cache_saved_tokens: int = 0
 
@@ -101,12 +102,14 @@ class AICostTracker:
         call_site: str | None = None,
         cache_hit: bool = False,
         cycle_id: str | None = None,
+        research_session_id: str | None = None,
     ) -> LLMUsageRecord:
         total = int(input_tokens + output_tokens)
         rec = LLMUsageRecord(
             request_id=uuid4().hex[:16].upper(),
             timestamp=datetime.now(timezone.utc).isoformat(),
             cycle_id=cycle_id or self.current_cycle_id(),
+            research_session_id=research_session_id,
             symbol=symbol,
             role=role,
             call_site=call_site,
@@ -150,6 +153,7 @@ class AICostTracker:
             request_id=uuid4().hex[:16].upper(),
             timestamp=datetime.now(timezone.utc).isoformat(),
             cycle_id=cid,
+            research_session_id=None,
             symbol=symbol,
             role=role,
             call_site=call_site,
@@ -187,16 +191,54 @@ class AICostTracker:
             records = list(self._daily.get(day) or [])
         return self._summarize_records(records, label=f"daily:{day}")
 
-    def summary(self) -> dict[str, Any]:
+    def summary(self, *, context: dict[str, Any] | None = None) -> dict[str, Any]:
         today = date.today().isoformat()
         with self._lock:
             all_today = list(self._daily.get(today) or [])
             cycle = self.cycle_summary() if self._cycle else {"n_calls": 0}
-        return {
+        daily = self._summarize_records(all_today, label=f"daily:{today}")
+        out = {
             "enabled": self.enabled,
             "log_path": str(self.log_path),
+            "cycle_cost": cycle,
+            "daily_cost": daily,
             "cycle": cycle,
-            "daily": self._summarize_records(all_today, label=f"daily:{today}"),
+            "daily": daily,
+        }
+        if context:
+            out["efficiency"] = self.efficiency_metrics(cycle, context)
+        return out
+
+    def efficiency_metrics(self, cycle_summary: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
+        """Per-candidate / per-research / per-buy cost efficiency."""
+        n_candidates = int(context.get("n_candidates") or 0)
+        n_research = int(context.get("n_research") or context.get("n_council") or 0)
+        n_buys = int(context.get("n_buys") or 0)
+        total_tokens = int(cycle_summary.get("total_tokens") or 0)
+        cost = float(cycle_summary.get("estimated_usd") or 0)
+        n_calls = int(cycle_summary.get("n_calls") or 0)
+        cache_hits = int(cycle_summary.get("n_cache_events") or 0)
+        saved = int(cycle_summary.get("cache_saved_tokens") or 0)
+        denom = lambda n: n if n > 0 else None
+        return {
+            "total_calls": n_calls,
+            "input_tokens": cycle_summary.get("input_tokens", 0),
+            "output_tokens": cycle_summary.get("output_tokens", 0),
+            "total_tokens": total_tokens,
+            "cache_hits": cache_hits,
+            "cache_saved_tokens": saved,
+            "cache_hit_rate": round(cache_hits / n_calls, 4) if n_calls else 0.0,
+            "estimated_usd": cost,
+            "tokens_per_candidate": round(total_tokens / n_candidates, 1) if denom(n_candidates) else None,
+            "tokens_per_research": round(total_tokens / n_research, 1) if denom(n_research) else None,
+            "tokens_per_buy": round(total_tokens / n_buys, 1) if denom(n_buys) else None,
+            "cost_per_candidate": round(cost / n_candidates, 6) if denom(n_candidates) else None,
+            "cost_per_buy": round(cost / n_buys, 6) if denom(n_buys) else None,
+            "context": {
+                "n_candidates": n_candidates,
+                "n_research": n_research,
+                "n_buys": n_buys,
+            },
         }
 
     def _summarize_records(
@@ -215,16 +257,25 @@ class AICostTracker:
         by_role: dict[str, int] = {}
         by_model: dict[str, int] = {}
         by_symbol: dict[str, int] = {}
+        role_cost: dict[str, float] = {}
+        model_cost: dict[str, float] = {}
+        symbol_cost: dict[str, float] = {}
         for r in llm_calls:
             by_role[r.role or "unknown"] = by_role.get(r.role or "unknown", 0) + r.total_tokens
             by_model[r.model or "unknown"] = by_model.get(r.model or "unknown", 0) + r.total_tokens
+            role_cost[r.role or "unknown"] = role_cost.get(r.role or "unknown", 0.0) + r.estimated_cost_usd
+            model_cost[r.model or "unknown"] = model_cost.get(r.model or "unknown", 0.0) + r.estimated_cost_usd
             if r.symbol:
                 by_symbol[r.symbol] = by_symbol.get(r.symbol, 0) + r.total_tokens
+                symbol_cost[r.symbol] = symbol_cost.get(r.symbol, 0.0) + r.estimated_cost_usd
         n_sym = len({r.symbol for r in llm_calls if r.symbol}) or 0
+        cache_hit_calls = sum(1 for r in records if r.cache_hit and r.usage_source != "cache")
         return {
             "label": label,
             "n_calls": len(llm_calls),
+            "total_calls": len(llm_calls),
             "n_cache_events": len(cache_rows),
+            "cache_hits": cache_hit_calls + len(cache_rows),
             "input_tokens": in_tok,
             "output_tokens": out_tok,
             "total_tokens": in_tok + out_tok,
@@ -236,6 +287,9 @@ class AICostTracker:
             "by_role": by_role,
             "by_model": by_model,
             "by_symbol": by_symbol,
+            "role_cost": {k: round(v, 6) for k, v in role_cost.items()},
+            "model_cost": {k: round(v, 6) for k, v in model_cost.items()},
+            "symbol_cost": {k: round(v, 6) for k, v in symbol_cost.items()},
             "actual_usage_calls": sum(1 for r in llm_calls if r.usage_source == "actual"),
             "estimated_usage_calls": sum(1 for r in llm_calls if r.usage_source == "estimated"),
         }
@@ -273,3 +327,7 @@ def get_cost_tracker(cfg: dict[str, Any] | None = None) -> AICostTracker:
         elif _tracker_singleton is None:
             _tracker_singleton = AICostTracker({})
         return _tracker_singleton
+
+
+# V5 alias — single ledger entry point
+AICostLedger = AICostTracker

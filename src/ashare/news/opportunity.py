@@ -63,8 +63,11 @@ class NewsOpportunityEngine:
         als = aliases if aliases is not None else dict(disc.get("aliases") or {})
         industry_available = bool(disc.get("industry_map_available", False))
         from ashare.research.hypothesis import ResearchHypothesisEngine
+        from ashare.news.cluster import cluster_timeline_events
+        from ashare.news.evidence_registry import EvidenceRegistry
 
         hypo_eng = ResearchHypothesisEngine()
+        registry = EvidenceRegistry(self.cfg)
 
         events: list[ExtractedEvent] = []
         candidates: list[NewsCandidate] = []
@@ -100,16 +103,38 @@ class NewsOpportunityEngine:
                     continue
                 for ent in ents:
                     method = ent.mapping_method or ent.link_source or "none"
-                    hyp = hypo_eng.from_event(ev, news=n).to_dict()
+                    ev_dict = ev.to_dict()
+                    ekey = EvidenceRegistry.evidence_key(n.id, n.title)
+                    evidence_id = registry.register(
+                        key=ekey,
+                        title=n.title,
+                        source=n.source,
+                        url=n.url,
+                        published_at=n.published_at,
+                        news_id=n.id,
+                        symbol=ent.symbol,
+                        persist=persist,
+                    )
+                    ev_dict["evidence_id"] = evidence_id
+                    ev_dict["symbol"] = ent.symbol
+                    hyp_obj = hypo_eng.from_event(ev, news=n)
+                    hyp = hyp_obj.to_dict()
+                    inv_hyp = hyp_obj.to_investment_hypothesis()
+                    news_score = float(ev.impact_score) * max(float(ent.confidence), 0.2)
                     cand = NewsCandidate(
                         symbol=ent.symbol,
                         candidate_source="news",
+                        candidate_sources=["news"],
                         event_id=ev.event_id,
+                        news_event_id=ev.event_id,
                         event_type=ev.event_type,
                         event_direction=ev.direction,
+                        direction=ev.direction,
                         event_impact=float(ev.impact_score),
+                        news_score=news_score,
                         relevance_score=float(ev.relevance),
                         novelty_score=None,
+                        novelty=None,
                         novelty_available=False,
                         source_quality=str(ev.source_quality or "C"),
                         confidence=float(ent.confidence),
@@ -117,8 +142,10 @@ class NewsOpportunityEngine:
                         price_reaction={"available": False, "note": "awaiting_bars"},
                         price_in_risk="UNKNOWN",
                         reason=n.title[:180],
-                        evidence_ids=[n.id, ev.event_id],
+                        evidence_ids=[evidence_id, n.id, ev.event_id],
                         research_hypotheses=[hyp],
+                        investment_hypothesis=inv_hyp,
+                        related_symbols=[ent.symbol],
                         mapping_method=method,
                         status="REJECTED" if method == "llm_inference" else "DISCOVERED",
                         reject_reason="LOW_CONFIDENCE" if method == "llm_inference" else "",
@@ -143,6 +170,12 @@ class NewsOpportunityEngine:
             rejected.append(c.to_dict())
         candidates = candidates[:max_c]
 
+        event_clusters = cluster_timeline_events(
+            [e.to_dict() for e in events],
+            max_clusters=int(disc.get("max_event_clusters") or 40),
+            by_symbol=True,
+        )
+
         payload = {
             "as_of": as_of.isoformat() if as_of else datetime.now(timezone.utc).isoformat(),
             "available": True,
@@ -150,9 +183,11 @@ class NewsOpportunityEngine:
             "provider_status": provider_status,
             "n_news": len(news),
             "n_events": len(events),
+            "n_event_clusters": len(event_clusters),
             "n_candidates": len(candidates),
             "n_rejected": len(rejected),
             "events": [e.to_dict() for e in events],
+            "event_clusters": event_clusters,
             "news_candidates": [c.to_dict() for c in candidates],
             "rejected": rejected[:200],
             "note": "NewsCandidate is discovery only — not a trading action.",

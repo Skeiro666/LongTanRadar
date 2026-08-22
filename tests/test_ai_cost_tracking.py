@@ -72,6 +72,35 @@ def test_record_and_cycle_summary(tmp_tracker: AICostTracker):
     assert row["usage_source"] == "actual"
 
 
+def test_efficiency_metrics(tmp_tracker: AICostTracker):
+    tmp_tracker.begin_cycle("eff_cycle")
+    tmp_tracker.record(
+        model="m",
+        provider="p",
+        input_tokens=1000,
+        output_tokens=500,
+        latency_ms=10.0,
+        usage_source="actual",
+        research_session_id="RTEST001",
+    )
+    cycle = tmp_tracker.cycle_summary("eff_cycle")
+    eff = tmp_tracker.efficiency_metrics(
+        cycle,
+        {"n_candidates": 10, "n_research": 5, "n_buys": 2},
+    )
+    assert eff["tokens_per_candidate"] == 150.0
+    assert eff["tokens_per_buy"] == 750.0
+    assert eff["cost_per_buy"] is not None
+    assert "unknown" in cycle["role_cost"]
+    assert cycle["total_calls"] == 1
+
+
+def test_aicost_ledger_alias():
+    from ashare.ai.cost_tracker import AICostLedger, AICostTracker
+
+    assert AICostLedger is AICostTracker
+
+
 def test_record_cache_save(tmp_tracker: AICostTracker):
     tmp_tracker.begin_cycle("cache_cycle")
     tmp_tracker.record_cache_save(

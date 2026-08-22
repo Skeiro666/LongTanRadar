@@ -34,9 +34,13 @@ class ResearchSessionEngine:
             prior_snapshot=prior,
             prior_opinions=(prior or {}).get("council"),
         )
-        incremental_reused = sum(1 for v in opinions.values() if v.get("source") == "incremental_reuse")
-        debate = self.debate.run(snap, opinions)
-        from ashare.research.incremental import roles_to_refresh, _incremental_cfg
+        council_meta = dict(opinions.get("_meta") or {})
+        role_opinions = {k: v for k, v in opinions.items() if not k.startswith("_")}
+        incremental_reused = sum(1 for v in role_opinions.values() if v.get("source") == "incremental_reuse")
+        debate = self.debate.run(snap, role_opinions)
+        from ashare.research.incremental import detect_change_reasons, roles_to_refresh, _incremental_cfg
+
+        change_reasons = detect_change_reasons(snap, prior, self.cfg) if prior else ["MANUAL_REFRESH"]
 
         reuse_chair = (
             prior
@@ -48,19 +52,22 @@ class ResearchSessionEngine:
             chairman = dict(prior["chairman"])
             chairman["source"] = "incremental_reuse"
         else:
-            chairman = self.chair.summarize(snap, opinions, debate)
+            chairman = self.chair.summarize(snap, role_opinions, debate)
         report = {
             "research_id": snap["research_id"],
             "symbol": snap["symbol"],
             "name": snap.get("name"),
             "research_time": snap["research_time"],
+            "research_tier": candidate.get("research_tier") or (candidate.get("gate") or {}).get("research_tier"),
             "trigger": snap.get("trigger"),
             "quant": snap.get("quant"),
             "profit_inflection": snap.get("profit_inflection"),
             "event": snap.get("event"),
             "council": opinions,
+            "council_meta": council_meta,
             "debate": debate,
             "chairman": chairman,
+            "change_reasons": change_reasons,
             "decision": {
                 "research_rating": chairman.get("rating"),
                 "action": chairman.get("trading_action"),
@@ -88,25 +95,58 @@ class ResearchSessionEngine:
     def run_pool(self, candidates: list[dict[str, Any]], panel: dict | None = None) -> list[dict[str, Any]]:
         ranked = list(candidates)
         if panel is not None:
-            try:
-                ranked = self.ml.predict_rows(ranked)
-            except Exception:  # noqa: BLE001
-                pass
+            need_ml = any(r.get("ml_rank_score") is None for r in ranked)
+            if need_ml:
+                try:
+                    from ashare.ml.candidate_ranking import apply_ml_rank_scores
+
+                    ranked = self.ml.predict_rows(ranked)
+                    ranked = apply_ml_rank_scores(ranked)
+                except Exception:  # noqa: BLE001
+                    pass
 
         max_n = int((self.research_cfg.get("funnel") or {}).get("max_council", 12))
         gate_batch = apply_research_gate(ranked, self.cfg)
         council_candidates = gate_batch.passed[:max_n]
+        gate_cfg = dict((self.research_cfg.get("research_gate") or {}))
+        max_llm = int(gate_cfg.get("max_llm_calls") or 30)
+        llm_used = 0
 
         reports: list[dict[str, Any]] = []
-        for c in council_candidates:
-            reports.append(self.run_session(c))
+        from ashare.research.progress import get_research_progress
+
+        prog = get_research_progress()
+        for i, c in enumerate(council_candidates):
+            sym = str(c.get("symbol") or "")
+            name = str(c.get("name") or sym)
+            if llm_used >= max_llm:
+                reports.append(self._budget_skip_report(c, llm_used))
+                prog.log("council", f"跳过 {name} — LLM 预算用尽", level="warn")
+                continue
+            prog.log("council", f"[{i + 1}/{len(council_candidates)}] 研究 {name} ({sym})")
+            rep = self.run_session(c)
+            meta = dict((rep.get("council_meta") or {}))
+            llm_used += len(meta.get("roles_called") or [])
+            if (rep.get("chairman") or {}).get("source") not in {"incremental_reuse", "cache"}:
+                llm_used += 1
+            rating = (rep.get("decision") or {}).get("research_rating") or (rep.get("chairman") or {}).get("rating")
+            prog.log("council", f"完成 {name} → {rating}", detail={"llm_used": llm_used})
+            reports.append(rep)
         for c in gate_batch.rejected:
             reports.append(self._gate_skip_report(c))
-        self._last_gate_summary = gate_batch.summary()
+        summary = gate_batch.summary()
+        summary["llm_budget"] = {"max": max_llm, "used": llm_used}
+        self._last_gate_summary = summary
         return reports
 
     def gate_summary(self) -> dict[str, Any]:
         return getattr(self, "_last_gate_summary", {})
+
+    def _budget_skip_report(self, candidate: dict[str, Any], llm_used: int) -> dict[str, Any]:
+        rep = self._gate_skip_report(candidate)
+        rep["gate"] = {**(rep.get("gate") or {}), "reason": "LLM_BUDGET", "llm_used": llm_used}
+        rep["chairman"]["rationale"] = "LLM_BUDGET"
+        return rep
 
     def _gate_skip_report(self, candidate: dict[str, Any]) -> dict[str, Any]:
         gate = dict(candidate.get("gate") or {})

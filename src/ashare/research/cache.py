@@ -21,6 +21,53 @@ def _cache_cfg(cfg: dict[str, Any] | None) -> dict[str, Any]:
     }
 
 
+def compute_candidate_hash(candidate: dict[str, Any]) -> str:
+    """Hash of scores/sources that affect research relevance — not full snapshot."""
+    blob = {
+        "candidate_score": round(float(candidate.get("candidate_score") or 0), 6),
+        "candidate_sources": sorted(candidate.get("candidate_sources") or []),
+        "leader_score": round(float(candidate.get("leader_score") or 0), 6),
+        "event_score": round(float(candidate.get("event_score") or 0), 6),
+        "news_score": round(float(candidate.get("news_score") or 0), 6),
+        "ml_rank_score": round(float(candidate.get("ml_rank_score") or 0), 6)
+        if candidate.get("ml_rank_score") is not None
+        else None,
+    }
+    raw = json.dumps(blob, sort_keys=True, ensure_ascii=False, default=str)
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:12]
+
+
+def extract_version_meta(snapshot: dict[str, Any]) -> dict[str, str]:
+    vers = dict(snapshot.get("versions") or {})
+    news_snap = dict(snapshot.get("news_snapshot") or {})
+    news_pkg = dict(snapshot.get("news_package") or {})
+    pkg_vers = dict(news_pkg.get("versions") or {})
+    quant = dict(snapshot.get("quant") or {})
+    as_of = str(snapshot.get("as_of") or (snapshot.get("snapshot_time") or "")[:10] or "")
+    cand_hash = compute_candidate_hash(
+        {
+            "candidate_score": quant.get("factor_score"),
+            "candidate_sources": snapshot.get("candidate_sources"),
+            "leader_score": quant.get("leader_score"),
+            "event_score": (snapshot.get("event") or {}).get("score"),
+            "news_score": news_pkg.get("net_event_score"),
+            "ml_rank_score": quant.get("ml_rank_score"),
+        }
+    )
+    return {
+        "as_of": as_of,
+        "factor_version": str(vers.get("factor_version") or "factor_v1"),
+        "news_version": str(
+            news_snap.get("news_data_version")
+            or pkg_vers.get("news_data_version")
+            or pkg_vers.get("provider_version")
+            or "news_v1"
+        ),
+        "model_version": str(vers.get("model_bundle") or "models_v1"),
+        "candidate_hash": cand_hash,
+    }
+
+
 def compute_context_hash(
     *,
     symbol: str,
@@ -29,6 +76,10 @@ def compute_context_hash(
     prompt_version: str,
     model: str,
     factor_version: str = "",
+    news_version: str = "",
+    model_version: str = "",
+    as_of: str = "",
+    candidate_hash: str = "",
 ) -> str:
     blob = json.dumps(
         {
@@ -37,6 +88,10 @@ def compute_context_hash(
             "prompt_version": prompt_version,
             "model": model,
             "factor_version": factor_version,
+            "news_version": news_version,
+            "model_version": model_version,
+            "as_of": as_of,
+            "candidate_hash": candidate_hash,
             "context": context,
         },
         sort_keys=True,

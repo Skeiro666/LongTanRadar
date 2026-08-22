@@ -100,15 +100,19 @@ def run_research(cfg: dict[str, Any], top_n: int | None = None) -> dict[str, Any
     from ashare.ai.roundtable import run_roundtable
     from ashare.candidate import CandidateEngine
     from ashare.config_loaders import load_yaml_config
-    from ashare.portfolio import PortfolioEngine, RiskFilterEngine, market_regime
+    from ashare.portfolio import RiskFilterEngine, market_regime
+    from ashare.research.progress import get_research_progress
     from ashare.research.session import ResearchSessionEngine
 
+    progress = get_research_progress()
     cycle_id = f"research_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
     get_cost_tracker(cfg).begin_cycle(cycle_id)
 
-    pool = build_leader_pool(cfg)
+    with progress.step("pool", "构建龙头/事件池", note="akshare 涨停/强势/利润断层"):
+        pool = build_leader_pool(cfg)
     cfg["_last_screen"] = pool
     symbols = [to_symbol(s) for s in (pool.get("symbols") or [])]
+    progress.log("pool", f"池规模 {len(symbols)}", detail=pool.get("sources"))
     if not symbols:
         raise RuntimeError("龙头/事件股票池为空 — 检查网络或 pool 配置")
 
@@ -123,7 +127,9 @@ def run_research(cfg: dict[str, Any], top_n: int | None = None) -> dict[str, Any
     except Exception as exc:  # noqa: BLE001
         logger.debug("save pool names failed: %s", exc)
 
-    panel = ensure_panel(cfg, symbols)
+    with progress.step("panel", "加载/刷新日线缓存", note="Parquet + akshare"):
+        panel = ensure_panel(cfg, symbols)
+    progress.log("panel", f"日线 panel {len(panel)} 只")
     if not panel:
         raise RuntimeError("No market data — run fetch first / check network")
 
@@ -139,7 +145,12 @@ def run_research(cfg: dict[str, Any], top_n: int | None = None) -> dict[str, Any
     try:
         from ashare.news.opportunity import NewsOpportunityEngine
 
-        news_discovery = NewsOpportunityEngine(cfg).discover(as_of=as_of_dt, persist=True)
+        with progress.step("news_discovery", "新闻发现", note="多源抓取 + 事件抽取"):
+            news_discovery = NewsOpportunityEngine(cfg).discover(as_of=as_of_dt, persist=True)
+        progress.log(
+            "news_discovery",
+            f"候选 {news_discovery.get('n_candidates', 0)} / 拒绝 {news_discovery.get('n_rejected', 0)}",
+        )
     except Exception as exc:  # noqa: BLE001
         logger.warning("news discovery skipped: %s", exc)
         news_discovery = {
@@ -191,22 +202,30 @@ def run_research(cfg: dict[str, Any], top_n: int | None = None) -> dict[str, Any
     n = int(top_n or cfg.get("strategy", {}).get("top_n", 5))
     shortlist = scored[: max(1, n)]
     rt_cfg = (cfg.get("ai") or {})
-    if bool(rt_cfg.get("roundtable", True)) and shortlist:
-        roundtable = run_roundtable(cfg, shortlist)
-        picks = list(roundtable.get("reviews") or shortlist)
+    roundtable_mode = str(rt_cfg.get("roundtable_mode") or "benchmark").lower()
+    run_rt = bool(rt_cfg.get("roundtable", True)) and roundtable_mode != "disabled"
+    if run_rt and shortlist:
+        with progress.step("roundtable", "圆桌 Benchmark", note="~5 次 LLM，不驱动交易"):
+            roundtable = run_roundtable(cfg, shortlist)
+        roundtable["benchmark_only"] = True
+        roundtable["controls_trading"] = False
+        progress.log(
+            "roundtable",
+            f"来源 {roundtable.get('source')} · 角色 {len(roundtable.get('roles') or [])}",
+            detail=roundtable.get("models_used"),
+        )
     else:
-        roundtable = {"source": "disabled", "summary": "圆桌关闭，仅因子排序", "roles": [], "debate": []}
-        picks = []
-        for i, row in enumerate(shortlist):
-            picks.append(
-                {
-                    **row,
-                    "committee_verdict": "watch",
-                    "committee_approve": False,
-                    "ai_approve": False,
-                    "weight": 0.0,
-                }
-            )
+        roundtable = {
+            "source": "disabled",
+            "summary": "圆桌关闭（benchmark-only 或未启用）",
+            "roles": [],
+            "debate": [],
+            "benchmark_only": True,
+            "controls_trading": False,
+        }
+    # Legacy roundtable never drives trading — canonical decisions only (V5 Phase 1).
+    picks: list[dict[str, Any]] = []
+    canonical_decisions: list[dict[str, Any]] = []
 
     # --- Platform v2 path (Candidate → ML rank hint → Council sessions) ---
     platform_reports: list[dict[str, Any]] = []
@@ -218,7 +237,12 @@ def run_research(cfg: dict[str, Any], top_n: int | None = None) -> dict[str, Any
     if use_platform:
         try:
             cand_eng = CandidateEngine(cfg)
-            uni = cand_eng.build_research_universe(panel=panel, pool=pool, news_discovery=news_discovery)
+            with progress.step("candidate", "候选 Union + 逐股新闻", note="最多 20 只 × 3 源"):
+                uni = cand_eng.build_research_universe(panel=panel, pool=pool, news_discovery=news_discovery)
+            progress.log(
+                "candidate",
+                f"Union {uni.get('n_union')} → 研究池 {len(uni.get('research_universe') or [])}",
+            )
             regime = market_regime(
                 panel_mom20=[
                     float((r.get("factors") or {}).get("momentum_20d") or 0)
@@ -228,80 +252,59 @@ def run_research(cfg: dict[str, Any], top_n: int | None = None) -> dict[str, Any
             for r in uni.get("research_universe") or []:
                 r["market_regime"] = regime
             session = ResearchSessionEngine(cfg)
-            platform_reports = session.run_pool(uni.get("research_universe") or [], panel=panel)
+            with progress.step("council", "Council 多角色研究", note="串行逐股 · 角色内并行"):
+                platform_reports = session.run_pool(uni.get("research_universe") or [], panel=panel)
             gate_summary = session.gate_summary()
-            # map BUY ratings to watch by default for trading (rating ≠ action)
+            progress.log(
+                "council",
+                f"报告 {len(platform_reports)} · LLM {gate_summary.get('llm_budget')}",
+            )
+            from ashare.research.canonical_decision import (
+                DECISION_SOURCE_PLATFORM,
+                apply_portfolio_weights,
+                build_canonical_decisions,
+                canonical_to_picks,
+            )
+
             risk = RiskFilterEngine(cfg)
-            port = PortfolioEngine(cfg)
-            mapped = []
-            src_map = {to_symbol(r["symbol"]): r.get("candidate_sources") for r in (uni.get("research_universe") or [])}
+            uni_by_sym = {to_symbol(r["symbol"]): r for r in (uni.get("research_universe") or [])}
+            src_map = {sym: r.get("candidate_sources") for sym, r in uni_by_sym.items()}
             for rep in platform_reports:
-                action = (rep.get("decision") or {}).get("action") or "WATCH"
-                rating = (rep.get("decision") or {}).get("research_rating") or "WATCH"
-                sym = to_symbol(rep["symbol"])
-                # keep sources on report for attribution
-                if not rep.get("candidate_sources"):
+                sym = to_symbol(rep.get("symbol") or "")
+                if sym and not rep.get("candidate_sources"):
                     rep["candidate_sources"] = src_map.get(sym) or []
-                bar = snap["bars"].get(sym)
-                allow, reason = (True, "ok")
-                if bar is not None:
-                    allow, reason = risk.allow_open(
-                        {
-                            "is_st": bar.is_st,
-                            "is_halt": bar.is_halt,
-                            "limit_up": bar.limit_up,
-                            "amount": bar.amount,
-                        }
-                    )
-                # Trading only if chairman says SMALL_POSITION and risk ok — still not auto-buy from rating alone
-                approve = allow and action == "SMALL_POSITION" and rating in {"BUY", "STRONG_BUY"}
-                mapped.append(
-                    {
-                        "symbol": sym,
-                        "name": rep.get("name"),
-                        "committee_verdict": "buy" if approve else ("watch" if rating in {"BUY", "WATCH", "STRONG_BUY"} else "pass"),
-                        "committee_approve": approve,
-                        "ai_approve": approve,
-                        "ai_confidence": (rep.get("chairman") or {}).get("confidence"),
-                        "committee_thesis": (rep.get("chairman") or {}).get("base_case"),
-                        "committee_risks": ",".join((rep.get("chairman") or {}).get("risks") or []),
-                        "committee_horizon": (rep.get("chairman") or {}).get("time_horizon"),
-                        "research_rating": rating,
-                        "trading_action": action,
-                        "research_id": rep.get("research_id"),
-                        "reason": "platform_council",
-                        "candidate_sources": src_map.get(sym) or [],
-                        "weight": 0.0,
-                    }
+            with progress.step("decision", "Canonical 决策 + 风控", note="单一交易真相源"):
+                canonical_decisions = build_canonical_decisions(
+                    platform_reports,
+                    as_of=as_of.isoformat(),
+                    universe_by_sym=uni_by_sym,
+                    bars_by_sym=snap["bars"],
+                    risk_engine=risk,
+                    decision_source=DECISION_SOURCE_PLATFORM,
                 )
-            # Prefer platform picks when available; keep legacy roundtable in payload
-            if mapped:
-                picks = mapped
-                weighted = port.suggest_weights(
-                    [{**p, "leader_score": 0.5 if p.get("committee_verdict") == "buy" else 0.0} for p in picks]
-                )
-                wmap = {w["symbol"]: w.get("target_weight", 0) for w in weighted}
-                for p in picks:
-                    p["weight"] = float(wmap.get(p["symbol"]) or 0.0) if p.get("committee_approve") else 0.0
+                canonical_decisions = apply_portfolio_weights(canonical_decisions, cfg)
+                picks = canonical_to_picks(canonical_decisions)
+            progress.log("decision", f"买入 {sum(1 for d in canonical_decisions if d.get('committee_approve'))} 只")
             # Phase 7: outcome attribution by discovery source (descriptive only)
             try:
-                from ashare.research.benchmark import equal_weight_benchmark_returns
+                from ashare.research.benchmark import resolve_benchmark_pack
                 from ashare.research.tracking import ReviewEngine
 
                 horizon = str(((research_yaml.get("tracking") or {}).get("attribution_horizon") or 5))
                 horizons = list((research_yaml.get("tracking") or {}).get("horizons_days") or [1, 3, 5, 10, 20, 60])
-                bench_pack = equal_weight_benchmark_returns(panel, as_of, horizons=horizons)
-                bench_returns = {
-                    k: v for k, v in (bench_pack.get("returns") or {}).items() if v is not None
-                }
-                outcome_pack = ReviewEngine(cfg).attribution_report(
-                    platform_reports,
-                    panel,
-                    horizon=horizon,
-                    benchmark_returns=bench_returns or None,
-                    persist=True,
-                )
-                outcome_pack["benchmark"] = bench_pack
+                with progress.step("outcome", "归因 + CSI300 基准", note="Top-K ablation + outcomes"):
+                    bench_pack = resolve_benchmark_pack(cfg, panel, as_of, horizons=horizons)
+                    bench_returns = {
+                        k: v for k, v in (bench_pack.get("returns") or {}).items() if v is not None
+                    }
+                    outcome_pack = ReviewEngine(cfg).attribution_report(
+                        platform_reports,
+                        panel,
+                        horizon=horizon,
+                        benchmark_returns=bench_returns or None,
+                        persist=True,
+                    )
+                    outcome_pack["benchmark"] = bench_pack
             except Exception as exc:  # noqa: BLE001
                 logger.warning("outcome attribution skipped: %s", exc)
                 outcome_pack = {"available": False, "error": str(exc)[:300]}
@@ -309,13 +312,20 @@ def run_research(cfg: dict[str, Any], top_n: int | None = None) -> dict[str, Any
             logger.warning("platform research path failed, legacy roundtable kept: %s", exc)
 
     approved = [p for p in picks if p.get("committee_approve") or p.get("committee_verdict") == "buy"]
-    if not any(p.get("weight") for p in picks):
+    if picks and not any(p.get("weight") for p in picks):
         w = 1.0 / len(approved) if approved else 0.0
         for p in picks:
             p["weight"] = w if (p.get("committee_approve") or p.get("committee_verdict") == "buy") else 0.0
-            p.setdefault("reason", "leader_factor_roundtable")
 
     picks = attach_names(picks, cfg)
+    if canonical_decisions:
+        canonical_decisions = attach_names(canonical_decisions, cfg)
+        for p in picks:
+            for d in canonical_decisions:
+                if d.get("symbol") == p.get("symbol"):
+                    d["name"] = p.get("name")
+                    d["weight"] = p.get("weight", d.get("weight", 0.0))
+                    break
     payload = {
         "as_of": as_of.isoformat(),
         "strategy": "leader_roundtable",
@@ -352,6 +362,13 @@ def run_research(cfg: dict[str, Any], top_n: int | None = None) -> dict[str, Any
             for r in scored[:20]
         ],
         "picks": picks,
+        "canonical_decisions": canonical_decisions,
+        "decision_chain": {
+            "canonical_source": "platform_council" if canonical_decisions else "none",
+            "roundtable_mode": roundtable_mode,
+            "roundtable_controls_trading": False,
+            "paper_trading_source": "canonical_decisions",
+        },
         "news_discovery": {
             "available": news_discovery.get("available"),
             "news_data_incomplete": news_discovery.get("news_data_incomplete"),
@@ -410,12 +427,16 @@ def run_research(cfg: dict[str, Any], top_n: int | None = None) -> dict[str, Any
             "attribution": outcome_pack.get("attribution"),
             "by_rating": outcome_pack.get("by_rating"),
             "ai_incremental_alpha": outcome_pack.get("ai_incremental_alpha"),
+            "ai_topk_ablation": outcome_pack.get("ai_topk_ablation"),
+            "discovery_attribution": outcome_pack.get("discovery_attribution"),
             "benchmark": outcome_pack.get("benchmark"),
             "note": outcome_pack.get("note") or outcome_pack.get("error"),
         },
         "roundtable": {
             "summary": roundtable.get("summary"),
             "source": roundtable.get("source"),
+            "benchmark_only": bool(roundtable.get("benchmark_only", True)),
+            "controls_trading": False,
             "replay_notes": roundtable.get("replay_notes"),
             "models_used": roundtable.get("models_used") or [],
             "chair_model": roundtable.get("chair_model"),
@@ -432,18 +453,31 @@ def run_research(cfg: dict[str, Any], top_n: int | None = None) -> dict[str, Any
                     "committee_thesis": r.get("committee_thesis"),
                     "committee_risks": r.get("committee_risks"),
                     "committee_horizon": r.get("committee_horizon"),
+                    "benchmark_only": True,
                 }
-                for r in (roundtable.get("reviews") or picks)
+                for r in (roundtable.get("reviews") or [])
             ],
         },
         "generated_at": datetime.now(timezone.utc).isoformat(),
     }
+    if canonical_decisions:
+        from ashare.research.canonical_decision import validate_decision_consistency
+
+        inconsistencies = validate_decision_consistency(payload)
+        payload["decision_consistency"] = {
+            "ok": not inconsistencies,
+            "errors": inconsistencies,
+        }
+        if inconsistencies:
+            logger.warning("decision consistency check failed: %s", inconsistencies)
     try:
         payload["ai_cost"] = get_cost_tracker(cfg).cycle_summary(cycle_id)
     except Exception as exc:  # noqa: BLE001
         logger.debug("research cost summary skipped: %s", exc)
-    persist_report(cfg, payload)
-    _persist_picks_compat(cfg, payload)
+    payload["run_log"] = get_research_progress().run_log()
+    with get_research_progress().step("persist", "写入研报与缓存", note="latest.json / Redis"):
+        persist_report(cfg, payload)
+        _persist_picks_compat(cfg, payload)
     return payload
 
 

@@ -12,7 +12,7 @@ funnel:
 ml_ranking:
   enabled: true
   horizon_days: 5
-  weight_in_candidate_score: 0.35
+  weight_in_candidate_score: 0.10
   leader_weight: 0.40
   factor_weight: 0.25
 
@@ -63,6 +63,11 @@ dynamic_council:
 research_gate:
   enabled: true
   always_pass_top_n: 3
+  deep_threshold: 0.22
+  light_threshold: 0.12
+  max_deep: 10
+  max_light: 8
+  max_llm_calls: 30
   min_candidate_score: 0.12
   min_leader_score: 0.10
   min_ml_prediction: 0.003
@@ -75,9 +80,16 @@ research_gate:
 incremental_research:
   enabled: true
 
+decision:
+  canonical_source: platform_council
+  roundtable_controls_trading: false
+
 tracking:
   horizons_days: [1, 3, 5, 10, 20, 60]
   attribution_horizon: 5
+  benchmark: csi300
+  benchmark_fallback: equal_weight_universe
+  execution_tracking: true
 
 snapshot:
   factor_version: factor_v1

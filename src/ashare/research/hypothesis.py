@@ -93,7 +93,35 @@ class ResearchHypothesis:
         d = asdict(self)
         d["type"] = "HYPOTHESIS"
         d["layers"] = {"FACT": self.fact, "INFERENCE": self.inference, "HYPOTHESIS": self.hypothesis}
+        d["investment_hypothesis"] = self.to_investment_hypothesis()
         return d
+
+    def to_investment_hypothesis(self) -> dict[str, Any]:
+        """V5 schema: mechanism + validation + invalidation."""
+        mechanism_map = {
+            "ORDER": "订单 → 收入 → 毛利 → EPS",
+            "EARNINGS_GUIDANCE": "业绩预告 → 一致预期修正 → 估值重定价",
+            "PRICE_INCREASE": "提价 → 单位毛利 → 净利润",
+            "POLICY_SUPPORT": "政策 → 需求/成本 → 行业盈利",
+        }
+        invalidation = {
+            "ORDER": ["订单取消", "毛利率下降", "市场已充分 Price In"],
+            "EARNINGS_GUIDANCE": ["预告下修", "非经常性损益主导", "基数效应"],
+            "PRICE_INCREASE": ["销量大幅下滑", "成本同步上涨", "竞争未跟涨"],
+        }
+        return {
+            "hypothesis": self.hypothesis,
+            "mechanism": mechanism_map.get(self.event_type, "事件 → 经营变量 → 盈利/估值"),
+            "validation": list(self.validation_questions),
+            "invalidation": invalidation.get(self.event_type, ["证伪条件未定义"]),
+            "confidence": min(0.95, max(0.1, 0.35 + 0.1 * len(self.evidence_ids))),
+            "evidence_ids": list(self.evidence_ids),
+            "layers": {
+                "FACT": self.fact,
+                "INFERENCE": self.inference,
+                "HYPOTHESIS": self.hypothesis,
+            },
+        }
 
 
 class ResearchHypothesisEngine:

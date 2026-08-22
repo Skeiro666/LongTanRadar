@@ -21,6 +21,11 @@ def _gate_cfg(cfg: dict[str, Any] | None) -> dict[str, Any]:
         "always_pass_top_n": int(g.get("always_pass_top_n") or 3),
         "boost_sources": list(g.get("boost_sources") or ["news", "profit", "event"]),
         "boost_score_floor": float(g.get("boost_score_floor") or 0.08),
+        "deep_threshold": float(g.get("deep_threshold") or 0.22),
+        "light_threshold": float(g.get("light_threshold") or 0.12),
+        "max_deep": int(g.get("max_deep") or 10),
+        "max_light": int(g.get("max_light") or 8),
+        "max_llm_calls": int(g.get("max_llm_calls") or 30),
     }
 
 
@@ -32,6 +37,7 @@ class GateDecision:
     candidate_score: float = 0.0
     signals: dict[str, float] = field(default_factory=dict)
     boosted: bool = False
+    research_tier: str = "NO_RESEARCH"
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -41,6 +47,7 @@ class GateDecision:
             "candidate_score": self.candidate_score,
             "signals": self.signals,
             "boosted": self.boosted,
+            "research_tier": self.research_tier,
         }
 
 
@@ -59,6 +66,14 @@ def _signal_values(candidate: dict[str, Any]) -> dict[str, float]:
     }
 
 
+def _assign_tier(cs: float, gc: dict[str, Any]) -> str:
+    if cs >= float(gc["deep_threshold"]):
+        return "DEEP_RESEARCH"
+    if cs >= float(gc["light_threshold"]):
+        return "LIGHT_RESEARCH"
+    return "NO_RESEARCH"
+
+
 def evaluate_research_gate(
     candidate: dict[str, Any],
     cfg: dict[str, Any] | None = None,
@@ -72,12 +87,18 @@ def evaluate_research_gate(
     gc = _gate_cfg(cfg)
     if not gc["enabled"]:
         sig = _signal_values(candidate)
-        return GateDecision(True, "gate_disabled", rank=rank, candidate_score=sig["candidate_score"], signals=sig)
+        tier = _assign_tier(sig["candidate_score"], gc)
+        return GateDecision(
+            True, "gate_disabled", rank=rank, candidate_score=sig["candidate_score"], signals=sig, research_tier=tier
+        )
 
     sig = _signal_values(candidate)
     cs = sig["candidate_score"]
+    tier = _assign_tier(cs, gc)
     sources = set(candidate.get("candidate_sources") or [])
     boosted = bool(sources & set(gc["boost_sources"]))
+    if tier == "NO_RESEARCH" and boosted and cs >= float(gc["boost_score_floor"]):
+        tier = "LIGHT_RESEARCH"
 
     if rank < int(gc["always_pass_top_n"]):
         return GateDecision(
@@ -87,6 +108,7 @@ def evaluate_research_gate(
             candidate_score=cs,
             signals=sig,
             boosted=boosted,
+            research_tier="DEEP_RESEARCH" if tier == "NO_RESEARCH" else tier,
         )
 
     score_floor = float(gc["boost_score_floor"]) if boosted else float(gc["min_candidate_score"])
@@ -98,6 +120,7 @@ def evaluate_research_gate(
             candidate_score=cs,
             signals=sig,
             boosted=boosted,
+            research_tier=tier,
         )
 
     strong = (
@@ -108,6 +131,18 @@ def evaluate_research_gate(
         or sig["news_score"] >= float(gc["min_news_score"])
         or sig["hypothesis_count"] >= 1.0
     )
+
+    if tier == "NO_RESEARCH" and not strong:
+        return GateDecision(
+            False,
+            "NO_RESEARCH_TIER",
+            rank=rank,
+            candidate_score=cs,
+            signals=sig,
+            boosted=boosted,
+            research_tier=tier,
+        )
+
     if strong:
         return GateDecision(
             True,
@@ -116,6 +151,7 @@ def evaluate_research_gate(
             candidate_score=cs,
             signals=sig,
             boosted=boosted,
+            research_tier=tier if tier != "NO_RESEARCH" else "LIGHT_RESEARCH",
         )
 
     return GateDecision(
@@ -125,6 +161,7 @@ def evaluate_research_gate(
         candidate_score=cs,
         signals=sig,
         boosted=boosted,
+        research_tier=tier,
     )
 
 
@@ -136,10 +173,14 @@ class GateBatchResult:
 
     def summary(self) -> dict[str, Any]:
         reasons = {d.reason for d in self.decisions.values() if not d.passed}
+        tiers: dict[str, int] = {}
+        for d in self.decisions.values():
+            tiers[d.research_tier] = tiers.get(d.research_tier, 0) + 1
         return {
             "n_in": len(self.passed) + len(self.rejected),
             "n_passed": len(self.passed),
             "n_rejected": len(self.rejected),
+            "research_tiers": tiers,
             "reject_reasons": {
                 r: sum(1 for d in self.decisions.values() if d.reason == r and not d.passed) for r in reasons
             },
@@ -150,17 +191,47 @@ def apply_research_gate(
     candidates: list[dict[str, Any]],
     cfg: dict[str, Any] | None = None,
 ) -> GateBatchResult:
-    """Sort by candidate_score desc, evaluate gate, annotate rows."""
+    """Sort by candidate_score desc, evaluate gate tiers, annotate rows."""
+    gc = _gate_cfg(cfg)
     ranked = sorted(candidates, key=lambda x: float(x.get("candidate_score") or 0), reverse=True)
     passed: list[dict[str, Any]] = []
     rejected: list[dict[str, Any]] = []
     decisions: dict[str, GateDecision] = {}
+    deep_n = 0
+    light_n = 0
 
     for i, row in enumerate(ranked):
         sym = str(row.get("symbol") or "")
         dec = evaluate_research_gate(row, cfg, rank=i)
+        if dec.passed:
+            tier = dec.research_tier
+            if tier == "DEEP_RESEARCH" and deep_n >= int(gc["max_deep"]):
+                dec = GateDecision(
+                    False,
+                    "DEEP_BUDGET",
+                    rank=i,
+                    candidate_score=dec.candidate_score,
+                    signals=dec.signals,
+                    boosted=dec.boosted,
+                    research_tier="NO_RESEARCH",
+                )
+            elif tier == "LIGHT_RESEARCH" and light_n >= int(gc["max_light"]):
+                dec = GateDecision(
+                    False,
+                    "LIGHT_BUDGET",
+                    rank=i,
+                    candidate_score=dec.candidate_score,
+                    signals=dec.signals,
+                    boosted=dec.boosted,
+                    research_tier="NO_RESEARCH",
+                )
+            elif dec.passed:
+                if dec.research_tier == "DEEP_RESEARCH":
+                    deep_n += 1
+                elif dec.research_tier == "LIGHT_RESEARCH":
+                    light_n += 1
         decisions[sym] = dec
-        annotated = {**row, "gate": dec.to_dict(), "in_council": dec.passed}
+        annotated = {**row, "gate": dec.to_dict(), "in_council": dec.passed, "research_tier": dec.research_tier}
         if dec.passed:
             passed.append(annotated)
         else:

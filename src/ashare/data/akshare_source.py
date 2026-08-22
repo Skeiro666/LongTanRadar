@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import json
 import logging
 import time
+from pathlib import Path
 from typing import Any
 
 import pandas as pd
@@ -10,6 +12,45 @@ import requests
 from ashare.symbols import bare_code, board_limit_pct, to_symbol
 
 logger = logging.getLogger("ashare.data.akshare")
+
+_ST_CACHE_TTL_SEC = 86400
+_ST_MEM: tuple[float, set[str]] | None = None
+
+
+def _project_root() -> Path:
+    return Path(__file__).resolve().parents[3]
+
+
+def _st_cache_path() -> Path:
+    return _project_root() / "data" / "cache" / "st_codes.json"
+
+
+def _load_st_cache(*, allow_stale: bool = False) -> set[str] | None:
+    path = _st_cache_path()
+    if not path.exists():
+        return None
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        codes = {to_symbol(str(x)) for x in (payload.get("codes") or [])}
+        updated = float(payload.get("updated_at") or 0)
+        age = time.time() - updated
+        if codes and (allow_stale or age <= _ST_CACHE_TTL_SEC):
+            return codes
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("ST cache read failed: %s", exc)
+    return None
+
+
+def _save_st_cache(codes: set[str]) -> None:
+    path = _st_cache_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(
+            {"updated_at": time.time(), "n": len(codes), "codes": sorted(codes)},
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
 
 
 def _import_ak():
@@ -31,15 +72,51 @@ def fetch_hs300_constituents() -> list[str]:
     return [to_symbol(str(x)) for x in df[col].tolist()]
 
 
-def fetch_st_codes() -> set[str]:
+def fetch_st_codes(*, max_retries: int = 3) -> set[str]:
+    """Fetch A-share ST symbols from Eastmoney; retry + file cache on network blips."""
+    global _ST_MEM
+    now = time.time()
+    if _ST_MEM and now - _ST_MEM[0] < 300:
+        return _ST_MEM[1]
+
+    fresh = _load_st_cache(allow_stale=False)
+    if fresh is not None:
+        _ST_MEM = (now, fresh)
+        return fresh
+
     ak = _import_ak()
-    try:
-        df = ak.stock_zh_a_st_em()
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("ST list fetch failed: %s", exc)
-        return set()
-    code_col = "代码" if "代码" in df.columns else df.columns[0]
-    return {to_symbol(str(x)) for x in df[code_col].tolist()}
+    last_exc: Exception | None = None
+    for attempt in range(max_retries):
+        try:
+            df = ak.stock_zh_a_st_em()
+            code_col = "代码" if "代码" in df.columns else df.columns[0]
+            codes = {to_symbol(str(x)) for x in df[code_col].tolist()}
+            if codes:
+                _save_st_cache(codes)
+                _ST_MEM = (now, codes)
+                logger.info("ST list fetched: n=%d", len(codes))
+                return codes
+        except Exception as exc:  # noqa: BLE001
+            last_exc = exc
+            if attempt + 1 < max_retries:
+                time.sleep(0.6 * (attempt + 1))
+                logger.debug("ST list fetch retry %d/%d: %s", attempt + 2, max_retries, exc)
+
+    stale = _load_st_cache(allow_stale=True)
+    if stale:
+        _ST_MEM = (now, stale)
+        logger.warning(
+            "ST list fetch failed (%s); using cached ST list (n=%d)",
+            last_exc,
+            len(stale),
+        )
+        return stale
+
+    logger.warning(
+        "ST list fetch failed (%s); no ST cache — is_st/limit flags may be incomplete this run",
+        last_exc,
+    )
+    return set()
 
 
 def _normalize_bars(df: pd.DataFrame, symbol: str, st_codes: set[str] | None) -> pd.DataFrame:
@@ -194,6 +271,52 @@ def fetch_spot_prices(symbols: list[str]) -> dict[str, float]:
         if len(key) >= 8:
             ex, num = key[:2].upper(), key[2:]
             out[f"{num}.{ex}"] = px
+    return out
+
+
+CSI300_INDEX_SYMBOL = "IDX.CSI300"
+
+
+def fetch_csi300_index_bars(cfg: dict[str, Any] | None = None) -> pd.DataFrame:
+    """Fetch CSI300 (000300) daily index bars; cache under data/cache/daily."""
+    from ashare.data.store import ParquetStore
+
+    cfg = cfg or {}
+    root = Path(cfg.get("_root") or Path(__file__).resolve().parents[3])
+    cache_dir = (cfg.get("data") or {}).get("cache_dir") or "data/cache"
+    store = ParquetStore(root / cache_dir)
+    cached = store.load_daily(CSI300_INDEX_SYMBOL)
+    try:
+        ak = _import_ak()
+        raw = ak.stock_zh_index_daily(symbol="sh000300")
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("CSI300 index fetch failed: %s", exc)
+        return cached if cached is not None else pd.DataFrame()
+
+    if raw is None or raw.empty:
+        return cached if cached is not None else pd.DataFrame()
+
+    out = raw.copy()
+    if "date" not in out.columns and "日期" in out.columns:
+        out = out.rename(columns={"日期": "date"})
+    out["date"] = pd.to_datetime(out["date"])
+    for src, dst in (("open", "open"), ("high", "high"), ("low", "low"), ("close", "close"), ("volume", "volume")):
+        if dst not in out.columns:
+            cn = {"open": "开盘", "high": "最高", "low": "最低", "close": "收盘", "volume": "成交量"}.get(dst)
+            if cn in out.columns:
+                out[dst] = out[cn]
+    out["symbol"] = CSI300_INDEX_SYMBOL
+    out["amount"] = 0.0
+    out["pct_chg"] = out["close"].pct_change().fillna(0.0) * 100.0
+    out["is_st"] = False
+    out["is_halt"] = False
+    out["limit_up"] = False
+    out["limit_down"] = False
+    out = out.sort_values("date").drop_duplicates(subset=["date"]).reset_index(drop=True)
+    try:
+        store.save_daily(CSI300_INDEX_SYMBOL, out)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("CSI300 cache save failed: %s", exc)
     return out
 
 

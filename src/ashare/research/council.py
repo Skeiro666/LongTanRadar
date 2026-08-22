@@ -9,9 +9,9 @@ from typing import Any
 
 from ashare.ai.client import client_for_role, client_from_cfg, parse_json_object
 from ashare.config_loaders import load_yaml_config
-from ashare.research.cache import compute_context_hash, get_research_cache
-from ashare.research.dynamic_council import select_council_roles, skipped_role_opinion
-from ashare.research.incremental import roles_to_refresh
+from ashare.research.cache import compute_context_hash, extract_version_meta, get_research_cache
+from ashare.research.dynamic_council import plan_council, skipped_role_opinion
+from ashare.research.incremental import detect_change_reasons, roles_to_refresh
 from ashare.research.intel_package import build_chairman_context, build_role_context
 
 logger = logging.getLogger("ashare.research.council")
@@ -63,6 +63,7 @@ class AICouncilEngine:
             return self._heuristic(role_id, snapshot, ver, "unconfigured")
 
         factor_version = str((self.research_cfg.get("snapshot") or {}).get("factor_version") or "factor_v1")
+        vmeta = extract_version_meta(snapshot)
         payload_json = json.dumps(payload, ensure_ascii=False, default=str)[:10000]
         cache = get_research_cache(self.cfg)
         cache_key = compute_context_hash(
@@ -72,6 +73,10 @@ class AICouncilEngine:
             prompt_version=ver,
             model=str(getattr(client, "model", "") or ""),
             factor_version=factor_version,
+            news_version=vmeta["news_version"],
+            model_version=vmeta["model_version"],
+            as_of=vmeta["as_of"],
+            candidate_hash=vmeta["candidate_hash"],
         )
         cached = cache.get(cache_key)
         if cached:
@@ -100,6 +105,7 @@ class AICouncilEngine:
                 role=role_id,
                 symbol=str(snapshot.get("symbol") or "") or None,
                 call_site="council.role",
+                research_session_id=str(snapshot.get("research_id") or "") or None,
             )
             data = parse_json_object(text)
             data["role"] = role_id
@@ -169,10 +175,12 @@ class AICouncilEngine:
         prior_opinions: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         opinions: dict[str, Any] = {}
-        active = select_council_roles(snapshot, self.cfg)
+        council_plan = plan_council(snapshot, self.cfg)
+        active = council_plan.roles
         from ashare.research.incremental import _incremental_cfg
 
         inc_on = bool(_incremental_cfg(self.cfg).get("enabled", True)) and prior_snapshot is not None
+        change_reasons = detect_change_reasons(snapshot, prior_snapshot, self.cfg) if prior_snapshot else ["MANUAL_REFRESH"]
         if inc_on:
             to_call = list(roles_to_refresh(snapshot, prior_snapshot, self.cfg))
         else:
@@ -180,7 +188,8 @@ class AICouncilEngine:
 
         for rid in self.ROLE_IDS:
             if rid not in active:
-                opinions[rid] = skipped_role_opinion(rid, "dynamic_council: 信号不足，跳过 LLM")
+                reason = council_plan.skip_reasons.get(rid) or "NOT_RELEVANT_ROLE"
+                opinions[rid] = skipped_role_opinion(rid, reason)
 
         for rid in active:
             if rid not in to_call and prior_opinions and rid in prior_opinions:
@@ -198,6 +207,13 @@ class AICouncilEngine:
         else:
             for rid in to_call:
                 opinions[rid] = self._call_role(rid, snapshot)
+        opinions["_meta"] = {
+            "council_profile": council_plan.profile,
+            "call_reasons": council_plan.call_reasons,
+            "skip_reasons": council_plan.skip_reasons,
+            "change_reasons": change_reasons,
+            "roles_called": list(to_call),
+        }
         return opinions
 
 
@@ -208,7 +224,11 @@ class DebateEngine:
         self.prompts = load_prompts(self.cfg)
 
     def needs_debate(self, opinions: dict[str, Any]) -> bool:
-        stances = {k: str(v.get("stance") or "neutral") for k, v in opinions.items()}
+        stances = {
+            k: str(v.get("stance") or "neutral")
+            for k, v in opinions.items()
+            if isinstance(v, dict) and not k.startswith("_")
+        }
         bulls = {k for k, s in stances.items() if s == "bull"}
         bears = {k for k, s in stances.items() if s == "bear"}
         return bool(bulls & {"fundamental", "quant", "event"}) and bool(bears)
@@ -258,11 +278,12 @@ class ChairmanEngine:
             client = client_from_cfg(self.cfg)
         if getattr(client, "configured", False):
             factor_version = str((load_yaml_config(self.cfg, "research").get("snapshot") or {}).get("factor_version") or "factor_v1")
+            vmeta = extract_version_meta(snapshot)
             cache = get_research_cache(self.cfg)
             opinion_sig = {
                 k: {"score": v.get("score"), "stance": v.get("stance"), "status": v.get("status")}
                 for k, v in opinions.items()
-                if isinstance(v, dict)
+                if isinstance(v, dict) and not k.startswith("_")
             }
             cache_key = compute_context_hash(
                 symbol=str(snapshot.get("symbol") or ""),
@@ -271,6 +292,10 @@ class ChairmanEngine:
                 prompt_version=ver,
                 model=str(getattr(client, "model", "") or ""),
                 factor_version=factor_version,
+                news_version=vmeta["news_version"],
+                model_version=vmeta["model_version"],
+                as_of=vmeta["as_of"],
+                candidate_hash=vmeta["candidate_hash"],
             )
             cached = cache.get(cache_key)
             if cached:
@@ -285,6 +310,7 @@ class ChairmanEngine:
                     role="chairman",
                     symbol=str(snapshot.get("symbol") or "") or None,
                     call_site="council.chairman",
+                    research_session_id=str(snapshot.get("research_id") or "") or None,
                 )
                 data = parse_json_object(text)
                 data["prompt_version"] = ver

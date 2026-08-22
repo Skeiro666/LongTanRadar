@@ -78,7 +78,11 @@ export const api = {
   pnl: () => req<any>("/api/pnl"),
   researchLatest: () => req<any>("/api/research/latest"),
   researchRun: (body?: { top_n?: number }) =>
-    req<any>("/api/research/run", { method: "POST", body: JSON.stringify(body || {}) }),
+    req<{ status: string; run_id?: string; poll?: string }>("/api/research/run", {
+      method: "POST",
+      body: JSON.stringify(body || {}),
+    }),
+  researchProgress: () => req<any>("/api/research/progress"),
   researchRefreshNews: () => req<any>("/api/research/refresh-news", { method: "POST", body: "{}" }),
   researchSessions: (limit = 50) => req<any>(`/api/research/sessions?limit=${limit}`),
   researchSession: (id: string) => req<any>(`/api/research/session/${id}`),
@@ -90,11 +94,16 @@ export const api = {
     req<any>(`/api/research/hypotheses${symbol ? `?symbol=${encodeURIComponent(symbol)}` : ""}`),
   researchOutcomes: (horizon = "5") => req<any>(`/api/research/outcomes?horizon=${horizon}`),
   researchAttribution: (horizon = "5") => req<any>(`/api/research/attribution?horizon=${horizon}`),
+  researchAlphaDashboard: (horizon = "5") => req<any>(`/api/research/alpha-dashboard?horizon=${horizon}`),
+  optimizerExperiments: (limit = 20) => req<any>(`/api/optimizer/experiments?limit=${limit}`),
   newsDiscovery: () => req<any>("/api/news/discovery"),
   news: (symbol: string, name = "") =>
     req<any>(`/api/news/${encodeURIComponent(symbol)}?name=${encodeURIComponent(name)}`),
   factors: () => req<any>("/api/factors"),
   mlRankTrain: () => req<any>("/api/ml/rank/train", { method: "POST", body: "{}" }),
+  mlWeightExperiments: (limit = 20) => req<any>(`/api/ml/weight-experiments?limit=${limit}`),
+  mlWeightExperimentRun: () =>
+    req<any>("/api/ml/weight-experiment", { method: "POST", body: "{}" }),
   aiCost: () => req<any>("/api/ai/cost"),
 };
 

@@ -10,6 +10,31 @@ from ashare.config_loaders import load_yaml_config
 from ashare.research.intel_package import build_research_intelligence
 
 
+def _candidate_score_meta(candidate: dict[str, Any]) -> dict[str, Any]:
+    hyps = list(candidate.get("research_hypotheses") or [])
+    inv = dict((candidate.get("news_discovery") or {}).get("investment_hypothesis") or {})
+    if not inv and hyps and isinstance(hyps[0], dict):
+        inv = dict(hyps[0].get("investment_hypothesis") or {})
+    eer = dict(inv.get("expected_excess_return") or {})
+    if not eer.get("available"):
+        eer = {
+            "available": False,
+            "value": None,
+            "confidence": 0.0,
+            "horizon": inv.get("mechanism") or "unknown",
+            "note": "无可靠 expected_excess_return，禁止伪造",
+            "qualitative_only": True,
+        }
+    return {
+        "candidate_score": round(float(candidate.get("candidate_score") or 0), 6),
+        "semantic": "cross_sectional_ranking_score",
+        "not_probability": True,
+        "not_expected_return": True,
+        "expected_excess_return": eer,
+        "confidence": float(eer.get("confidence") or 0.0) if eer.get("available") else None,
+    }
+
+
 class SnapshotStore:
     def __init__(self, cfg: dict[str, Any] | None = None) -> None:
         self.cfg = cfg or {}
@@ -86,6 +111,7 @@ def build_snapshot(candidate: dict[str, Any], cfg: dict[str, Any] | None = None)
         or (candidate.get("news_discovery") or {}).get("price_in_risk")
         or "UNKNOWN",
         "news_package": candidate.get("news_package") or {},
+        "candidate_score_meta": _candidate_score_meta(candidate),
         "news_snapshot": {
             "news_ids": (candidate.get("news_package") or {}).get("news_ids") or [],
             "event_ids": (candidate.get("news_package") or {}).get("event_ids") or [],

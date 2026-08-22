@@ -43,6 +43,20 @@ def test_lifecycle_rejected():
     assert lc["lifecycle_status"] == LIFECYCLE_REJECTED
 
 
+def test_lifecycle_confirmed_on_high_confidence():
+    from ashare.news.event_lifecycle import LIFECYCLE_CONFIRMED, LIFECYCLE_DEVELOPING, LIFECYCLE_NEW, compute_event_lifecycle
+
+    nc = {
+        "status": "DISCOVERED",
+        "confidence": 0.88,
+        "mapping_method": "official_name",
+        "price_in_risk": "LOW",
+        "price_reaction": {"available": True, "ret_since_event": 0.01},
+    }
+    lc = compute_event_lifecycle(nc, as_of="2026-08-22")
+    assert lc["lifecycle_status"] in {LIFECYCLE_CONFIRMED, LIFECYCLE_NEW, LIFECYCLE_DEVELOPING}
+
+
 def test_lifecycle_resolved_by_outcome():
     nc = {"status": "DISCOVERED", "price_in_risk": "LOW"}
     outcome = {

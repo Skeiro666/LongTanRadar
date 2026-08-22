@@ -309,6 +309,26 @@ export default function Research() {
                 </div>
               </dl>
             )}
+            {data.research_outcomes.portfolio_attribution?.available && (
+              <p className="muted" style={{ marginTop: "0.35rem" }}>
+                Portfolio α (primary) T+{data.research_outcomes.portfolio_attribution.horizon || data.research_outcomes.horizon}:{" "}
+                {data.research_outcomes.portfolio_attribution.mean_selection_alpha != null
+                  ? `${(data.research_outcomes.portfolio_attribution.mean_selection_alpha * 100).toFixed(2)}% selection`
+                  : data.research_outcomes.portfolio_attribution.mean_market_alpha != null
+                    ? `${(data.research_outcomes.portfolio_attribution.mean_market_alpha * 100).toFixed(2)}% market`
+                    : "—"}
+                {" · fill "}
+                {data.research_outcomes.portfolio_attribution.n_paper_fill ?? 0}
+                {" / signal "}
+                {data.research_outcomes.portfolio_attribution.n_signal_close ?? 0}
+              </p>
+            )}
+            {data.ai_cost?.budget && (
+              <p className="muted" style={{ fontSize: "0.82rem" }}>
+                Cache hit {(Number(data.ai_cost.budget.used?.cache_hit_rate ?? 0) * 100).toFixed(0)}%
+                {data.ai_cost.budget.hard_stop ? " · budget stop" : ""}
+              </p>
+            )}
             {(data.research_outcomes.ai_incremental_alpha?.available ||
               data.research_outcomes.ai_topk_ablation?.available) && (
               <p className="muted">

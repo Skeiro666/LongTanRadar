@@ -458,6 +458,8 @@ def run_research(cfg: dict[str, Any], top_n: int | None = None) -> dict[str, Any
             "discovery_attribution": outcome_pack.get("discovery_attribution"),
             "benchmark": outcome_pack.get("benchmark"),
             "benchmark_snapshot": outcome_pack.get("benchmark_snapshot"),
+            "portfolio_attribution": outcome_pack.get("portfolio_attribution"),
+            "outcome_truth": outcome_pack.get("outcome_truth"),
             "note": outcome_pack.get("note") or outcome_pack.get("error"),
         },
         "roundtable": {
@@ -500,7 +502,13 @@ def run_research(cfg: dict[str, Any], top_n: int | None = None) -> dict[str, Any
         if inconsistencies:
             logger.warning("decision consistency check failed: %s", inconsistencies)
     try:
-        payload["ai_cost"] = get_cost_tracker(cfg).cycle_summary(cycle_id)
+        from ashare.research.llm_budget import budget_snapshot
+
+        cycle_cost = get_cost_tracker(cfg).cycle_summary(cycle_id)
+        payload["ai_cost"] = {
+            **cycle_cost,
+            "budget": budget_snapshot(cycle_cost, cfg),
+        }
     except Exception as exc:  # noqa: BLE001
         logger.debug("research cost summary skipped: %s", exc)
     payload["run_log"] = get_research_progress().run_log()

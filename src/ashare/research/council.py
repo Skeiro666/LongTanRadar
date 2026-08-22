@@ -62,6 +62,16 @@ class AICouncilEngine:
         if not getattr(client, "configured", False):
             return self._heuristic(role_id, snapshot, ver, "unconfigured")
 
+        try:
+            from ashare.ai.cost_tracker import get_cost_tracker
+            from ashare.research.llm_budget import budget_allows_llm_call
+
+            ok, budget_reason = budget_allows_llm_call(get_cost_tracker(self.cfg).cycle_summary(), self.cfg)
+            if not ok:
+                return self._heuristic(role_id, snapshot, ver, f"budget_{budget_reason}")
+        except Exception:  # noqa: BLE001
+            pass
+
         factor_version = str((self.research_cfg.get("snapshot") or {}).get("factor_version") or "factor_v1")
         vmeta = extract_version_meta(snapshot)
         payload_json = json.dumps(payload, ensure_ascii=False, default=str)[:10000]
@@ -277,6 +287,15 @@ class ChairmanEngine:
         except Exception:  # noqa: BLE001
             client = client_from_cfg(self.cfg)
         if getattr(client, "configured", False):
+            try:
+                from ashare.ai.cost_tracker import get_cost_tracker
+                from ashare.research.llm_budget import budget_allows_llm_call
+
+                ok, budget_reason = budget_allows_llm_call(get_cost_tracker(self.cfg).cycle_summary(), self.cfg)
+                if not ok:
+                    return self._heuristic(opinions, missing, ver)
+            except Exception:  # noqa: BLE001
+                pass
             factor_version = str((load_yaml_config(self.cfg, "research").get("snapshot") or {}).get("factor_version") or "factor_v1")
             vmeta = extract_version_meta(snapshot)
             cache = get_research_cache(self.cfg)

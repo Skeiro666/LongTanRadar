@@ -225,8 +225,12 @@ class ReviewEngine:
             for o in outcomes:
                 rep = report_by_sym.get(str(o.get("symbol"))) or {}
                 attach_paper_execution(o, rep, fills_by_sym, panel=panel)
+        from ashare.research.outcome_truth import apply_primary_truth, summarize_portfolio_attribution
+
+        outcomes = apply_primary_truth(outcomes)
         if persist and outcomes:
             self.persist_outcomes(outcomes)
+        portfolio_truth = summarize_portfolio_attribution(outcomes, horizon=str(horizon))
         attr = self.summarize_by_source(outcomes, horizon=horizon)
         by_rating = self.summarize_by_rating(outcomes, horizon=horizon)
         legacy_alpha = self.compute_ai_incremental_alpha(outcomes, horizon=horizon)
@@ -250,6 +254,11 @@ class ReviewEngine:
             "discovery_attribution": discovery_attr,
             "horizon": str(horizon),
             "benchmark_snapshot": benchmark_snapshot,
+            "portfolio_attribution": portfolio_truth,
+            "outcome_truth": {
+                "primary_source_rule": "paper_fill > signal_close",
+                "note": "Per-symbol alpha uses primary_horizons; account PnL remains paper broker equity.",
+            },
         }
 
     def compute_topk_ablation_alpha(
@@ -335,6 +344,7 @@ class ReviewEngine:
             "available": True,
             "insufficient_sample": k < 2,
             "method": "same_universe_topk_ablation",
+            "ranking_method": "heuristic_rating_to_score",
             "horizon": str(horizon),
             "top_k": k,
             "sample_count": len(eligible),

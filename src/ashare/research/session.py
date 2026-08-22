@@ -111,6 +111,10 @@ class ResearchSessionEngine:
         gate_cfg = dict((self.research_cfg.get("research_gate") or {}))
         max_llm = int(gate_cfg.get("max_llm_calls") or 30)
         llm_used = 0
+        from ashare.ai.cost_tracker import get_cost_tracker
+        from ashare.research.llm_budget import budget_allows_llm_call
+
+        cost_tracker = get_cost_tracker(self.cfg)
 
         reports: list[dict[str, Any]] = []
         from ashare.research.progress import get_research_progress
@@ -122,6 +126,11 @@ class ResearchSessionEngine:
             if llm_used >= max_llm:
                 reports.append(self._budget_skip_report(c, llm_used))
                 prog.log("council", f"跳过 {name} — LLM 预算用尽", level="warn")
+                continue
+            ok, budget_reason = budget_allows_llm_call(cost_tracker.cycle_summary(), self.cfg)
+            if not ok:
+                reports.append(self._budget_skip_report(c, llm_used))
+                prog.log("council", f"跳过 {name} — Token/Cost 预算 ({budget_reason})", level="warn")
                 continue
             prog.log("council", f"[{i + 1}/{len(council_candidates)}] 研究 {name} ({sym})")
             rep = self.run_session(c)
@@ -135,7 +144,10 @@ class ResearchSessionEngine:
         for c in gate_batch.rejected:
             reports.append(self._gate_skip_report(c))
         summary = gate_batch.summary()
-        summary["llm_budget"] = {"max": max_llm, "used": llm_used}
+        from ashare.research.llm_budget import budget_snapshot
+
+        summary["llm_budget"] = budget_snapshot(cost_tracker.cycle_summary(), self.cfg)
+        summary["llm_budget"]["call_budget"] = {"max": max_llm, "used": llm_used}
         self._last_gate_summary = summary
         return reports
 

@@ -106,3 +106,15 @@ role_ablation:
 
 model_benchmark:
   enabled: true
+
+llm_budget:
+  enabled: true
+  max_llm_calls: 30
+  max_input_tokens: 800000
+  max_output_tokens: 200000
+  max_cost_usd: 5.0
+
+candidate_score:
+  semantic: cross_sectional_ranking_score
+  not_probability: true
+  not_expected_return: true

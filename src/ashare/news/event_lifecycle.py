@@ -6,8 +6,12 @@ import pandas as pd
 
 # V5.2 event lifecycle — research semantics only, never trading actions.
 LIFECYCLE_NEW = "NEW"
+LIFECYCLE_CONFIRMED = "CONFIRMED"
+LIFECYCLE_DEVELOPING = "DEVELOPING"
 LIFECYCLE_PRICED_IN = "PRICED_IN"
+LIFECYCLE_MONETIZING = "MONETIZING"
 LIFECYCLE_RESOLVED = "RESOLVED"
+LIFECYCLE_INVALIDATED = "INVALIDATED"
 LIFECYCLE_REJECTED = "REJECTED"
 
 _RISK_SCORE = {"HIGH": 0.85, "MEDIUM": 0.50, "LOW": 0.15, "UNKNOWN": 0.0}
@@ -18,10 +22,7 @@ def price_in_score(
     price_in_risk: str = "UNKNOWN",
     price_reaction: dict[str, Any] | None = None,
 ) -> float:
-    """
-    0–1 score: higher = more likely information is already in the price.
-    Display / feature only — not mixed into BUY score.
-    """
+    """0–1: higher = more likely information is already in the price."""
     risk = (price_in_risk or "UNKNOWN").upper()
     base = float(_RISK_SCORE.get(risk, 0.0))
     rx = price_reaction or {}
@@ -72,11 +73,11 @@ def compute_event_lifecycle(
     resolve_after_trading_days: int = 20,
 ) -> dict[str, Any]:
     """
-    NEW → PRICED_IN → RESOLVED (or REJECTED).
+    NEW → CONFIRMED → DEVELOPING → PRICED_IN → MONETIZING → RESOLVED / INVALIDATED / REJECTED
     Does not change trading decisions.
     """
     status = str(nc.get("status") or "DISCOVERED").upper()
-    if status == "REJECTED":
+    if status == "REJECTED" or nc.get("reject_reason"):
         return {
             "lifecycle_status": LIFECYCLE_REJECTED,
             "lifecycle_reason": str(nc.get("reject_reason") or "rejected"),
@@ -85,6 +86,19 @@ def compute_event_lifecycle(
     rx = dict(nc.get("price_reaction") or {})
     risk = str(nc.get("price_in_risk") or rx.get("price_in_risk") or "UNKNOWN").upper()
     score = price_in_score(price_in_risk=risk, price_reaction=rx)
+    direction = str(nc.get("event_direction") or nc.get("direction") or "NEUTRAL").upper()
+    confidence = float(nc.get("confidence") or 0)
+    mapping = str(nc.get("mapping_method") or "none")
+    ret_since = rx.get("ret_since_event")
+    if ret_since is None:
+        ret_since = rx.get("ret_1d")
+
+    if str(nc.get("invalidated") or "").lower() == "true" or nc.get("invalidate_reason"):
+        return {
+            "lifecycle_status": LIFECYCLE_INVALIDATED,
+            "lifecycle_reason": str(nc.get("invalidate_reason") or "invalidated"),
+            "price_in_score": score,
+        }
 
     if _outcome_fully_resolved(outcome, min_horizon=resolve_after_trading_days):
         return {
@@ -110,6 +124,27 @@ def compute_event_lifecycle(
             "price_in_score": score,
         }
 
+    if ret_since is not None and float(ret_since) >= 0.05 and direction in {"BULLISH", "VERY_BULLISH"}:
+        return {
+            "lifecycle_status": LIFECYCLE_MONETIZING,
+            "lifecycle_reason": "positive_price_move_post_event",
+            "price_in_score": score,
+        }
+
+    if age is not None and 1 <= age <= 5:
+        return {
+            "lifecycle_status": LIFECYCLE_DEVELOPING,
+            "lifecycle_reason": f"age_{age}td",
+            "price_in_score": score,
+        }
+
+    if confidence >= 0.55 and mapping in {"official_name", "code", "title", "alias"}:
+        return {
+            "lifecycle_status": LIFECYCLE_CONFIRMED,
+            "lifecycle_reason": "entity_link_confirmed",
+            "price_in_score": score,
+        }
+
     return {
         "lifecycle_status": LIFECYCLE_NEW,
         "lifecycle_reason": "fresh_discovery",
@@ -132,9 +167,11 @@ def apply_event_lifecycle(
         price_in_risk=str(out.get("price_in_risk") or "UNKNOWN"),
         price_reaction=out.get("price_reaction"),
     )
-    # Keep legacy status for funnel reject; lifecycle is orthogonal.
     if out.get("lifecycle_status") == LIFECYCLE_REJECTED and out.get("status") != "REJECTED":
         out["status"] = "REJECTED"
-    elif out.get("status") in {"", "DISCOVERED"} and out.get("lifecycle_status") == LIFECYCLE_NEW:
+    elif out.get("status") in {"", "DISCOVERED"} and out.get("lifecycle_status") in {
+        LIFECYCLE_NEW,
+        LIFECYCLE_CONFIRMED,
+    }:
         out["status"] = "DISCOVERED"
     return out

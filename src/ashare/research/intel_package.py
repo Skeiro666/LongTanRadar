@@ -187,6 +187,7 @@ def build_research_intelligence(snapshot: dict[str, Any], *, role_id: str | None
             "FACT ≠ INFERENCE ≠ HYPOTHESIS",
             "available=false fields must not be invented",
             "price_in_risk is a warning only, not auto PASS/SELL",
+            "candidate_score is cross-sectional rank — NOT probability or expected return",
         ],
     }
 

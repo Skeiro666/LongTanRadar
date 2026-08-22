@@ -100,7 +100,7 @@ def pnl_summary(cfg: dict[str, Any]) -> dict[str, Any]:
         }
         for p in points
     ]
-    return {
+    out = {
         "initial_balance": initial,
         "equity": float(last["equity"]),
         "pnl_day": float(last.get("pnl_day") or 0),
@@ -110,4 +110,35 @@ def pnl_summary(cfg: dict[str, Any]) -> dict[str, Any]:
         "as_of": last.get("date"),
         "curve": curve,
         "updated_at": payload.get("updated_at"),
+        "truth_model": {
+            "account_pnl": "paper_broker_equity",
+            "per_symbol_alpha": "research_outcomes.primary_horizons",
+            "note": "Portfolio equity from paper account; attribution alpha from latest research outcomes.",
+        },
     }
+    out.update(_research_alpha_link(cfg))
+    return out
+
+
+def _research_alpha_link(cfg: dict[str, Any]) -> dict[str, Any]:
+    try:
+        from ashare.services.research import latest_research
+
+        research = latest_research(cfg) or {}
+        pack = research.get("research_outcomes") or {}
+        if not pack.get("available"):
+            return {"research_link": {"available": False}}
+        return {
+            "research_link": {
+                "available": True,
+                "research_as_of": research.get("as_of"),
+                "horizon": pack.get("horizon"),
+                "benchmark_snapshot": pack.get("benchmark_snapshot"),
+                "portfolio_attribution": pack.get("portfolio_attribution"),
+                "ai_incremental_alpha": pack.get("ai_incremental_alpha"),
+                "outcome_truth": pack.get("outcome_truth"),
+            }
+        }
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("research alpha link skipped: %s", exc)
+        return {"research_link": {"available": False, "note": "research_unavailable"}}

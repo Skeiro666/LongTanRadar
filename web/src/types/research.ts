@@ -245,7 +245,15 @@ export type ResearchPayload = {
       baseline_topk?: { mean_return?: number };
       ai_topk?: { mean_return?: number };
     };
-    ai_incremental_alpha_legacy?: { note?: string; conclusion?: string };
+    portfolio_attribution?: {
+      available?: boolean;
+      horizon?: string;
+      mean_market_alpha?: number | null;
+      mean_selection_alpha?: number | null;
+      n_paper_fill?: number;
+      n_signal_close?: number;
+    };
+    outcome_truth?: { primary_source_rule?: string; note?: string };
     role_ablation?: {
       available?: boolean;
       experimental?: boolean;
@@ -268,6 +276,10 @@ export type ResearchPayload = {
     total_tokens?: number;
     estimated_usd?: number;
     cache_saved_tokens?: number;
+    budget?: {
+      hard_stop?: boolean;
+      used?: { cache_hit_rate?: number; llm_calls?: number; total_tokens?: number };
+    };
   };
   roundtable?: RoundtableData;
   decision_chain?: {

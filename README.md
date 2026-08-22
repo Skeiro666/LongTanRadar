@@ -350,6 +350,14 @@ pytest tests/ -q
 | [`CURRENT_ARCHITECTURE.md`](CURRENT_ARCHITECTURE.md) | 模块与数据流 |
 | [`CURRENT_NEWS_ARCHITECTURE.md`](CURRENT_NEWS_ARCHITECTURE.md) | 新闻 Provider 与引擎 |
 | [`docs/NEWS_DISCOVERY_ARCHITECTURE.md`](docs/NEWS_DISCOVERY_ARCHITECTURE.md) | Discovery 第三版 Phase 0–10 审计与落地记录 |
+| [`docs/V5_2_COMPLETE.md`](docs/V5_2_COMPLETE.md) | **V5.2** Alpha 验证与降本 — 总览与文档索引 |
+| [`docs/V5_2_AUDIT.md`](docs/V5_2_AUDIT.md) | V5.2 Phase 0 审计 + gap 闭合状态 |
+| [`docs/V5_2_BENCHMARK.md`](docs/V5_2_BENCHMARK.md) | 双 Benchmark · market/selection alpha |
+| [`docs/V5_2_OUTCOME_TRUTH.md`](docs/V5_2_OUTCOME_TRUTH.md) | Paper fill 优先 · primary horizons |
+| [`docs/V5_2_TOKEN_COST.md`](docs/V5_2_TOKEN_COST.md) | Token ledger · LLM budget 硬停 |
+| [`docs/V5_2_COST_OPTIMIZATION.md`](docs/V5_2_COST_OPTIMIZATION.md) | Cache · Chairman 压缩 · Roundtable 采样 |
+| [`docs/V5_2_ALPHA_ATTRIBUTION.md`](docs/V5_2_ALPHA_ATTRIBUTION.md) | AI incremental alpha · role ablation |
+| [`docs/V5_2_NEWS_EVENT_LIFECYCLE.md`](docs/V5_2_NEWS_EVENT_LIFECYCLE.md) | Event 8 态生命周期 |
 
 ---
 

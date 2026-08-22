@@ -1,0 +1,303 @@
+# Factor catalog v1 — technical factors available; fundamentals stubbed.
+factor_version: factor_v1
+
+normalization:
+  method: winsorize_zscore  # winsorize_zscore | percentile
+  winsorize_low: 0.01
+  winsorize_high: 0.99
+
+leader_weights:
+  momentum: 0.20
+  relative_strength: 0.30
+  liquidity: 0.15
+  breakout: 0.15
+  attention: 0.10
+  quality: 0.05
+  value: 0.05
+
+# Categories with availability. sector_* and true value/quality need as-of data.
+categories:
+  momentum:
+    available: true
+  relative_strength:
+    available: true  # market RS available; sector RS stubbed unavailable
+  volume_liquidity:
+    available: true
+  breakout_trend:
+    available: true
+  volatility:
+    available: true
+  value:
+    available: false  # no as-of PE/PB — do not fabricate
+  quality:
+    available: false
+  attention:
+    available: true  # amount/turnover ranks; limit-up counts optional
+
+factors:
+  # --- Momentum ---
+  - name: momentum_5d
+    category: momentum
+    description: 5-day return
+    formula: close/close.shift(5)-1
+    lookback: 5
+    direction: high
+    available: true
+  - name: momentum_10d
+    category: momentum
+    description: 10-day return
+    formula: close/close.shift(10)-1
+    lookback: 10
+    direction: high
+    available: true
+  - name: momentum_20d
+    category: momentum
+    description: 20-day return
+    formula: close/close.shift(20)-1
+    lookback: 20
+    direction: high
+    available: true
+  - name: momentum_60d
+    category: momentum
+    description: 60-day return
+    formula: close/close.shift(60)-1
+    lookback: 60
+    direction: high
+    available: true
+  - name: momentum_120d
+    category: momentum
+    description: 120-day return
+    formula: close/close.shift(120)-1
+    lookback: 120
+    direction: high
+    available: true
+  - name: momentum_acceleration
+    category: momentum
+    description: Short minus long momentum
+    formula: momentum_10d - momentum_60d
+    lookback: 60
+    direction: high
+    available: true
+  - name: positive_return_ratio_20d
+    category: momentum
+    description: Fraction of up days in 20
+    formula: (ret>0).rolling(20).mean()
+    lookback: 20
+    direction: high
+    available: true
+  - name: trend_consistency_20d
+    category: momentum
+    description: Share of days close above MA20
+    formula: (close>ma20).rolling(20).mean()
+    lookback: 20
+    direction: high
+    available: true
+
+  # --- Relative strength (market) ---
+  - name: market_relative_strength_5d
+    category: relative_strength
+    description: Stock 5d return minus equal-weight universe 5d
+    lookback: 5
+    direction: high
+    available: true
+  - name: market_relative_strength_20d
+    category: relative_strength
+    description: Stock 20d return minus universe 20d
+    lookback: 20
+    direction: high
+    available: true
+  - name: market_relative_strength_60d
+    category: relative_strength
+    description: Stock 60d return minus universe 60d
+    lookback: 60
+    direction: high
+    available: true
+  - name: market_rank_20d
+    category: relative_strength
+    description: Cross-sectional percentile of 20d return
+    lookback: 20
+    direction: high
+    available: true
+  - name: sector_relative_strength_5d
+    category: relative_strength
+    description: Stub — needs industry map
+    available: false
+  - name: sector_relative_strength_20d
+    category: relative_strength
+    description: Stub — needs industry map
+    available: false
+  - name: sector_relative_strength_60d
+    category: relative_strength
+    description: Stub — needs industry map
+    available: false
+  - name: sector_rank_5d
+    category: relative_strength
+    available: false
+  - name: sector_rank_20d
+    category: relative_strength
+    available: false
+  - name: sector_rank_60d
+    category: relative_strength
+    available: false
+
+  # --- Volume / liquidity ---
+  - name: volume_ratio_5d
+    category: volume_liquidity
+    formula: volume / volume.rolling(5).mean()
+    lookback: 5
+    direction: neutral
+    available: true
+  - name: volume_ratio_20d
+    category: volume_liquidity
+    formula: volume / volume.rolling(20).mean()
+    lookback: 20
+    direction: neutral
+    available: true
+  - name: amount_rank_20d
+    category: volume_liquidity
+    description: Cross-sectional amount percentile
+    lookback: 1
+    direction: high
+    available: true
+  - name: turnover_rate
+    category: volume_liquidity
+    description: Proxy amount/close (no float shares); optional
+    available: true
+  - name: turnover_percentile_20d
+    category: volume_liquidity
+    available: true
+  - name: amount_growth_20d
+    category: volume_liquidity
+    formula: amount / amount.shift(20) - 1
+    lookback: 20
+    direction: neutral
+    available: true
+  - name: liquidity_score
+    category: volume_liquidity
+    description: Blend of amount rank and vol stability
+    available: true
+
+  # --- Breakout / trend ---
+  - name: distance_to_ma5
+    category: breakout_trend
+    formula: close/ma5 - 1
+    lookback: 5
+    direction: high
+    available: true
+  - name: distance_to_ma20
+    category: breakout_trend
+    formula: close/ma20 - 1
+    lookback: 20
+    direction: high
+    available: true
+  - name: distance_to_ma60
+    category: breakout_trend
+    formula: close/ma60 - 1
+    lookback: 60
+    direction: high
+    available: true
+  - name: breakout_20d
+    category: breakout_trend
+    formula: close / high.rolling(20).max() - 1
+    lookback: 20
+    direction: high
+    available: true
+  - name: breakout_60d
+    category: breakout_trend
+    formula: close / high.rolling(60).max() - 1
+    lookback: 60
+    direction: high
+    available: true
+  - name: high_position_60d
+    category: breakout_trend
+    formula: (close-min60)/(max60-min60)
+    lookback: 60
+    direction: high
+    available: true
+  - name: ma_alignment
+    category: breakout_trend
+    description: 1 if ma5>ma20>ma60 else 0
+    lookback: 60
+    direction: high
+    available: true
+  - name: trend_strength
+    category: breakout_trend
+    description: Average of distance_to_ma20/60 when aligned
+    lookback: 60
+    direction: high
+    available: true
+
+  # --- Volatility ---
+  - name: volatility_10d
+    category: volatility
+    formula: ret.rolling(10).std()
+    lookback: 10
+    direction: neutral
+    available: true
+  - name: volatility_20d
+    category: volatility
+    formula: ret.rolling(20).std()
+    lookback: 20
+    direction: neutral
+    available: true
+  - name: volatility_60d
+    category: volatility
+    formula: ret.rolling(60).std()
+    lookback: 60
+    direction: neutral
+    available: true
+  - name: atr_14
+    category: volatility
+    lookback: 14
+    direction: neutral
+    available: true
+  - name: volatility_ratio
+    category: volatility
+    formula: vol_10 / vol_60
+    lookback: 60
+    direction: neutral
+    available: true
+
+  # --- Attention ---
+  - name: consecutive_rise_days
+    category: attention
+    available: true
+  - name: limit_up_count_20d
+    category: attention
+    description: Count of limit_up flags if present
+    available: true
+  - name: limit_up_count_60d
+    category: attention
+    available: true
+
+  # --- Value / Quality stubs ---
+  - name: pe
+    category: value
+    available: false
+  - name: pb
+    category: value
+    available: false
+  - name: ps
+    category: value
+    available: false
+  - name: pe_percentile
+    category: value
+    available: false
+  - name: pb_percentile
+    category: value
+    available: false
+  - name: roe
+    category: quality
+    available: false
+  - name: roa
+    category: quality
+    available: false
+  - name: revenue_growth
+    category: quality
+    available: false
+  - name: profit_growth
+    category: quality
+    available: false
+  - name: debt_ratio
+    category: quality
+    available: false

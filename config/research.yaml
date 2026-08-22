@@ -1,0 +1,56 @@
+# Research platform config
+research_version: research_v1
+enabled: true
+
+funnel:
+  max_after_screen: 500
+  max_after_events: 100
+  max_union_candidates: 100
+  max_research_pool: 20
+  max_council: 12
+
+ml_ranking:
+  enabled: true
+  horizon_days: 5
+  weight_in_candidate_score: 0.35
+  leader_weight: 0.40
+  factor_weight: 0.25
+
+council:
+  mode: multi_model
+  max_debate_rounds: 2
+  parallel_roles: true
+  # Research rating ≠ trading action
+  separate_trading_action: true
+  roles:
+    - id: fundamental
+      name: Fundamental Analyst
+      prompt_version: fundamental_v1
+    - id: quant
+      name: Quant Analyst
+      prompt_version: quant_v1
+    - id: event
+      name: Event Analyst
+      prompt_version: event_v1
+    - id: valuation
+      name: Valuation Analyst
+      prompt_version: valuation_v1
+    - id: bear
+      name: Bear Analyst
+      prompt_version: bear_v1
+    - id: chair
+      name: Chairman
+      prompt_version: chairman_v1
+
+tracking:
+  horizons_days: [1, 3, 5, 10, 20, 60]
+  attribution_horizon: 5
+
+snapshot:
+  factor_version: factor_v1
+  prompt_bundle: prompts_v1
+  model_bundle: models_v1
+
+ab_test:
+  quant_only_key: quant_only
+  quant_ai_key: quant_plus_ai

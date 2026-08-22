@@ -1,0 +1,12 @@
+---
+description: A-share quant project constraints for the coding agent
+alwaysApply: true
+---
+
+This repo is an A-share (China mainland) daily quant research system, not crypto.
+
+- Never use same-bar close as the fill for a same-bar signal (no look-ahead). Default: T close signal, T+1 open/close fill.
+- Simulate T+1, lot size 100, stamp tax on sells, halt / limit-up-down / ST.
+- Do not add live broker order routing unless the user explicitly asks.
+- LLM keys live in `.env` (`AI_API_KEY`); never commit secrets. AI is optional: review + `ai_select`, with multi-factor fallback.
+- Prefer extending `Strategy.on_date` over copying the backtest loop.

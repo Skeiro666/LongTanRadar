@@ -1,0 +1,43 @@
+# Model / ML versioning
+bundle_version: models_v1
+lgbm:
+  model_version: lgbm_v1
+  prediction_horizon_days: 5
+  supported_horizons: [5, 10, 20]
+  target: excess_return  # stock_fwd - benchmark_fwd
+  benchmark: equal_weight_universe  # until index series available
+  walk_forward:
+    enabled: true
+    train_years: 3
+    test_years: 1
+    embargos_days: 5  # >= horizon
+  grid:
+    num_leaves: [15, 31]
+    learning_rate: [0.05, 0.1]
+    min_data_in_leaf: [20, 50]
+  n_estimators: 120
+
+final_score_weights:
+  ml: 0.40
+  leader: 0.30
+  momentum: 0.15
+  quality: 0.10
+  value: 0.05
+
+signal_rules:
+  strong_buy:
+    ml_z_gt: 1.0
+    leader_z_gt: 1.0
+    momentum_z_gt: 0.5
+  normal_buy:
+    ml_z_gt: 0.0
+    leader_z_gt: 0.0
+  conflict_max_scale: 0.5
+  strong_negative:
+    ml_z_lt: -1.0
+    leader_z_lt: -1.0
+
+position:
+  max_name_weight: 0.10
+  max_sector_weight: 0.25
+  max_gross_weight: 0.95

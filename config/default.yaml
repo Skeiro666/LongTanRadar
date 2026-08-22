@@ -1,0 +1,190 @@
+trading:
+  mode: backtest
+  execute_at: open
+  lot_size: 100
+
+universe:
+  mode: leader
+  symbols:
+    - 601288.SH
+    - 601398.SH
+    - 601988.SH
+    - 601328.SH
+    - 600016.SH
+    - 000001.SZ
+    - 601166.SH
+    - 601818.SH
+    - 600919.SH
+    - 002142.SZ
+  screen:
+    min_price: 2.0
+    max_price: 80.0
+    min_amount: 50000000
+    exclude_st: true
+    exclude_bj: true
+    exclude_kcb: true
+    exclude_cyb: false
+    max_pct_chg: 19.5
+    max_daily_gain: null
+    rank_by: leader
+    max_candidates: 50
+
+pool:
+  use_limit_up: true
+  use_strong: true
+  use_profit_gap: true
+  use_tech_leader: true
+  max_candidates: 40
+  min_amount: 80000000
+  min_price: 3.0
+  max_price: 80.0
+  exclude_st: true
+  exclude_bj: true
+  exclude_kcb: true
+  exclude_cyb: false
+  tech_min_pct_chg: 3.0
+  tech_top: 25
+  min_profit_yoy_pct: 50.0
+
+research:
+  enabled: true
+
+factors:
+  weights:
+    rs_20: 0.18
+    breakout: 0.14
+    vol_confirm: 0.10
+    trend: 0.12
+    board: 0.18
+    profit_gap: 0.16
+    event: 0.08
+    liquidity: 0.04
+
+paper:
+  initial_balance: 3000
+  state_file: data/paper_state.json
+  reset_on_start: false
+
+costs:
+  commission_rate: 0.00025
+  min_commission: 5.0
+  stamp_tax_rate: 0.0005
+  transfer_fee_rate: 0.00001
+  slippage_bps: 5
+
+ai:
+  enabled: true
+  # 聚合商：一个 Key + 一个 URL，圆桌只换 model 名
+  # 硅基流动 https://api.siliconflow.cn/v1
+  # 阿里云百炼 https://dashscope.aliyuncs.com/compatible-mode/v1
+  # 默认示例为硅基流动；.env 可整段覆盖为百炼等
+  provider: siliconflow
+  base_url: https://api.siliconflow.cn/v1
+  model: deepseek-ai/DeepSeek-V4-Flash
+  api_key_env: AI_API_KEY
+  timeout_sec: 180
+  temperature: 0.2
+  max_tokens: 4096
+  use_openai_sdk: true
+  review_backtest: true
+  roundtable: true
+  trade_review: false
+  cache_dir: data/cache/ai_decisions
+  committee:
+    mode: multi_model
+    risk_sees_others: true
+    # 角色默认只写 model；base_url/key 继承全局（.env 可改模型名）
+    roles:
+      - id: dragon
+        name: 龙头研究员
+        model: Qwen/Qwen3.8-Max
+      - id: event
+        name: 事件/业绩研究员
+        model: deepseek-ai/DeepSeek-V4-Flash
+      - id: risk
+        name: 风控官
+        model: moonshotai/Kimi-K3
+      - id: chair
+        name: 投委会主席
+        model: deepseek-ai/DeepSeek-V4-Flash
+        temperature: 0.15
+
+strategy:
+  name: leader
+  picks_style: leader
+  scoring:
+    w_ml_z: 0.55
+    w_mr_z: 0.45
+    require_ml_nonneg: true
+    conflict_penalty: 1.2
+    agree_weight: 1.0
+    mr_only_weight_scale: 0.25
+    ml_only_weight_scale: 0.5
+    min_ml_pred: 0.006
+    zero_mr_on_breakdown: true
+    skip_breakdown_without_ml: true
+  anti_chase:
+    max_daily_ret: 0.02
+    max_mom20: 0.12
+    max_ma_gap20: 0.06
+    ban_dump_ret: -0.04
+  fast: 10
+  slow: 30
+  max_positions: 3
+  rebalance_threshold: 0.05
+  lookback_mom: 20
+  lookback_vol: 20
+  lookback_value: 60
+  top_n: 3
+  rebalance: week_end
+  w_mom: 0.1
+  w_vol: 0.35
+  w_value: 0.55
+
+ml:
+  label_horizon: 5
+  top_n: 3
+  valid_ratio: 0.2
+  n_estimators: 120
+  train_start: "2021-01-01"
+  train_end: "2024-06-30"
+  models_dir: data/models
+  grid_num_leaves: [15, 31]
+  grid_learning_rate: [0.05, 0.1]
+  grid_min_data_in_leaf: [20, 50]
+
+risk:
+  max_name_weight: 0.55
+  max_gross_weight: 0.98
+  max_drawdown: 0.30
+  max_daily_loss: 0.15
+
+backtest:
+  start: "2022-01-01"
+  end: "2024-12-31"
+
+data:
+  provider: akshare
+  use_sample_if_empty: true
+  cache_dir: data/cache
+  start: "2021-01-01"
+  refresh_lag_days: 5
+  screen_hist_days: 420
+
+monitor:
+  log_dir: logs
+  log_level: INFO
+
+storage:
+  database_url: postgresql+psycopg://postgres:postgres@127.0.0.1:5432/ashare
+  redis_url: redis://127.0.0.1:6379/0
+
+broker:
+  mode: paper
+  qmt_userdata_path: ""
+  qmt_account_id: ""
+
+agent:
+  autostart: true
+  interval_sec: 1800
+  paper_only: true

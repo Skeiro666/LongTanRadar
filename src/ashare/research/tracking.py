@@ -10,6 +10,26 @@ from ashare.config_loaders import load_yaml_config
 from ashare.symbols import to_symbol
 
 
+def _primary_cell(outcome: dict[str, Any], horizon: str) -> dict[str, Any]:
+    """V5.4: prefer primary_horizons over legacy horizons."""
+    cell = (outcome.get("primary_horizons") or {}).get(str(horizon))
+    if cell and cell.get("status") != "pending":
+        return cell
+    return (outcome.get("horizons") or {}).get(str(horizon)) or {}
+
+
+def _metric_from_cell(cell: dict[str, Any], prefer_excess: bool = True) -> float | None:
+    if prefer_excess:
+        for k in ("selection_alpha", "market_alpha", "excess_return", "actual_return", "total_return", "realized_return"):
+            if cell.get(k) is not None:
+                return float(cell[k])
+    else:
+        for k in ("actual_return", "total_return", "realized_return"):
+            if cell.get(k) is not None:
+                return float(cell[k])
+    return None
+
+
 def _source_bucket(sources: list[str] | None) -> str:
     srcs = sorted({str(s).lower() for s in (sources or []) if s})
     if not srcs:
@@ -95,7 +115,7 @@ class TrackingEngine:
             if primary_bench is None:
                 cell["note"] = "no_benchmark_excess_unavailable"
             out_h[h_key] = cell
-        return {**base_meta, "horizons": out_h, "status": "ok"}
+        return {**base_meta, "horizons": out_h, "status": "ok", "signal_price": entry}
 
 
 class ReviewEngine:
@@ -228,6 +248,15 @@ class ReviewEngine:
         from ashare.research.outcome_truth import apply_primary_truth, summarize_portfolio_attribution
 
         outcomes = apply_primary_truth(outcomes)
+        from ashare.research.price_truth import attach_paper_fill_price, attach_signal_price
+        from ashare.research.signal_attribution import enrich_outcome_sources, summarize_signal_attribution
+
+        for o in outcomes:
+            enrich_outcome_sources(o, self.cfg)
+            attach_signal_price(o, o.get("signal_price"))
+            exec_block = o.get("execution") or {}
+            if exec_block.get("fill_price"):
+                attach_paper_fill_price(o, exec_block.get("fill_price"))
         if persist and outcomes:
             self.persist_outcomes(outcomes)
         portfolio_truth = summarize_portfolio_attribution(outcomes, horizon=str(horizon))
@@ -236,6 +265,20 @@ class ReviewEngine:
         legacy_alpha = self.compute_ai_incremental_alpha(outcomes, horizon=horizon)
         topk_alpha = self.compute_topk_ablation_alpha(reports, outcomes, horizon=horizon)
         discovery_attr = self.summarize_discovery_sources(outcomes, horizon=horizon)
+        signal_attr = summarize_signal_attribution(outcomes, self.cfg)
+        from ashare.research.ai_ablation import run_council_ablation
+        from ashare.research.calibration import build_calibration
+
+        llm_cost = 0.0
+        try:
+            from ashare.ai.cost_tracker import get_cost_tracker
+
+            cycle = get_cost_tracker(self.cfg).cycle_summary()
+            llm_cost = float(cycle.get("estimated_usd") or cycle.get("cost_usd") or 0)
+        except Exception:  # noqa: BLE001
+            pass
+        council_ablation = run_council_ablation(reports, outcomes, self.cfg, llm_cost_usd=llm_cost)
+        calibration = build_calibration(reports, outcomes, self.cfg)
         # V5.2 P2-1: canonical ai_incremental_alpha = same-universe Top-K ablation
         unified_alpha = dict(topk_alpha)
         unified_alpha["canonical"] = True
@@ -252,6 +295,9 @@ class ReviewEngine:
             "ai_topk_ablation": topk_alpha,
             "ai_incremental_alpha_legacy": legacy_alpha,
             "discovery_attribution": discovery_attr,
+            "signal_attribution": signal_attr,
+            "ai_council_ablation": council_ablation,
+            "calibration": calibration,
             "horizon": str(horizon),
             "benchmark_snapshot": benchmark_snapshot,
             "portfolio_attribution": portfolio_truth,
@@ -276,17 +322,8 @@ class ReviewEngine:
         outcome_by_sym = {str(o.get("symbol")): o for o in outcomes}
 
         def _return(sym: str) -> float | None:
-            cell = (outcome_by_sym.get(sym) or {}).get("horizons") or {}
-            c = cell.get(str(horizon)) or {}
-            if c.get("selection_alpha") is not None:
-                return float(c["selection_alpha"])
-            if c.get("market_alpha") is not None:
-                return float(c["market_alpha"])
-            if c.get("excess_return") is not None:
-                return float(c["excess_return"])
-            if c.get("actual_return") is not None:
-                return float(c["actual_return"])
-            return None
+            cell = _primary_cell(outcome_by_sym.get(sym) or {}, str(horizon))
+            return _metric_from_cell(cell)
 
         eligible: list[dict[str, Any]] = []
         for r in reports:
@@ -335,8 +372,7 @@ class ReviewEngine:
             incremental = float(am["mean_return"]) - float(bm["mean_return"])
 
         use_excess = any(
-            ((outcome_by_sym.get(str(r["symbol"])) or {}).get("horizons") or {}).get(str(horizon), {}).get("excess_return")
-            is not None
+            _primary_cell(outcome_by_sym.get(str(r["symbol"])) or {}, str(horizon)).get("excess_return") is not None
             for r in eligible
         )
 
@@ -378,12 +414,10 @@ class ReviewEngine:
             rating = str(o.get("rating") or "")
             if rating in {"GATE_SKIP", "SKIP"}:
                 continue
-            cell = (o.get("horizons") or {}).get(str(horizon)) or {}
-            val = cell.get("excess_return")
-            if val is not None:
+            cell = _primary_cell(o, str(horizon))
+            if cell.get("selection_alpha") is not None or cell.get("excess_return") is not None:
                 use_excess = True
-            else:
-                val = cell.get("actual_return")
+            val = _metric_from_cell(cell)
             if val is None:
                 continue
             ret = float(val)
@@ -418,14 +452,12 @@ class ReviewEngine:
         return ab
 
     def summarize_discovery_sources(self, outcomes: list[dict[str, Any]], horizon: str = "5") -> dict[str, Any]:
-        """Per discovery tag (quant/news/event/profit/ml) excess return stats."""
+        """Per discovery tag (quant/news/event/profit/ml) — uses primary_horizons."""
         tags = ("quant", "news", "event", "profit", "ml")
         by_tag: dict[str, list[float]] = {t: [] for t in tags}
         for o in outcomes:
-            cell = (o.get("horizons") or {}).get(str(horizon)) or {}
-            val = cell.get("excess_return")
-            if val is None:
-                val = cell.get("actual_return")
+            cell = _primary_cell(o, str(horizon))
+            val = _metric_from_cell(cell)
             if val is None:
                 continue
             srcs = set(str(s).lower() for s in (o.get("candidate_sources") or []))

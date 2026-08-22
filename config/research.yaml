@@ -114,6 +114,11 @@ llm_budget:
   max_output_tokens: 200000
   max_cost_usd: 5.0
 
+attribution:
+  primary_source_priority: [profit, event, quant, news, ml]
+  horizons_days: [1, 5, 10, 20]
+  minimum_sample: 5
+
 candidate_score:
   semantic: cross_sectional_ranking_score
   not_probability: true

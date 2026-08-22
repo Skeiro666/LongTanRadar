@@ -1,5 +1,6 @@
 import { NavLink, Route, Routes } from "react-router-dom";
 import Agent from "./pages/Agent";
+import AlphaLab from "./pages/AlphaLab";
 import Notifications from "./pages/Notifications";
 import Overview from "./pages/Overview";
 import Research from "./pages/Research";
@@ -18,6 +19,7 @@ export default function App() {
           </NavLink>
           <NavLink to="/research">圆桌研报</NavLink>
           <NavLink to="/notifications">通知</NavLink>
+          <NavLink to="/alpha-lab">Alpha Lab</NavLink>
           <NavLink to="/agent">研究循环</NavLink>
         </nav>
       </header>
@@ -26,6 +28,7 @@ export default function App() {
           <Route path="/" element={<Overview />} />
           <Route path="/research" element={<Research />} />
           <Route path="/notifications" element={<Notifications />} />
+          <Route path="/alpha-lab" element={<AlphaLab />} />
           <Route path="/agent" element={<Agent />} />
           <Route path="*" element={<Overview />} />
         </Routes>

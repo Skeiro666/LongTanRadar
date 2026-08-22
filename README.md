@@ -360,6 +360,8 @@ pytest tests/ -q
 | [`docs/V5_2_NEWS_EVENT_LIFECYCLE.md`](docs/V5_2_NEWS_EVENT_LIFECYCLE.md) | Event 8 态生命周期 |
 | [`docs/V5_3_COMPLETE.md`](docs/V5_3_COMPLETE.md) | **V5.3** 通知 + 生产验证 |
 | [`docs/V5_3_NOTIFICATION_AUDIT.md`](docs/V5_3_NOTIFICATION_AUDIT.md) | V5.3 Phase 0 审计 |
+| [`docs/V5_4_COMPLETE.md`](docs/V5_4_COMPLETE.md) | **V5.4** Alpha 验证与 Ablation Lab |
+| [`docs/V5_4_ALPHA_VALIDATION_AUDIT.md`](docs/V5_4_ALPHA_VALIDATION_AUDIT.md) | V5.4 Phase 0 审计 |
 
 ---
 

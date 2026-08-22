@@ -666,6 +666,12 @@ def create_app(config_path: str | None = None) -> FastAPI:
             raise HTTPException(status_code=400, detail="symbol required")
         return notification_status_for_symbol(get_cfg(), symbol, research_id or None)
 
+    @app.get("/api/alpha-lab")
+    def api_alpha_lab() -> dict[str, Any]:
+        from ashare.services.alpha_lab import build_alpha_lab
+
+        return build_alpha_lab(get_cfg())
+
     @app.post("/api/ml/rank/train")
     def api_ml_rank_train() -> dict[str, Any]:
         from ashare.data.provider import ensure_panel

@@ -183,6 +183,8 @@ def _send_job(cfg: dict[str, Any], job: dict[str, Any], cycle_id: str | None) ->
             "event_id": _event_id(inp.snapshot, inp.report),
             "notify_price": _notify_price(inp),
             "candidate_sources": canonical.get("candidate_sources") or [],
+            "confidence": canonical.get("confidence"),
+            "expected_excess_return": gr.metadata.get("expected_excess_return"),
         }
         rec = store.make_record(
             canonical=canonical,

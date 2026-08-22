@@ -329,6 +329,16 @@ def run_research(cfg: dict[str, Any], top_n: int | None = None) -> dict[str, Any
                         )
                     except Exception as sub_exc:  # noqa: BLE001
                         logger.debug("role ablation / model benchmark skipped: %s", sub_exc)
+                    try:
+                        from ashare.research.factor_attribution import build_factor_attribution, persist_factor_report
+
+                        # Optional factor IC — does not block research
+                        fr = build_factor_attribution(None, cfg)
+                        if not fr.get("available"):
+                            fr = {"available": False, "note": "factor_panel_deferred"}
+                        outcome_pack["factor_attribution"] = fr
+                    except Exception as fac_exc:  # noqa: BLE001
+                        logger.debug("factor attribution skipped: %s", fac_exc)
             except Exception as exc:  # noqa: BLE001
                 logger.warning("outcome attribution skipped: %s", exc)
                 outcome_pack = {"available": False, "error": str(exc)[:300]}
@@ -456,6 +466,10 @@ def run_research(cfg: dict[str, Any], top_n: int | None = None) -> dict[str, Any
             "role_ablation": outcome_pack.get("role_ablation"),
             "model_benchmark": outcome_pack.get("model_benchmark"),
             "discovery_attribution": outcome_pack.get("discovery_attribution"),
+            "signal_attribution": outcome_pack.get("signal_attribution"),
+            "ai_council_ablation": outcome_pack.get("ai_council_ablation"),
+            "calibration": outcome_pack.get("calibration"),
+            "factor_attribution": outcome_pack.get("factor_attribution"),
             "benchmark": outcome_pack.get("benchmark"),
             "benchmark_snapshot": outcome_pack.get("benchmark_snapshot"),
             "portfolio_attribution": outcome_pack.get("portfolio_attribution"),

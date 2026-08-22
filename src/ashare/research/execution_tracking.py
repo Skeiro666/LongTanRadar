@@ -124,13 +124,19 @@ def attach_paper_execution(
         "order_time": fill.get("traded_at"),
         "fill_time": fill.get("traded_at"),
         "fill_price": fill_px,
+        "paper_fill_price": fill_px,
         "fill_qty": fill.get("quantity"),
         "quantity": fill.get("quantity"),
         "traded_at": fill.get("traded_at"),
         "signal_close": signal_close,
+        "signal_price": signal_close,
         "slippage_vs_signal_close": slippage,
         "reason": fill.get("reason") or "",
     }
+    from ashare.research.price_truth import attach_paper_fill_price, attach_signal_price
+
+    attach_signal_price(outcome, signal_close)
+    attach_paper_fill_price(outcome, fill_px)
 
     if df is not None and not df.empty:
         fill_dt = pd.Timestamp(str(fill.get("traded_at"))[:10])

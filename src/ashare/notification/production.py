@@ -8,6 +8,16 @@ from typing import Any
 from ashare.config_loaders import load_yaml_config
 
 
+def _paper_fill_count(payload: dict[str, Any]) -> int:
+    outcomes = (payload.get("research_outcomes") or {}).get("outcomes") or []
+    return sum(1 for o in outcomes if (o.get("execution") or {}).get("available"))
+
+
+def _notification_alpha(payload: dict[str, Any], horizon: str) -> float | None:
+    # Placeholder from research pack if notification refresh not run this cycle
+    return _horizon_alpha(payload, horizon)
+
+
 def record_production_cycle(
     cfg: dict[str, Any],
     payload: dict[str, Any],
@@ -15,7 +25,7 @@ def record_production_cycle(
     *,
     notification_result: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Persist production validation metrics for V5.3."""
+    """Persist production validation metrics for V5.3/V5.4."""
     n_cfg = load_yaml_config(cfg, "notification")
     pv = dict(n_cfg.get("production_validation") or {})
     if not pv.get("enabled", True):
@@ -30,9 +40,12 @@ def record_production_cycle(
     buy_n = sum(1 for d in canonical if str(d.get("research_rating") or "").upper() == "BUY")
     sb_n = sum(1 for d in canonical if str(d.get("research_rating") or "").upper() == "STRONG_BUY")
     ai_cost = dict(payload.get("ai_cost") or {})
-    budget = dict(ai_cost.get("budget") or {})
     nr = notification_result or {}
     records = list(nr.get("records") or [])
+    ro = payload.get("research_outcomes") or {}
+    ab = ro.get("ai_council_ablation") or {}
+    cal = ro.get("calibration") or {}
+    hz5 = (ab.get("horizons") or {}).get("5") or {}
 
     row = {
         "cycle_id": cycle_id or payload.get("generated_at"),
@@ -40,11 +53,13 @@ def record_production_cycle(
         "recorded_at": datetime.now(timezone.utc).isoformat(),
         "candidate_count": (payload.get("candidate_union") or {}).get("n_union"),
         "research_count": (payload.get("candidate_union") or {}).get("n_research"),
-        "llm_calls": ai_cost.get("llm_calls") or ai_cost.get("calls"),
+        "buy_count": buy_n,
+        "strong_buy_count": sb_n,
+        "llm_calls": ai_cost.get("llm_calls") or ai_cost.get("n_calls"),
         "input_tokens": ai_cost.get("input_tokens"),
         "output_tokens": ai_cost.get("output_tokens"),
         "total_tokens": ai_cost.get("total_tokens"),
-        "cost_usd": ai_cost.get("cost_usd"),
+        "cost_usd": ai_cost.get("cost_usd") or ai_cost.get("estimated_usd"),
         "cache_hit_rate": ai_cost.get("cache_hit_rate"),
         "BUY_count": buy_n,
         "STRONG_BUY_count": sb_n,
@@ -52,10 +67,17 @@ def record_production_cycle(
         "notification_failed": nr.get("failed", 0),
         "notification_llm_cost": 0,
         "notification_channel_calls": len(records),
-        "paper_fill_count": None,
+        "paper_fill_count": _paper_fill_count(payload),
+        "t5_alpha": _horizon_alpha(payload, "5"),
+        "t10_alpha": _horizon_alpha(payload, "10"),
+        "t20_alpha": _horizon_alpha(payload, "20"),
         "T+5_alpha": _horizon_alpha(payload, "5"),
         "T+10_alpha": _horizon_alpha(payload, "10"),
         "T+20_alpha": _horizon_alpha(payload, "20"),
+        "ai_incremental_alpha_t5": hz5.get("ai_incremental_alpha"),
+        "ai_efficiency": ab.get("ai_efficiency"),
+        "notification_alpha_t5": _notification_alpha(payload, "5"),
+        "calibration_sample_count": cal.get("eer_sample_count"),
     }
     with path.open("a", encoding="utf-8") as f:
         f.write(json.dumps(row, ensure_ascii=False, default=str) + "\n")

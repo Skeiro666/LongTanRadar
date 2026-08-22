@@ -17,23 +17,45 @@ def _cfg(cfg: dict[str, Any] | None) -> dict[str, Any]:
 def seed_notification_outcome(cfg: dict[str, Any], notification_row: dict[str, Any], inp: Any) -> dict[str, Any]:
     """Create outcome tracking row at notification send time."""
     from ashare.notification.store import NotificationStore
+    from ashare.research.signal_attribution import resolve_primary_source
 
     meta = notification_row.get("metadata") or {}
+    canonical = inp.canonical if hasattr(inp, "canonical") else {}
+    snap = inp.snapshot if hasattr(inp, "snapshot") else {}
+    eer = dict(meta.get("expected_excess_return") or {})
+    if not eer.get("available"):
+        eer_meta = dict((snap.get("candidate_score_meta") or {}).get("expected_excess_return") or {})
+        eer = eer_meta if eer_meta.get("available") else eer
+    srcs = meta.get("candidate_sources") or canonical.get("candidate_sources") or []
+    resolved = resolve_primary_source(srcs, attribution_cfg(cfg).get("primary_source_priority"))
+
     outcome = {
         "notification_id": notification_row.get("notification_id"),
         "decision_id": notification_row.get("decision_id"),
         "research_session_id": notification_row.get("research_session_id"),
         "symbol": notification_row.get("symbol"),
         "level": notification_row.get("level"),
+        "decision": canonical.get("research_rating") or notification_row.get("level"),
+        "confidence": meta.get("confidence") or canonical.get("confidence"),
+        "expected_excess_return": eer,
         "notify_time": notification_row.get("sent_at") or notification_row.get("created_at"),
         "notify_price": meta.get("notify_price"),
-        "candidate_sources": meta.get("candidate_sources") or [],
+        "entry_type": "notify_price",
+        "candidate_sources": srcs,
+        "primary_source": resolved["primary_source"],
+        "secondary_sources": resolved["secondary_sources"],
         "horizons": {},
         "status": "tracking",
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     NotificationStore(cfg).append_outcome(outcome)
     return outcome
+
+
+def attribution_cfg(cfg: dict[str, Any] | None) -> dict[str, Any]:
+    from ashare.research.signal_attribution import attribution_cfg as _acfg
+
+    return _acfg(cfg)
 
 
 def refresh_notification_outcomes(cfg: dict[str, Any], panel: dict[str, pd.DataFrame] | None = None) -> dict[str, Any]:

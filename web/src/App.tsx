@@ -7,7 +7,10 @@ export default function App() {
   return (
     <div className="app-shell">
       <header className="topnav">
-        <div className="brand">大A龙头研报</div>
+        <div className="brand">
+          <span className="brand-title">龙探雷达</span>
+          <span className="brand-sub">大A龙头探查</span>
+        </div>
         <nav className="nav-links">
           <NavLink to="/" end>
             总览

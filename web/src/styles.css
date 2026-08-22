@@ -68,10 +68,24 @@ select {
 }
 
 .brand {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+}
+
+.brand-title {
   font-family: var(--font-display);
   font-weight: 700;
   font-size: 1.25rem;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.06em;
+}
+
+.brand-sub {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+  letter-spacing: 0.12em;
+  text-transform: none;
 }
 
 .nav-links {

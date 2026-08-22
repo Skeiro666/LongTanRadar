@@ -78,7 +78,7 @@ def create_app(config_path: str | None = None) -> FastAPI:
 
         stop_agent()
 
-    app = FastAPI(title="ashare API", version="0.2.0", lifespan=lifespan)
+    app = FastAPI(title="龙探雷达 API", version="0.2.0", lifespan=lifespan)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
@@ -106,6 +106,7 @@ def create_app(config_path: str | None = None) -> FastAPI:
         from ashare.services.trading import broker_mode
 
         return {
+            "product": cfg.get("product") or {},
             "strategy": cfg.get("strategy", {}),
             "ml": {k: v for k, v in cfg.get("ml", {}).items() if k != "api_key"},
             "risk": cfg.get("risk", {}),

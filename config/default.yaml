@@ -1,3 +1,10 @@
+# 龙探雷达 LongTan Radar — 产品标识（代码包名仍为 ashare）
+product:
+  name: 龙探雷达
+  name_en: LongTan Radar
+  tagline: 大A龙头 · 事件 · 新闻 智能探查
+  description: 机器找龙头候选，AI 做研究评级，人做决策；默认纸面模拟，不自动实盘。
+
 trading:
   mode: backtest
   execute_at: open

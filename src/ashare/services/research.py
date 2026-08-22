@@ -515,6 +515,18 @@ def run_research(cfg: dict[str, Any], top_n: int | None = None) -> dict[str, Any
     with get_research_progress().step("persist", "写入研报与缓存", note="latest.json / Redis"):
         persist_report(cfg, payload)
         _persist_picks_compat(cfg, payload)
+    try:
+        from ashare.notification.production import record_production_cycle
+
+        record_production_cycle(cfg, payload, cycle_id, notification_result=None)
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("production validation skipped: %s", exc)
+    try:
+        from ashare.notification.service import schedule_notification_job
+
+        schedule_notification_job(cfg, payload, cycle_id)
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("notification schedule skipped: %s", exc)
     return payload
 
 

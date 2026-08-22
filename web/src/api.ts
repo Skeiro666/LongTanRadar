@@ -95,6 +95,12 @@ export const api = {
   researchOutcomes: (horizon = "5") => req<any>(`/api/research/outcomes?horizon=${horizon}`),
   researchAttribution: (horizon = "5") => req<any>(`/api/research/attribution?horizon=${horizon}`),
   researchAlphaDashboard: (horizon = "5") => req<any>(`/api/research/alpha-dashboard?horizon=${horizon}`),
+  notifications: (limit = 100) => req<any>(`/api/notifications?limit=${limit}`),
+  notificationStats: () => req<any>("/api/notifications/stats"),
+  notificationStatus: (symbol: string, researchId = "") =>
+    req<any>(
+      `/api/notifications/status?symbol=${encodeURIComponent(symbol)}${researchId ? `&research_id=${encodeURIComponent(researchId)}` : ""}`
+    ),
   optimizerExperiments: (limit = 20) => req<any>(`/api/optimizer/experiments?limit=${limit}`),
   newsDiscovery: () => req<any>("/api/news/discovery"),
   news: (symbol: string, name = "") =>

@@ -16,6 +16,7 @@ export default function Research() {
   const [busy, setBusy] = useState(false);
   const [newsBusy, setNewsBusy] = useState(false);
   const [tab, setTab] = useState<TabId>("overview");
+  const [notifyMap, setNotifyMap] = useState<Record<string, { notified?: boolean; notification_time?: string; channel?: string }>>({});
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   function stopPoll() {
@@ -75,6 +76,23 @@ export default function Research() {
   useEffect(() => {
     load();
   }, []);
+
+  useEffect(() => {
+    if (!data?.platform_reports?.length) return;
+    api.notifications(80).then((res) => {
+      const map: Record<string, { notified?: boolean; notification_time?: string; channel?: string }> = {};
+      for (const n of res.notifications || []) {
+        if (n.status !== "SENT") continue;
+        const key = `${n.symbol}:${n.research_session_id || ""}`;
+        map[key] = {
+          notified: true,
+          notification_time: n.sent_at || n.created_at,
+          channel: n.channel,
+        };
+      }
+      setNotifyMap(map);
+    }).catch(() => {});
+  }, [data?.platform_reports]);
 
   const rt = data?.roundtable;
   const picks = data?.picks || [];
@@ -245,15 +263,24 @@ export default function Research() {
             {(data.platform_reports || []).length > 0 && (
               <div className="persona-panel compact" style={{ marginTop: "0.75rem" }}>
                 <h3>平台研报</h3>
-                {(data.platform_reports || []).map((r) => (
+                {(data.platform_reports || []).map((r) => {
+                  const nk = `${r.symbol}:${r.research_id || ""}`;
+                  const ns = notifyMap[nk];
+                  return (
                   <div key={r.research_id || r.symbol} className="verdict-row">
                     <span className={`badge badge-${(r.rating || "WATCH").toLowerCase().includes("buy") ? "buy" : "watch"}`}>
                       {(r.rating || "WATCH").toUpperCase()}
                     </span>{" "}
                     <strong>{r.name || r.symbol}</strong>
+                    {ns?.notified ? (
+                      <span className="muted"> · 🟢 已通知 {ns.channel} {ns.notification_time?.slice(0, 16)}</span>
+                    ) : (
+                      <span className="muted"> · ⚪ 未通知</span>
+                    )}
                     <p style={{ margin: "0.3rem 0 0" }}>{r.chairman?.base_case || "—"}</p>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
             <div className="persona-panel compact" style={{ marginTop: "0.75rem" }}>

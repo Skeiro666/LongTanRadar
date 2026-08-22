@@ -1,5 +1,6 @@
 import { NavLink, Route, Routes } from "react-router-dom";
 import Agent from "./pages/Agent";
+import Notifications from "./pages/Notifications";
 import Overview from "./pages/Overview";
 import Research from "./pages/Research";
 
@@ -16,6 +17,7 @@ export default function App() {
             总览
           </NavLink>
           <NavLink to="/research">圆桌研报</NavLink>
+          <NavLink to="/notifications">通知</NavLink>
           <NavLink to="/agent">研究循环</NavLink>
         </nav>
       </header>
@@ -23,6 +25,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Overview />} />
           <Route path="/research" element={<Research />} />
+          <Route path="/notifications" element={<Notifications />} />
           <Route path="/agent" element={<Agent />} />
           <Route path="*" element={<Overview />} />
         </Routes>

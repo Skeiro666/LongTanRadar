@@ -594,6 +594,78 @@ def create_app(config_path: str | None = None) -> FastAPI:
             raise HTTPException(status_code=404, detail="snapshot not found")
         return json.loads(path.read_text(encoding="utf-8"))
 
+    @app.get("/api/notifications")
+    def api_notifications(limit: int = 100) -> dict[str, Any]:
+        from ashare.notification.store import NotificationStore
+
+        rows = NotificationStore(get_cfg()).list_recent(limit=limit)
+        return {"n": len(rows), "notifications": rows}
+
+    @app.get("/api/notifications/stats")
+    def api_notifications_stats() -> dict[str, Any]:
+        from datetime import datetime, timedelta, timezone
+
+        from ashare.notification.outcome import refresh_notification_outcomes
+        from ashare.notification.production import production_summary
+        from ashare.notification.store import NotificationStore
+
+        cfg = get_cfg()
+        store = NotificationStore(cfg)
+        rows = store.list_recent(500)
+        now = datetime.now(timezone.utc)
+
+        def _in_days(n: int) -> list[dict[str, Any]]:
+            cutoff = now - timedelta(days=n)
+            out = []
+            for r in rows:
+                ts = r.get("sent_at") or r.get("created_at")
+                if not ts:
+                    continue
+                try:
+                    dt = datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
+                    if dt >= cutoff:
+                        out.append(r)
+                except ValueError:
+                    continue
+            return out
+
+        today = _in_days(1)
+        w7 = _in_days(7)
+        m30 = _in_days(30)
+        sent = [r for r in rows if r.get("status") == "SENT"]
+        failed = [r for r in rows if r.get("status") == "FAILED"]
+        cooldown = sum(1 for r in rows if r.get("status") == "COOLDOWN")
+        duplicate = sum(1 for r in rows if r.get("status") == "DUPLICATE")
+
+        try:
+            outcome_pack = refresh_notification_outcomes(cfg)
+        except Exception:  # noqa: BLE001
+            outcome_pack = {"available": False}
+
+        return {
+            "today_count": len(today),
+            "days_7_count": len(w7),
+            "days_30_count": len(m30),
+            "success_rate": len(sent) / max(len(sent) + len(failed), 1),
+            "BUY_count": sum(1 for r in sent if r.get("level") == "BUY"),
+            "STRONG_BUY_count": sum(1 for r in sent if r.get("level") == "STRONG_BUY"),
+            "RISK_EXIT_count": sum(1 for r in sent if r.get("level") == "RISK_EXIT"),
+            "cooldown_count": cooldown,
+            "duplicate_count": duplicate,
+            "notification_attribution": outcome_pack.get("notification_attribution"),
+            "discovery_attribution": outcome_pack.get("discovery_attribution"),
+            "notification_llm_cost": 0,
+            "production": production_summary(cfg),
+        }
+
+    @app.get("/api/notifications/status")
+    def api_notification_status(symbol: str = "", research_id: str = "") -> dict[str, Any]:
+        from ashare.notification.service import notification_status_for_symbol
+
+        if not symbol:
+            raise HTTPException(status_code=400, detail="symbol required")
+        return notification_status_for_symbol(get_cfg(), symbol, research_id or None)
+
     @app.post("/api/ml/rank/train")
     def api_ml_rank_train() -> dict[str, Any]:
         from ashare.data.provider import ensure_panel

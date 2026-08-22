@@ -358,6 +358,8 @@ pytest tests/ -q
 | [`docs/V5_2_COST_OPTIMIZATION.md`](docs/V5_2_COST_OPTIMIZATION.md) | Cache · Chairman 压缩 · Roundtable 采样 |
 | [`docs/V5_2_ALPHA_ATTRIBUTION.md`](docs/V5_2_ALPHA_ATTRIBUTION.md) | AI incremental alpha · role ablation |
 | [`docs/V5_2_NEWS_EVENT_LIFECYCLE.md`](docs/V5_2_NEWS_EVENT_LIFECYCLE.md) | Event 8 态生命周期 |
+| [`docs/V5_3_COMPLETE.md`](docs/V5_3_COMPLETE.md) | **V5.3** 通知 + 生产验证 |
+| [`docs/V5_3_NOTIFICATION_AUDIT.md`](docs/V5_3_NOTIFICATION_AUDIT.md) | V5.3 Phase 0 审计 |
 
 ---
 

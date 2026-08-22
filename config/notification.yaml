@@ -1,0 +1,65 @@
+# V5.3 Notification & Production Validation
+enabled: true
+
+# Gate thresholds (all configurable — no hardcoding in code)
+gate:
+  buy:
+    min_confidence: 0.65
+    min_expected_excess_return: 0.03
+    require_risk_pass: true
+  strong_buy:
+    min_confidence: 0.75
+    min_expected_excess_return: 0.05
+    require_risk_pass: true
+  risk_exit:
+    require_paper_position: true
+    require_risk_blocked: true
+
+# Priority = expected_excess_return * confidence * data_quality * risk_quality
+priority:
+  max_per_cycle: 3
+
+# Dedup & cooldown
+dedup:
+  enabled: true
+cooldown:
+  same_symbol_hours: 24
+  same_event_hours: 72
+  allow_upgrade: true  # WATCH→BUY, BUY→STRONG_BUY, BUY→RISK_EXIT
+
+# Channels
+channels:
+  buy: [wechat]
+  strong_buy: [wechat, email]
+  risk_exit: [wechat, email]
+
+wechat:
+  enabled: true
+  timeout_sec: 10
+  max_retries: 3
+  retry_delay_sec: 2
+
+email:
+  enabled: true
+  timeout_sec: 15
+  max_retries: 3
+  retry_delay_sec: 3
+  use_tls: true
+
+# Async job
+async:
+  enabled: true
+  max_send_retries: 3
+
+# Outcome tracking
+outcome:
+  horizons_days: [1, 5, 10, 20]
+  minimum_sample: 5
+
+# Production validation (cycle metrics)
+production_validation:
+  enabled: true
+  persist_path: data/production_cycles.jsonl
+
+# Research URL for notifications
+public_base_url: ""  # override via PUBLIC_BASE_URL env

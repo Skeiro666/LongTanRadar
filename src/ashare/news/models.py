@@ -95,6 +95,11 @@ class ExtractedEvent:
     facts: list[str] = field(default_factory=list)
     inferences: list[str] = field(default_factory=list)
     evidence_id: str = ""
+    normalized_event_type: str = ""
+    evidence_direction: str = "unknown"
+    news_intelligence: dict[str, Any] = field(default_factory=dict)
+    news_intelligence_score: float = 0.0
+    intel_source: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

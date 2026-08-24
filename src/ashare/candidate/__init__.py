@@ -114,6 +114,9 @@ class CandidateEngine:
             by_sym[r["symbol"]] = item
             scored.append(item)
 
+        scored.sort(key=lambda x: x["candidate_score"], reverse=True)
+        quant_top_n = {r["symbol"] for r in scored[:max_events]}
+
         panel = panel or {}
         as_of_str = as_of or str((news_discovery or {}).get("as_of") or "")
         from ashare.research.price_reaction import annotate_news_candidate_price
@@ -257,6 +260,13 @@ class CandidateEngine:
                 pkg = {"news_data_incomplete": True, "net_event_score": 0.0, "legacy_headlines": []}
             r["news_package"] = pkg
             r["news_data_incomplete"] = bool(pkg.get("news_data_incomplete"))
+            r["compact_news"] = pkg.get("compact_news_package")
+            r["quant_top_n_at_signal"] = sym in quant_top_n
+            intel0 = (pkg.get("news_intelligence") or [None])[0] if pkg.get("news_intelligence") else None
+            if intel0:
+                r["news_intelligence"] = intel0
+                r["news_intelligence_score"] = float(intel0.get("news_intelligence_score") or 0)
+                r["evidence_direction"] = str(intel0.get("direction") or "unknown")
             net = float(pkg.get("net_event_score") or 0)
             if net:
                 r["news_score"] = net
@@ -285,6 +295,7 @@ class CandidateEngine:
             "sources": pool.get("sources"),
             "factor_version": self.factors.catalog.version,
             "research_symbols": sorted(research_syms),
+            "quant_top_n_symbols": sorted(quant_top_n),
         }
 
     def _trigger(self, row: dict[str, Any], leader: float, pi: float, ev: float) -> dict[str, Any]:

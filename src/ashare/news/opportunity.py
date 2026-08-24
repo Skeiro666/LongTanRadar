@@ -13,6 +13,7 @@ from ashare.news.dedup import dedupe_news
 from ashare.news.engine import NewsIntelligenceEngine
 from ashare.news.extract import extract_events
 from ashare.news.linking import link_entities_open
+from ashare.news.merge_intel import merge_intelligence_into_events
 from ashare.news.models import ExtractedEvent, NewsCandidate, RawNews
 from ashare.news.score import annotate_event
 
@@ -98,6 +99,8 @@ class NewsOpportunityEngine:
         )
         from ashare.news.schema import discovery_grade
 
+        intel_stats = {"calls": 0, "cache_hits": 0, "tokens": 0, "skipped": 0}
+
         for n in news:
             cat = classify_news(n)
             ents = [annotate_entity_source(e) for e in link_entities_open(n, name_map=names, aliases=als)]
@@ -106,20 +109,24 @@ class NewsOpportunityEngine:
 
                 ents = infer_entities_from_news(n, news_client)
             intel = extract_for_news(n, intel_engine, ents, classification=cat)
+            if intel:
+                if intel.get("cache_hit"):
+                    intel_stats["cache_hits"] += 1
+                elif intel.get("status") in {"ok", "error"}:
+                    intel_stats["calls"] += 1
+                    intel_stats["tokens"] += int(intel.get("total_tokens") or 0)
+                elif intel.get("status") in {"skipped", "budget"}:
+                    intel_stats["skipped"] += 1
             if intel and not ents:
                 hyp = hypothesis_from_intel(intel, n)
                 if hyp:
-                    hypotheses.append({"news_id": n.id, "title": n.title, **hyp})
+                    hypotheses.append({"news_id": n.id, "title": n.title, "news_role": "hypothesis", **hyp})
             extracted = extract_events(
                 n,
                 symbol=ents[0].symbol if ents else "",
                 relevance=ents[0].confidence if ents else 0.35,
             )
-            if intel and intel.get("event_type") and intel.get("event_type") != "unknown":
-                for ev in extracted:
-                    ev.event_type = str(intel.get("event_type") or ev.event_type)
-                    if intel.get("direction") and intel.get("direction") != "unknown":
-                        ev.direction = str(intel["direction"])
+            extracted = merge_intelligence_into_events(extracted, intel)
             for ev in extracted:
                 link_conf = ents[0].confidence if ents else 0.0
                 ev = annotate_event(ev, n, link_confidence=link_conf, classification=cat)
@@ -252,6 +259,7 @@ class NewsOpportunityEngine:
             "news_watchlist": watchlist[:80],
             "hypotheses": hypotheses[:80],
             "rejected": rejected[:200],
+            "intel_stats": intel_stats,
             "note": "NewsCandidate is DIRECT discovery only — inferred entities go to watchlist/hypothesis, never a trade action.",
         }
         if persist:

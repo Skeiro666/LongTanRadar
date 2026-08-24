@@ -375,6 +375,7 @@ def run_research(cfg: dict[str, Any], top_n: int | None = None) -> dict[str, Any
                     break
     payload = {
         "as_of": as_of.isoformat(),
+        "quant_top_n_symbols": uni.get("quant_top_n_symbols") or [],
         "strategy": "leader_roundtable",
         "picks_style": "leader",
         "universe_mode": "leader_event",
@@ -431,6 +432,7 @@ def run_research(cfg: dict[str, Any], top_n: int | None = None) -> dict[str, Any
         "candidate_union": {
             "n_union": uni.get("n_union"),
             "n_research": len(uni.get("research_universe") or []),
+            "quant_top_n_symbols": uni.get("quant_top_n_symbols") or [],
             "universe": [
                 {
                     "symbol": r.get("symbol"),

@@ -170,6 +170,9 @@ def build_research_intelligence(snapshot: dict[str, Any], *, role_id: str | None
             "event_clusters": (news.get("event_clusters") or [])[:12],
             "role_view": news_view if role_id else None,
             "last_7d": (news.get("last_7d") or news_view.get("news") if isinstance(news_view, dict) else None) or [],
+            "compact_news_package": news.get("compact_news_package"),
+            "news_intelligence_score": (news.get("compact_news_package") or {}).get("news_intelligence_score"),
+            "evidence_direction": (news.get("compact_news_package") or {}).get("evidence_direction"),
         },
         "news_event_context": nd if isinstance(nd, dict) and nd else None,
         "research_hypotheses": hyps[:12],
@@ -257,6 +260,7 @@ def build_role_context(
         last_7d = news_ctx.get("last_7d")
         if isinstance(news_ctx.get("role_view"), dict):
             last_7d = news_ctx["role_view"].get("news") or last_7d
+        compact = news_ctx.get("compact_news_package") or full.get("news_context", {}).get("compact_news_package")
         base.update(
             {
                 "quant_context": _slim_quant(full.get("quant_context"), detail="score_only"),
@@ -268,7 +272,8 @@ def build_role_context(
                     "conflicts": (news_ctx.get("conflicts") or [])[:6],
                     "timeline": _compact_news_list(news_ctx.get("timeline"), max_tl),
                     "event_clusters": (news_ctx.get("event_clusters") or [])[:max_tl],
-                    "last_7d": _compact_news_list(last_7d if isinstance(last_7d, list) else None, max_news),
+                    "compact_news_package": compact,
+                    "last_7d": _compact_news_list(last_7d if isinstance(last_7d, list) else None, max(2, max_news // 2)),
                 },
                 "news_event_context": _slim_news_event_context(full.get("news_event_context")),
                 "price_reaction": full.get("price_reaction"),

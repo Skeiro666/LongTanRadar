@@ -29,7 +29,27 @@ type LabData = {
   token_efficiency?: Record<string, unknown>;
   ai_routing?: Record<string, unknown>;
   lab_summary?: string[];
+  news_alpha?: Record<string, unknown>;
+  news_calibration?: Record<string, unknown>;
+  news_ablation?: Record<string, unknown>;
+  news_ab_buckets?: Record<string, unknown>;
+  news_token_stats?: Record<string, unknown>;
+  cloud_token_stats?: Record<string, unknown>;
+  token_saved_pct?: number;
+  news_discovery?: Record<string, unknown>;
+  news_evidence?: Record<string, unknown>;
 };
+
+function horizonCell(hz: Record<string, unknown> | undefined, key: string) {
+  const h = (hz || {})[key] as Record<string, unknown> | undefined;
+  if (!h) return "—";
+  if (h.status === "INSUFFICIENT_SAMPLE") return `n=${h.sample_count}`;
+  const ex = h.excess_return as Record<string, number> | undefined;
+  if (ex?.mean != null) return fmtPct(ex.mean);
+  const sel = h.selection_alpha as Record<string, number> | undefined;
+  if (sel?.mean != null) return fmtPct(sel.mean);
+  return String(h.status || "—");
+}
 
 function fmtPct(v: number | null | undefined) {
   if (v == null) return "—";
@@ -116,6 +136,80 @@ export default function AlphaLab() {
             </table>
           )}
         </div>
+
+        {data?.news_token_stats && (
+          <div className="persona-panel compact" style={{ marginTop: "0.75rem" }}>
+            <h3>News Token (Local Ollama)</h3>
+            <p className="muted" style={{ fontSize: "0.85rem" }}>
+              calls={String(data.news_token_stats.calls ?? 0)} · cache_hits=
+              {String(data.news_token_stats.cache_hits ?? 0)} · tokens=
+              {String(data.news_token_stats.total_tokens ?? 0)} · saved{" "}
+              {data.token_saved_pct != null ? `${data.token_saved_pct}%` : "—"}
+            </p>
+            {data.cloud_token_stats && (
+              <p className="muted" style={{ fontSize: "0.85rem" }}>
+                Cloud: calls={String(data.cloud_token_stats.calls ?? 0)} · tokens=
+                {String(data.cloud_token_stats.total_tokens ?? 0)} · cost $
+                {Number(data.cloud_token_stats.cost_usd ?? 0).toFixed(2)}
+              </p>
+            )}
+          </div>
+        )}
+
+        {data?.news_alpha && (
+          <div className="persona-panel compact" style={{ marginTop: "0.75rem" }}>
+            <h3>News Alpha (Discovery / Evidence / Factor / Council)</h3>
+            <table className="data-table" style={{ width: "100%", fontSize: "0.85rem" }}>
+              <thead>
+                <tr>
+                  <th>Lane</th>
+                  <th>T+5</th>
+                  <th>T+10</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(
+                  [
+                    ["Discovery", data.news_alpha.news_discovery_alpha],
+                    ["Evidence", data.news_alpha.news_evidence_alpha],
+                    ["News+Factor", data.news_alpha.news_factor_alpha],
+                    ["News+Council", data.news_alpha.news_council_alpha],
+                  ] as const
+                ).map(([label, hz]) => {
+                  const h5 = (hz as Record<string, unknown>)?.["5"] as Record<string, unknown> | undefined;
+                  const h10 = (hz as Record<string, unknown>)?.["10"] as Record<string, unknown> | undefined;
+                  return (
+                    <tr key={label}>
+                      <td>{label}</td>
+                      <td>{horizonCell(hz as Record<string, unknown>, "5")}</td>
+                      <td>{horizonCell(hz as Record<string, unknown>, "10")}</td>
+                      <td>{String(h5?.status || h10?.status || "—")}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {data?.news_ab_buckets && (
+          <div className="persona-panel compact" style={{ marginTop: "0.75rem" }}>
+            <h3>News A/B/C/D (News Only = B)</h3>
+            <pre style={{ fontSize: "0.8rem", whiteSpace: "pre-wrap" }}>
+              {JSON.stringify(data.news_ab_buckets, null, 2)}
+            </pre>
+          </div>
+        )}
+
+        {data?.news_calibration && (
+          <div className="persona-panel compact" style={{ marginTop: "0.75rem" }}>
+            <h3>News Score / Importance / Novelty Calibration</h3>
+            <pre style={{ fontSize: "0.8rem", whiteSpace: "pre-wrap" }}>
+              {JSON.stringify(data.news_calibration, null, 2)}
+            </pre>
+          </div>
+        )}
 
         {data?.ai_council_ablation && (
           <div className="persona-panel compact" style={{ marginTop: "0.75rem" }}>

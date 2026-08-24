@@ -143,6 +143,17 @@ class ResearchSessionEngine:
                 prog.log("council", f"跳过 {name} — Token/Cost 预算 ({budget_reason})", level="warn")
                 continue
             prog.log("council", f"[{i + 1}/{len(council_candidates)}] 研究 {name} ({sym})")
+            from ashare.research.cloud_escalation import should_escalate_news
+
+            esc = should_escalate_news(
+                c,
+                c.get("news_intelligence") or {},
+                c.get("news_conflict") or {},
+                self.cfg,
+            )
+            c["cloud_escalation"] = esc
+            if esc.get("escalate"):
+                c["compact_news"] = esc.get("extra_context", {}).get("compact_news") or c.get("compact_news")
             rep = self.run_session(c)
             rep["ai_routing"] = routing
             meta = dict((rep.get("council_meta") or {}))

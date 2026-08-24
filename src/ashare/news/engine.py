@@ -11,6 +11,7 @@ from ashare.news.dedup import dedupe_news
 from ashare.news.expectation import expectation_gap
 from ashare.news.extract import extract_events
 from ashare.news.linking import link_entities
+from ashare.news.merge_intel import merge_intelligence_into_events
 from ashare.news.models import ExtractedEvent, RawNews
 from ashare.news.package import build_package, filter_asof
 from ashare.news.provider import ProviderUnavailable
@@ -106,7 +107,9 @@ class NewsIntelligenceEngine:
                 from ashare.news.enrich import extract_for_news
 
                 intel_row = extract_for_news(n, intel_engine, ents, classification=cat)
-            for ev in extract_events(n, symbol=sym, relevance=conf):
+            news_events = extract_events(n, symbol=sym, relevance=conf)
+            news_events = merge_intelligence_into_events(news_events, intel_row)
+            for ev in news_events:
                 ev = annotate_event(ev, n, link_confidence=conf, classification=cat)
                 gap = expectation_gap()
                 ev.expectation_available = bool(gap["available"])
@@ -155,10 +158,28 @@ class NewsIntelligenceEngine:
         pkg["news_role"] = "evidence"
         if intel_rows:
             from ashare.news.conflict import compute_news_conflict
+            from ashare.news.compact import build_compact_news_package
 
             pkg["news_conflict"] = compute_news_conflict(
                 intelligence=intel_rows[0],
                 events=[e.to_dict() for e in events],
+            )
+            pkg["compact_news_package"] = build_compact_news_package(
+                sym,
+                [e.to_dict() for e in events],
+                intel_rows,
+                net_event_score=net,
+                conflicts=pkg.get("conflicts"),
+            )
+        else:
+            from ashare.news.compact import build_compact_news_package
+
+            pkg["compact_news_package"] = build_compact_news_package(
+                sym,
+                [e.to_dict() for e in events],
+                [],
+                net_event_score=net,
+                conflicts=pkg.get("conflicts"),
             )
         return pkg
 

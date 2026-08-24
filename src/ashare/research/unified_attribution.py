@@ -100,6 +100,22 @@ def build_unified_record(
         hz_out[str(h)] = _horizon_block(outcome, h)
 
     routing = dict(report.get("ai_routing") or outcome.get("ai_routing") or {})
+    nd = report.get("news_discovery") or {}
+    pkg = report.get("news_package") or report.get("snapshot", {}).get("news_package") or {}
+    intel = report.get("news_intelligence") or nd.get("news_intelligence") or {}
+    quant_top = bool(report.get("quant_top_n_at_signal") or outcome.get("quant_top_n_at_signal"))
+
+    from ashare.research.news_alpha import news_alpha_bucket
+
+    bucket = news_alpha_bucket(
+        {
+            **outcome,
+            "candidate_sources": srcs,
+            "discovery_primary_source": resolved["primary_source"],
+            "secondary_sources": resolved["secondary_sources"],
+        },
+        {sym} if quant_top else set(),
+    )
 
     return {
         "candidate_id": f"{sym}:{rid}" if sym and rid else sym or rid,
@@ -119,6 +135,16 @@ def build_unified_record(
         "primary_entry_source": outcome.get("primary_entry_source"),
         "horizons": hz_out,
         "ai_routing": routing if routing else {"available": False},
+        "news_role": nd.get("news_role") or pkg.get("news_role") or "none",
+        "discovery_grade": nd.get("discovery_grade") or "NONE",
+        "news_intelligence_score": float(
+            report.get("news_intelligence_score") or intel.get("news_intelligence_score") or 0
+        ),
+        "evidence_direction": str(report.get("evidence_direction") or intel.get("direction") or "unknown"),
+        "news_intelligence": intel if isinstance(intel, dict) else {},
+        "news_alpha_bucket": bucket,
+        "news_published_at": nd.get("published_at") or intel.get("published_at"),
+        "quant_top_n_at_signal": quant_top,
     }
 
 

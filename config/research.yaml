@@ -127,6 +127,19 @@ ai_routing:
   low_score_skip_above: 0.72
   low_score_skip_below: 0.18
 
+cloud_escalation:
+  enabled: true
+  importance_threshold: 0.75
+  low_event_confidence: 0.45
+  conflict_threshold: 0.55
+  candidate_score_threshold: 0.35
+  min_triggers: 2
+
+news_calibration:
+  minimum_sample: 5
+  news_score_threshold: 0.12
+  quant_score_threshold: 0.15
+
 candidate_score:
   semantic: cross_sectional_ranking_score
   not_probability: true

@@ -146,6 +146,21 @@ def build_alpha_lab(cfg: dict[str, Any] | None = None, *, window: str = "all") -
 
     routing = pack.get("token_efficiency") or data.get("gate_summary", {}).get("ai_routing") or {}
 
+    from ashare.research.news_ablation import build_news_ablation
+    from ashare.research.news_alpha import build_news_alpha_attribution
+    from ashare.research.news_calibration import build_news_calibration
+    from ashare.research.token_attribution import summarize_token_attribution
+
+    quant_top_n = set(
+        data.get("quant_top_n_symbols")
+        or (data.get("candidate_union") or {}).get("quant_top_n_symbols")
+        or []
+    )
+    news_alpha = build_news_alpha_attribution(outcomes, cfg, quant_top_n=quant_top_n)
+    news_calibration = build_news_calibration(outcomes, cfg)
+    news_ablation = build_news_ablation(outcomes, cfg)
+    token_stats = summarize_token_attribution(cfg)
+
     return {
         "available": bool(source_rows or pack.get("available")),
         "window": window,
@@ -161,6 +176,14 @@ def build_alpha_lab(cfg: dict[str, Any] | None = None, *, window: str = "all") -
         "ai_routing": routing,
         "news_discovery": ((sig.get("cohorts") or {}).get("news_discovery")),
         "news_evidence": ((sig.get("cohorts") or {}).get("news_evidence")),
+        "news_alpha": news_alpha,
+        "news_calibration": news_calibration,
+        "news_ablation": news_ablation,
+        "quant_top_n_symbols": sorted(quant_top_n),
+        "news_ab_buckets": news_alpha.get("ab_buckets"),
+        "news_token_stats": token_stats.get("local"),
+        "cloud_token_stats": token_stats.get("cloud"),
+        "token_saved_pct": token_stats.get("token_saved_pct"),
         "lab_summary": pack.get("lab_summary") or build_lab_summary(pack),
         "notification_llm_cost": 0,
     }

@@ -63,7 +63,7 @@ def build_token_dashboard(cfg: dict[str, Any] | None = None) -> dict[str, Any]:
                 "escalated": escalated,
                 "entered_council": council_after,
                 "final_buy": buy_after,
-                "note": "T+10 outcome for escalated BUY requires sufficient sample — see Alpha Lab",
+                "note": "升级样本的 T+10 收益见 Alpha Lab — 需足够样本",
             },
         },
     }

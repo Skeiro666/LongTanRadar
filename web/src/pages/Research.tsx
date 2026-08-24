@@ -92,11 +92,11 @@ export default function Research() {
 
   return (
     <PageShell
-      title="Research Terminal"
+      title="研究终端"
       subtitle={
         terminal
           ? `${terminal.as_of || "—"} · 更新 ${String(terminal.generated_at || "").slice(0, 16)} · 新闻覆盖 ${terminal.data_completeness?.news_coverage || "—"} (${terminal.data_completeness?.pct ?? "—"}%)`
-          : "Signal First · 结论 → 原因 → 证据"
+          : "结论 → 原因 → 证据"
       }
       actions={
         <>
@@ -125,16 +125,16 @@ export default function Research() {
           </button>
         </>
       }
-      status={err ? <span className="persona-error">{err}</span> : busy ? <span className="status ok">Research Cycle 运行中…</span> : undefined}
+      status={err ? <span className="persona-error">{err}</span> : busy ? <span className="status ok">研究循环运行中…</span> : undefined}
       kpis={[
         { label: "候选", value: terminal?.counts?.candidates ?? "—" },
-        { label: "BUY", value: buyN, tone: buyN ? "ok" : undefined },
-        { label: "WATCH", value: watchN },
-        { label: "PASS", value: passN },
-        { label: "News Discovery", value: terminal?.counts?.news_discovery ?? "—" },
+        { label: "买入", value: buyN, tone: buyN ? "ok" : undefined },
+        { label: "观察", value: watchN },
+        { label: "放弃", value: passN },
+        { label: "新闻发现", value: terminal?.counts?.news_discovery ?? "—" },
         {
-          label: "Cycle",
-          value: busy ? "RUN" : progress?.status?.toUpperCase() || (data ? "READY" : "—"),
+          label: "状态",
+          value: busy ? "运行中" : progress?.status === "done" ? "就绪" : data ? "就绪" : "—",
           tone: busy ? "warn" : undefined,
         },
       ]}
@@ -143,8 +143,8 @@ export default function Research() {
         active={tab}
         onChange={(id) => setTab(id as TabId)}
         tabs={[
-          { id: "terminal", label: "Research", badge: candidates.length || undefined },
-          { id: "pipeline", label: "Pipeline", badge: busy ? "…" : undefined },
+          { id: "terminal", label: "研究", badge: candidates.length || undefined },
+          { id: "pipeline", label: "流水线", badge: busy ? "…" : undefined },
         ]}
       />
 
@@ -157,18 +157,18 @@ export default function Research() {
           <>
             {terminal?.news_discovery_status?.degraded && (
               <div className="degraded-banner">
-                News DEGRADED — {String(terminal.news_discovery_status.provider_status || "provider issue")}
+                新闻降级 — {String(terminal.news_discovery_status.provider_status || "数据源异常")}
               </div>
             )}
 
             <div className="persona-panel compact">
-              <h3>News × Quant Matrix</h3>
+              <h3>新闻 × 量化 矩阵</h3>
               <NewsQuantMatrix matrix={terminal?.matrix} candidates={candidates} />
             </div>
 
             <div className="candidate-list">
               {candidates.length === 0 ? (
-                <p className="muted">尚无候选。点「跑一轮」开始 Research Cycle。</p>
+                <p className="muted">尚无候选。点「跑一轮」开始研究循环。</p>
               ) : (
                 candidates.map((c: CandidateCard) => (
                   <CandidateCardView

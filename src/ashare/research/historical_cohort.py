@@ -91,8 +91,8 @@ def build_historical_cohort(
                 "max_drawdown": float((s.cumsum() - s.cumsum().cummax()).min()) if len(s) > 1 else 0.0,
             }
     return {
-        "label": "Historical Cohort",
-        "note": "Structured match on event_type + score/importance buckets — not AI similarity.",
+        "label": "历史同类信号",
+        "note": "按事件类型 + 分数/重要性分桶结构化匹配，非 AI 相似度。",
         "cohort_key": key,
         "sample_count": len(matched),
         "horizons": hz_out,

@@ -13,16 +13,16 @@ def _discovery_source(sources: list[str] | None) -> str:
     has_news = "news" in srcs
     has_quant = bool(srcs & {"quant", "event", "profit", "ml"})
     if has_news and has_quant:
-        return "QUANT + NEWS"
+        return "量化+新闻"
     if has_news:
-        return "NEWS"
+        return "新闻"
     if "event" in srcs:
-        return "EVENT"
+        return "事件"
     if "ml" in srcs:
-        return "ML"
+        return "机器学习"
     if "quant" in srcs or "profit" in srcs:
-        return "QUANT"
-    return "UNKNOWN"
+        return "量化"
+    return "未知"
 
 
 def _news_discovery_labels(candidate: dict[str, Any], quant_top_n: set[str]) -> list[str]:
@@ -30,11 +30,11 @@ def _news_discovery_labels(candidate: dict[str, Any], quant_top_n: set[str]) -> 
     srcs = {str(s).lower() for s in (candidate.get("candidate_sources") or [])}
     labels: list[str] = []
     if "news" in srcs:
-        labels.append("NEWS DISCOVERY")
+        labels.append("新闻发现")
         if sym in quant_top_n or candidate.get("quant_top_n_at_signal"):
-            labels.append("QUANT CONFIRMED")
+            labels.append("量化确认")
         else:
-            labels.append("NEWS ONLY")
+            labels.append("纯新闻")
     return labels
 
 
@@ -58,12 +58,12 @@ def _signal_contribution(candidate: dict[str, Any]) -> list[dict[str, Any]]:
         (candidate.get("chairman") or {}).get("confidence") or 0
     )
     parts = [
-        ("Leader", leader),
-        ("Profit", profit),
-        ("Event", event),
-        ("News", news),
-        ("ML", ml),
-        ("Council", council),
+        ("龙头", leader),
+        ("利润", profit),
+        ("事件", event),
+        ("新闻", news),
+        ("机器学习", ml),
+        ("投委会", council),
     ]
     total = sum(v for _, v in parts) or 1.0
     return [
@@ -99,19 +99,19 @@ def _research_priority(candidate: dict[str, Any]) -> dict[str, Any]:
     rating = str((candidate.get("decision") or {}).get("research_rating") or candidate.get("rating") or "")
     reasons: list[str] = []
     if rating in {"BUY", "STRONG_BUY"}:
-        reasons.append("Chairman BUY")
+        reasons.append("主席买入")
     if intel >= 0.7:
-        reasons.append("High news intelligence")
+        reasons.append("新闻智能分高")
     if conflict >= 0.55:
-        reasons.append("News/Quant conflict")
+        reasons.append("新闻/量化冲突")
     if score >= 0.35:
-        reasons.append("High candidate score")
-    level = "LOW"
+        reasons.append("候选分高")
+    level = "低"
     if rating in {"STRONG_BUY", "BUY"} or score >= 0.4 or intel >= 0.75:
-        level = "HIGH"
+        level = "高"
     elif score >= 0.22 or intel >= 0.5 or conflict >= 0.4:
-        level = "MEDIUM"
-    return {"level": level, "reasons": reasons[:4] or ["Routine research pool"]}
+        level = "中"
+    return {"level": level, "reasons": reasons[:4] or ["常规研究池"]}
 
 
 def _news_card(candidate: dict[str, Any]) -> dict[str, Any] | None:
@@ -153,14 +153,14 @@ def _conflict_detail(candidate: dict[str, Any]) -> dict[str, Any]:
         return {"news_conflict": False, "conflict_score": 0}
     return {
         **c,
-        "display": "NEWS / QUANT CONFLICT" if c.get("news_conflict") else None,
+        "display": "新闻/量化冲突" if c.get("news_conflict") else None,
         "reason_labels": [
             lbl
             for lbl, flag in (
-                ("RS Weak", (c.get("signals") or {}).get("rs_weak")),
-                ("Momentum Weak", (c.get("signals") or {}).get("momentum_weak")),
-                ("Volume Weak", (c.get("signals") or {}).get("volume_weak")),
-                ("Price Strong", (c.get("signals") or {}).get("price_strong")),
+                ("相对强弱偏弱", (c.get("signals") or {}).get("rs_weak")),
+                ("动量偏弱", (c.get("signals") or {}).get("momentum_weak")),
+                ("量能偏弱", (c.get("signals") or {}).get("volume_weak")),
+                ("价格偏强", (c.get("signals") or {}).get("price_strong")),
             )
             if flag
         ],
@@ -172,12 +172,19 @@ def _council_summary(report: dict[str, Any] | None) -> list[dict[str, Any]]:
         return []
     council = report.get("council") or {}
     out = []
+    role_names = {
+        "fundamental": "基本面",
+        "quant": "量化",
+        "event": "事件",
+        "valuation": "估值",
+        "bear": "空方",
+    }
     for rid in ("fundamental", "quant", "event", "valuation", "bear", "chair"):
         if rid == "chair":
             ch = report.get("chairman") or {}
             out.append(
                 {
-                    "role": "Chairman",
+                    "role": "主席",
                     "stance": ch.get("rating") or ch.get("stance") or "NEUTRAL",
                     "confidence": ch.get("confidence"),
                     "summary": (ch.get("base_case") or ch.get("summary") or "")[:160],
@@ -190,7 +197,7 @@ def _council_summary(report: dict[str, Any] | None) -> list[dict[str, Any]]:
             continue
         out.append(
             {
-                "role": rid.capitalize(),
+                "role": role_names.get(rid, rid),
                 "stance": row.get("stance") or row.get("rating") or "NEUTRAL",
                 "confidence": row.get("confidence"),
                 "summary": (row.get("summary") or row.get("base_case") or "")[:160],
@@ -310,7 +317,7 @@ def build_research_terminal(cfg: dict[str, Any] | None = None) -> dict[str, Any]
             matrix[q].append(sym)
     cards.sort(
         key=lambda x: (
-            0 if (x.get("research_priority") or {}).get("level") == "HIGH" else 1,
+            0 if (x.get("research_priority") or {}).get("level") == "高" else 1,
             -float((reports.get(str(x.get("symbol"))) or {}).get("candidate_score") or 0),
         )
     )
@@ -372,5 +379,5 @@ def build_research_detail(
         "council_full": (snap or {}).get("council") or report.get("council"),
         "debate": (snap or {}).get("debate") or report.get("debate"),
         "news_package_frozen": (snap or {}).get("news_package") or candidate.get("news_package"),
-        "note": "Snapshot preferred over live recompute when available.",
+        "note": "优先展示快照数据，非今日重算。",
     }

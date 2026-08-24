@@ -6,9 +6,9 @@ from ashare.services.research_terminal import build_candidate_card, build_resear
 
 
 def test_discovery_source():
-    assert _discovery_source(["news", "quant"]) == "QUANT + NEWS"
-    assert _discovery_source(["news"]) == "NEWS"
-    assert _discovery_source(["quant"]) == "QUANT"
+    assert _discovery_source(["news", "quant"]) == "量化+新闻"
+    assert _discovery_source(["news"]) == "新闻"
+    assert _discovery_source(["quant"]) == "量化"
 
 
 def test_cohort_key_buckets():
@@ -20,7 +20,7 @@ def test_cohort_key_buckets():
 def test_historical_cohort_insufficient():
     cand = {"news_score": 0.4, "news_intelligence": {"importance": 0.6, "event_type": "order"}}
     out = build_historical_cohort(cand, [], {})
-    assert out["label"] == "Historical Cohort"
+    assert out["label"] == "历史同类信号"
     assert out["horizons"]["5"]["status"] == "INSUFFICIENT_SAMPLE"
 
 
@@ -38,9 +38,9 @@ def test_candidate_card_fields():
         outcomes=[],
         cfg={},
     )
-    assert card["news_labels"] == ["NEWS DISCOVERY", "NEWS ONLY"]
-    assert card["conflict"]["display"] == "NEWS / QUANT CONFLICT"
-    assert "RS Weak" in card["conflict"]["reason_labels"]
+    assert card["news_labels"] == ["新闻发现", "纯新闻"]
+    assert card["conflict"]["display"] == "新闻/量化冲突"
+    assert "相对强弱偏弱" in card["conflict"]["reason_labels"]
 
 
 def test_experiment_lab_delta():

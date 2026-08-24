@@ -1,3 +1,5 @@
+import { insufficientSample } from "../../i18n/zh";
+
 type Point = {
   bucket?: string;
   sample_count?: number;
@@ -14,14 +16,14 @@ export default function CalibrationBarChart({ title, series }: Props) {
     return (
       <div className="calibration-chart">
         <h4>{title}</h4>
-        <p className="muted">INSUFFICIENT SAMPLE — 不绘制误导曲线</p>
+        <p className="muted">{insufficientSample()} — 不绘制误导曲线</p>
       </div>
     );
   }
   const maxAbs = Math.max(...valid.map((p) => Math.abs(Number(p.t10_excess_return))), 0.001);
   return (
     <div className="calibration-chart">
-      <h4>{title} → T+10 Excess Return</h4>
+      <h4>{title} → T+10 超额收益</h4>
       <div className="cal-bars">
         {series.map((p) => {
           const insuf = p.status === "INSUFFICIENT_SAMPLE" || p.t10_excess_return == null;

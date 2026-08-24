@@ -24,8 +24,8 @@ export default function App() {
           </NavLink>
           <NavLink to="/research">圆桌研报</NavLink>
           <NavLink to="/notifications">通知</NavLink>
-          <NavLink to="/alpha-lab">Alpha Lab</NavLink>
-          <NavLink to="/token">Token</NavLink>
+          <NavLink to="/alpha-lab">Alpha 实验室</NavLink>
+          <NavLink to="/token">Token 成本</NavLink>
           <NavLink to="/agent">研究循环</NavLink>
         </nav>
       </header>

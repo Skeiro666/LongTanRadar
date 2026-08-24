@@ -1,5 +1,14 @@
 import { Link } from "react-router-dom";
 import type { CandidateCard } from "../../types/terminal";
+import {
+  insufficientSample,
+  labelDiscovery,
+  labelNewsLabel,
+  labelPriority,
+  labelRating,
+  labelRisk,
+  labelTradingAction,
+} from "../../i18n/zh";
 import CouncilCollapse from "./CouncilCollapse";
 import NewsCard from "./NewsCard";
 import SignalBreakdown from "./SignalBreakdown";
@@ -27,38 +36,38 @@ export default function CandidateCardView({ card, expanded, onToggle }: Props) {
       <header className="candidate-card-head">
         <div>
           <span className={`badge badge-${ratingBadge(card.research_rating)}`}>
-            {(card.research_rating || "WATCH").toUpperCase()}
+            {labelRating(card.research_rating)}
           </span>
           <strong style={{ marginLeft: "0.4rem" }}>{card.name || card.symbol}</strong>
           <span className="muted"> {card.symbol}</span>
           {card.price != null && <span className="muted"> · ¥{Number(card.price).toFixed(2)}</span>}
         </div>
         <div className="candidate-card-meta">
-          <span className="muted">Action: {card.trading_action || "NONE"}</span>
+          <span className="muted">交易动作：{labelTradingAction(card.trading_action)}</span>
           <span className={`badge badge-${card.risk_status === "BLOCKED" ? "pass" : "watch"}`}>
-            Risk {card.risk_status || "PASS"}
+            风控 {labelRisk(card.risk_status)}
           </span>
-          {(card.research_priority?.level) && (
-            <span className="badge badge-persona">{card.research_priority.level} PRIORITY</span>
+          {card.research_priority?.level && (
+            <span className="badge badge-persona">优先级 {labelPriority(card.research_priority.level)}</span>
           )}
         </div>
       </header>
 
       <div className="candidate-discovery">
-        <span className="badge badge-watch">{card.discovery_source || "—"}</span>
+        <span className="badge badge-watch">{labelDiscovery(card.discovery_source)}</span>
         {(card.news_labels || []).map((l) => (
-          <span key={l} className="badge badge-buy">{l}</span>
+          <span key={l} className="badge badge-buy">{labelNewsLabel(l)}</span>
         ))}
         {card.degraded?.news && (
-          <span className="badge badge-pass">News DEGRADED {String(card.degraded.reason || "")}</span>
+          <span className="badge badge-pass">新闻降级 {String(card.degraded.reason || "")}</span>
         )}
       </div>
 
       {Boolean(conflict.news_conflict) && (
         <div className="conflict-banner">
-          ⚠ NEWS / QUANT CONFLICT · score {Number(conflict.conflict_score || 0).toFixed(2)}
+          ⚠ {String(conflict.display || "新闻/量化冲突")} · 分数 {Number(conflict.conflict_score || 0).toFixed(2)}
           {(conflict.reason_labels as string[] | undefined)?.length ? (
-            <span className="muted"> — {(conflict.reason_labels as string[]).join(", ")}</span>
+            <span className="muted"> — {(conflict.reason_labels as string[]).join("、")}</span>
           ) : null}
         </div>
       )}
@@ -89,8 +98,8 @@ export default function CandidateCardView({ card, expanded, onToggle }: Props) {
           />
           {cohort && (
             <div className="historical-cohort">
-              <h4>Historical Cohort (structured, not AI similarity)</h4>
-              <p className="muted">n={String(cohort.sample_count)} · {String(cohort.note || "")}</p>
+              <h4>{String(cohort.label || "历史同类信号")}</h4>
+              <p className="muted">样本 {String(cohort.sample_count)} · {String(cohort.note || "")}</p>
               <dl className="metrics">
                 {["1", "5", "10", "20"].map((h) => {
                   const row = hz[h];
@@ -101,8 +110,8 @@ export default function CandidateCardView({ card, expanded, onToggle }: Props) {
                       <dt>T+{h}</dt>
                       <dd>
                         {insuf
-                          ? `INSUFFICIENT SAMPLE (n=${row.sample_count})`
-                          : `${((Number(row.excess_return_mean) || 0) * 100).toFixed(2)}% ex · HR ${((Number(row.hit_rate) || 0) * 100).toFixed(0)}%`}
+                          ? insufficientSample(Number(row.sample_count))
+                          : `超额 ${((Number(row.excess_return_mean) || 0) * 100).toFixed(2)}% · 胜率 ${((Number(row.hit_rate) || 0) * 100).toFixed(0)}%`}
                       </dd>
                     </div>
                   );
@@ -112,7 +121,7 @@ export default function CandidateCardView({ card, expanded, onToggle }: Props) {
           )}
           {card.research_id && (
             <Link className="btn btn-ghost" to={`/research/${card.research_id}/${card.symbol}`}>
-              打开 Research Snapshot →
+              打开研究快照 →
             </Link>
           )}
         </>

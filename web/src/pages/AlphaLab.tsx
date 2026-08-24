@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import CalibrationBarChart from "../components/research/CalibrationBarChart";
 import { api } from "../api";
+import { insufficientSample, labelPerfLane, labelSourceAlpha, labelStatus } from "../i18n/zh";
 import PageShell from "../components/layout/PageShell";
 import ScrollPane from "../components/layout/ScrollPane";
 
@@ -44,7 +45,7 @@ type ExpRow = {
 };
 
 function fmtPct(v: number | null | undefined, status?: string, n?: number, minN?: number) {
-  if (status === "INSUFFICIENT_SAMPLE" || (minN != null && n != null && n < minN)) return `INSUFFICIENT SAMPLE (n=${n ?? 0})`;
+  if (status === "INSUFFICIENT_SAMPLE" || (minN != null && n != null && n < minN)) return insufficientSample(n);
   if (v == null) return "—";
   return `${(v * 100).toFixed(2)}%`;
 }
@@ -65,7 +66,7 @@ export default function AlphaLab() {
   const charts = data?.calibration_charts as Record<string, Array<Record<string, unknown>>> | undefined;
 
   return (
-    <PageShell title="Alpha Lab" subtitle="系统现在真的有效吗？— 10 秒内看 T+5 / T+10">
+    <PageShell title="Alpha 实验室" subtitle="系统现在真的有效吗？— 10 秒内看 T+5 / T+10">
       <ScrollPane>
         <div style={{ marginBottom: "0.75rem", display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
           <span className="muted">窗口</span>
@@ -76,37 +77,37 @@ export default function AlphaLab() {
               className={window === w ? "badge badge-buy" : "badge badge-watch"}
               onClick={() => setWindow(w)}
             >
-              {w === "all" ? "全部" : w.toUpperCase()}
+              {w === "all" ? "全部" : w.replace("d", " 天")}
             </button>
           ))}
           <Link className="btn btn-ghost" to="/token" style={{ marginLeft: "auto" }}>
-            Token Dashboard →
+            Token 成本 →
           </Link>
         </div>
 
         {err && <p className="error">{err}</p>}
-        {Boolean(data?.as_of) && <p className="muted">As of {String(data?.as_of)} · min n = {minN}</p>}
+        {Boolean(data?.as_of) && <p className="muted">截至 {String(data?.as_of)} · 最小样本 {minN}</p>}
 
         <div className="persona-panel compact">
-          <h3>Research Performance Dashboard</h3>
+          <h3>研究表现总览</h3>
           <table className="data-table" style={{ width: "100%", fontSize: "0.85rem" }}>
             <thead>
               <tr>
-                <th>Lane</th>
-                <th>Sample</th>
-                <th>T+5 Excess</th>
-                <th>T+10 Excess</th>
-                <th>Status</th>
+                <th>通道</th>
+                <th>样本</th>
+                <th>T+5 超额</th>
+                <th>T+10 超额</th>
+                <th>状态</th>
               </tr>
             </thead>
             <tbody>
               {perf.map((r) => (
                 <tr key={r.lane} className={r.t5_status === "INSUFFICIENT_SAMPLE" ? "insufficient-row" : ""}>
-                  <td>{r.lane}</td>
+                  <td>{labelPerfLane(r.lane)}</td>
                   <td>{r.sample_count}</td>
                   <td>{fmtPct(r.t5_excess_return, r.t5_status, r.sample_count, minN)}</td>
                   <td>{fmtPct(r.t10_excess_return, r.t10_status, r.sample_count, minN)}</td>
-                  <td>{r.t10_status || r.t5_status || "—"}</td>
+                  <td>{labelStatus(r.t10_status || r.t5_status)}</td>
                 </tr>
               ))}
             </tbody>
@@ -114,34 +115,34 @@ export default function AlphaLab() {
         </div>
 
         <div className="persona-panel compact" style={{ marginTop: "0.75rem" }}>
-          <h3>Source Alpha</h3>
+          <h3>信号来源 Alpha</h3>
           {rows.length === 0 ? (
             <p className="muted">跑完一轮研究后显示。</p>
           ) : (
             <table className="data-table" style={{ width: "100%", fontSize: "0.85rem" }}>
               <thead>
                 <tr>
-                  <th>Source</th>
-                  <th>n</th>
+                  <th>来源</th>
+                  <th>样本</th>
                   <th>T+1</th>
                   <th>T+5</th>
                   <th>T+10</th>
                   <th>T+20</th>
-                  <th>Win%</th>
-                  <th>Status</th>
+                  <th>胜率</th>
+                  <th>状态</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.map((r) => (
                   <tr key={r.source} className={r.status === "INSUFFICIENT_SAMPLE" ? "insufficient-row" : ""}>
-                    <td>{r.source}</td>
+                    <td>{labelSourceAlpha(r.source)}</td>
                     <td>{r.sample_count}</td>
                     <td>{fmtPct(r.t1_alpha, r.status, r.sample_count, minN)}</td>
                     <td>{fmtPct(r.t5_alpha, r.status, r.sample_count, minN)}</td>
                     <td>{fmtPct(r.t10_alpha, r.status, r.sample_count, minN)}</td>
                     <td>{fmtPct(r.t20_alpha, r.status, r.sample_count, minN)}</td>
                     <td>{r.win_rate != null && r.status !== "INSUFFICIENT_SAMPLE" ? `${(r.win_rate * 100).toFixed(0)}%` : "—"}</td>
-                    <td>{r.status}</td>
+                    <td>{labelStatus(r.status)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -151,17 +152,17 @@ export default function AlphaLab() {
 
         {expLab && (
           <div className="persona-panel compact" style={{ marginTop: "0.75rem" }}>
-            <h3>Experiment Lab (vs {expLab.baseline_row?.label || "No News"})</h3>
+            <h3>实验对照（基线：{expLab.baseline_row?.label || "无新闻"}）</h3>
             <table className="data-table" style={{ width: "100%", fontSize: "0.85rem" }}>
               <thead>
                 <tr>
-                  <th>Arm</th>
-                  <th>n</th>
+                  <th>实验组</th>
+                  <th>样本</th>
                   <th>T+5</th>
-                  <th>Δ vs baseline</th>
+                  <th>相对基线</th>
                   <th>T+10</th>
-                  <th>Δ vs baseline</th>
-                  <th>Status</th>
+                  <th>相对基线</th>
+                  <th>状态</th>
                 </tr>
               </thead>
               <tbody>
@@ -171,13 +172,13 @@ export default function AlphaLab() {
                   const h10 = row.horizons?.["10"] || {};
                   return (
                     <tr key={row.id} className={row.status === "INSUFFICIENT_SAMPLE" ? "insufficient-row" : ""}>
-                      <td>{row.label}</td>
+                      <td>{labelPerfLane(row.label)}</td>
                       <td>{row.sample_count}</td>
                       <td>{fmtPct(h5.excess_return_mean, h5.status, h5.sample_count, minN)}</td>
                       <td>{fmtPct(h5.delta_vs_baseline, h5.status, h5.sample_count, minN)}</td>
                       <td>{fmtPct(h10.excess_return_mean, h10.status, h10.sample_count, minN)}</td>
                       <td>{fmtPct(h10.delta_vs_baseline, h10.status, h10.sample_count, minN)}</td>
-                      <td>{row.status}</td>
+                      <td>{labelStatus(row.status)}</td>
                     </tr>
                   );
                 })}
@@ -187,9 +188,9 @@ export default function AlphaLab() {
         )}
 
         <div className="dash-grid-2" style={{ marginTop: "0.75rem" }}>
-          <CalibrationBarChart title="News Score" series={charts?.news_score as never} />
-          <CalibrationBarChart title="Importance" series={charts?.importance as never} />
-          <CalibrationBarChart title="Novelty" series={charts?.novelty as never} />
+          <CalibrationBarChart title="新闻分" series={charts?.news_score as never} />
+          <CalibrationBarChart title="重要性" series={charts?.importance as never} />
+          <CalibrationBarChart title="新颖度" series={charts?.novelty as never} />
         </div>
 
         {Array.isArray(data?.lab_summary) && (data?.lab_summary as string[]).length > 0 && (

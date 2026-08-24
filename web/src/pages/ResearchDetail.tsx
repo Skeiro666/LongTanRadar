@@ -25,11 +25,11 @@ export default function ResearchDetail() {
 
   return (
     <PageShell
-      title={`Research Snapshot · ${symbol || ""}`}
+      title={`研究快照 · ${symbol || ""}`}
       subtitle="当时为什么这么判断？— 冻结快照，非今日重算"
       actions={
         <Link className="btn btn-ghost" to="/research">
-          ← Research
+          ← 研究终端
         </Link>
       }
     >
@@ -38,8 +38,8 @@ export default function ResearchDetail() {
         {!detail && !err && <p className="muted">加载中…</p>}
         {versions && (
           <p className="muted">
-            factor {versions.factor_version} · news {versions.news_version || "—"} · prompt{" "}
-            {versions.prompt_version || versions.prompt_bundle} · model {versions.model_version || versions.model_bundle}
+            因子 {versions.factor_version} · 新闻 {versions.news_version || "—"} · 提示词{" "}
+            {versions.prompt_version || versions.prompt_bundle} · 模型 {versions.model_version || versions.model_bundle}
           </p>
         )}
         {detail && <CandidateCardView card={detail} expanded />}

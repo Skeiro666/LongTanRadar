@@ -1,12 +1,6 @@
 import { Link } from "react-router-dom";
 import type { CandidateCard } from "../../types/terminal";
-
-const QUADS: { key: string; title: string }[] = [
-  { key: "news_strong_quant_strong", title: "Strong News · Strong Quant" },
-  { key: "news_strong_quant_weak", title: "Strong News · Weak Quant" },
-  { key: "news_weak_quant_strong", title: "Weak News · Strong Quant" },
-  { key: "news_weak_quant_weak", title: "Weak News · Weak Quant" },
-];
+import { MATRIX_QUADS } from "../../i18n/zh";
 
 type Props = {
   matrix?: Record<string, string[]>;
@@ -18,7 +12,7 @@ export default function NewsQuantMatrix({ matrix, candidates, onSelect }: Props)
   const bySym = Object.fromEntries((candidates || []).map((c) => [c.symbol, c]));
   return (
     <div className="news-quant-matrix">
-      {QUADS.map(({ key, title }) => {
+      {MATRIX_QUADS.map(({ key, title }) => {
         const syms = matrix?.[key] || [];
         return (
           <div key={key} className="matrix-cell">

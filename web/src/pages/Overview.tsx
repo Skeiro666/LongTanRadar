@@ -87,8 +87,8 @@ export default function Overview() {
 
   return (
     <PageShell
-      title="Command · Research Terminal"
-      subtitle="Market / Research Status · 模拟盘 · Alpha · 通知"
+      title="总览 · 指挥台"
+      subtitle="市场 / 研究状态 · 模拟盘 · Alpha · 通知"
       actions={
         <>
           <Link className="btn btn-primary" to="/research">
@@ -131,13 +131,13 @@ export default function Overview() {
       {terminal && (
         <div className="home-research-strip">
           <div className="home-strip-row">
-            <span>BUY {buyN}</span>
-            <span>WATCH {ratings.WATCH ?? 0}</span>
-            <span>PASS {ratings.PASS ?? 0}</span>
-            <span className="muted">News Discovery {terminal.counts?.news_discovery ?? 0}</span>
-            <Link to="/research" className="btn btn-ghost">Research →</Link>
-            <Link to="/alpha-lab" className="btn btn-ghost">Alpha Lab →</Link>
-            <Link to="/token" className="btn btn-ghost">Token →</Link>
+            <span>买入 {buyN}</span>
+            <span>观察 {ratings.WATCH ?? 0}</span>
+            <span>放弃 {ratings.PASS ?? 0}</span>
+            <span className="muted">新闻发现 {terminal.counts?.news_discovery ?? 0}</span>
+            <Link to="/research" className="btn btn-ghost">研究终端 →</Link>
+            <Link to="/alpha-lab" className="btn btn-ghost">Alpha 实验室 →</Link>
+            <Link to="/token" className="btn btn-ghost">Token 成本 →</Link>
           </div>
           {terminal.matrix && (
             <NewsQuantMatrix matrix={terminal.matrix} candidates={terminal.candidates} />

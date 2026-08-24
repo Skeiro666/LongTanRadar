@@ -108,11 +108,11 @@ def build_experiment_lab(news_ablation: dict[str, Any], *, min_n: int) -> dict[s
     arms = news_ablation.get("arms") or {}
     baseline = arms.get("no_news") or {}
     labels = {
-        "no_news": "No News",
-        "evidence_only": "News Evidence",
-        "discovery_only": "News Discovery",
-        "discovery_and_evidence": "News Discovery + Evidence",
-        "news_plus_council": "News + Council",
+        "no_news": "无新闻",
+        "evidence_only": "新闻证据",
+        "discovery_only": "新闻发现",
+        "discovery_and_evidence": "新闻发现+证据",
+        "news_plus_council": "新闻+投委会",
     }
     experiments = [
         _arm_row(name, labels.get(name, name), arm, baseline, min_n)
@@ -129,11 +129,11 @@ def build_experiment_lab(news_ablation: dict[str, Any], *, min_n: int) -> dict[s
 
 def build_performance_dashboard(news_alpha: dict[str, Any], min_n: int) -> list[dict[str, Any]]:
     lanes = [
-        ("news_discovery_alpha", "News Discovery"),
-        ("news_evidence_alpha", "News Evidence"),
-        ("news_only_alpha", "News Only"),
-        ("news_factor_alpha", "News + Factor"),
-        ("news_council_alpha", "News + Council"),
+        ("news_discovery_alpha", "新闻发现"),
+        ("news_evidence_alpha", "新闻证据"),
+        ("news_only_alpha", "纯新闻"),
+        ("news_factor_alpha", "新闻+因子"),
+        ("news_council_alpha", "新闻+投委会"),
     ]
     rows: list[dict[str, Any]] = []
     for key, label in lanes:
@@ -204,14 +204,14 @@ def build_alpha_lab(cfg: dict[str, Any] | None = None, *, window: str = "all") -
         hz = (sig.get("by_primary_source") or {}).get(src) or {}
         if not hz:
             continue
-        source_rows.append(_source_row(src.capitalize(), hz, min_n=min_n))
+        source_rows.append(_source_row({"event": "事件", "profit": "利润", "quant": "量化", "news": "新闻"}.get(src, src.capitalize()), hz, min_n=min_n))
 
     ml_ab = pack.get("ml_ablation") or {}
     if ml_ab.get("available"):
         h5 = (ml_ab.get("horizons") or {}).get("5") or {}
         source_rows.append(
             {
-                "source": "ML",
+                "source": "机器学习",
                 "sample_count": h5.get("sample_count") or 0,
                 "t5_alpha": (h5.get("with_ml") or {}).get("mean"),
                 "t10_alpha": ((ml_ab.get("horizons") or {}).get("10") or {}).get("with_ml", {}).get("mean"),
@@ -230,7 +230,7 @@ def build_alpha_lab(cfg: dict[str, Any] | None = None, *, window: str = "all") -
         incr = h5.get("ai_incremental_alpha")
         source_rows.append(
             {
-                "source": "AI",
+                "source": "投委会 AI",
                 "sample_count": h5.get("sample_count") or 0,
                 "t5_alpha": (h5.get("with_council") or {}).get("mean"),
                 "t10_alpha": ((ab.get("horizons") or {}).get("10") or {}).get("with_council", {}).get("mean"),

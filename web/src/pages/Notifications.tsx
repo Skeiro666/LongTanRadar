@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api";
+import { labelNotifyLevel, labelStatus } from "../i18n/zh";
 import PageShell from "../components/layout/PageShell";
 import ScrollPane from "../components/layout/ScrollPane";
 
@@ -45,7 +46,7 @@ export default function Notifications() {
   }, []);
 
   return (
-    <PageShell title="通知中心" subtitle="历史通知 + Outcome 复盘 — 以前的通知准不准？">
+    <PageShell title="通知中心" subtitle="历史通知 + 结果复盘 — 以前的通知准不准？">
       <ScrollPane>
         {err && <p className="error">{err}</p>}
 
@@ -55,37 +56,37 @@ export default function Notifications() {
             <dl className="metrics">
               <div className="metric"><dt>今日</dt><dd>{String(stats.today_count ?? 0)}</dd></div>
               <div className="metric"><dt>7日</dt><dd>{String(stats.days_7_count ?? 0)}</dd></div>
-              <div className="metric"><dt>BUY</dt><dd>{String(stats.BUY_count ?? 0)}</dd></div>
-              <div className="metric"><dt>STRONG_BUY</dt><dd>{String(stats.STRONG_BUY_count ?? 0)}</dd></div>
+              <div className="metric"><dt>买入</dt><dd>{String(stats.BUY_count ?? 0)}</dd></div>
+              <div className="metric"><dt>强买</dt><dd>{String(stats.STRONG_BUY_count ?? 0)}</dd></div>
             </dl>
           </div>
         )}
 
         <div className="persona-panel compact" style={{ marginTop: "0.75rem" }}>
-          <h3>Notification History</h3>
+          <h3>通知历史</h3>
           {rows.length === 0 ? (
-            <p className="muted">暂无通知。Precision &gt; Recall。</p>
+            <p className="muted">暂无通知。宁缺毋滥 — 无信号时不打扰。</p>
           ) : (
             rows.map((r) => {
               const rid = r.research_snapshot_id;
               const hz = r.horizons || {};
               return (
                 <div key={r.notification_id || `${r.symbol}-${r.created_at}`} className="verdict-row">
-                  <span className={`badge badge-${r.status === "SENT" ? "buy" : "watch"}`}>{r.status}</span>{" "}
-                  <span className="badge badge-watch">{r.level}</span>{" "}
+                  <span className={`badge badge-${r.status === "SENT" ? "buy" : "watch"}`}>{labelStatus(r.status)}</span>{" "}
+                  <span className="badge badge-watch">{labelNotifyLevel(r.level)}</span>{" "}
                   <strong>{r.name || r.symbol}</strong>{" "}
                   <span className="muted">{r.symbol} · {r.sent_at || r.created_at}</span>
                   <div className="muted" style={{ fontSize: "0.82rem", marginTop: "0.25rem" }}>
-                    Outcome {r.outcome_status || "PENDING"} ·{" "}
+                    结果 {labelStatus(r.outcome_status) || "待结算"} ·{" "}
                     {["1", "5", "10", "20"].map((h) => {
                       const cell = hz[h];
-                      if (!cell?.available) return `T+${h}: pending`;
+                      if (!cell?.available) return `T+${h}: 待结算`;
                       return `T+${h}: ${fmtPct(cell.excess_return ?? cell.return)}`;
                     }).join(" · ")}
                   </div>
                   {rid && r.symbol && (
                     <Link className="btn btn-ghost" to={`/research/${rid}/${r.symbol}`} style={{ marginTop: "0.25rem" }}>
-                      Research Snapshot →
+                      打开研究快照 →
                     </Link>
                   )}
                 </div>

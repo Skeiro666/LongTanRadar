@@ -12,5 +12,5 @@ def test_same_news_hits_cache(tmp_path):
     assert a["status"] == "ok"
     assert b["cache_hit"] is True
     assert client.calls == 1
-    assert b["model_name"] == "qwen3.5:4b"
+    assert b["model_name"] == "qwen3.5:latest"
     assert b["prompt_version"]

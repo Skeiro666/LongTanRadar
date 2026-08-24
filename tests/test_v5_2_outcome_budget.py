@@ -1,4 +1,4 @@
-"""V5.2 â€” outcome truth + LLM budget tests."""
+"""V5.2 â€?outcome truth + LLM budget tests."""
 
 from __future__ import annotations
 

@@ -27,7 +27,7 @@ def test_alias_and_fuzzy_and_unknown():
 
 
 def test_llm_inferred_source_capped():
-    n = sample_news("某材料价格大幅上涨")
+    n = sample_news("某材料价格大幅上�?)
     ents = entities_from_llm_guesses(n, [{"symbol": "000786.SZ", "name": "北新建材", "confidence": 0.99}])
     assert ents[0].entity_source == "llm_inferred"
     assert ents[0].confidence <= LLM_INFERENCE_MAX_CONF

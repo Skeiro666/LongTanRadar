@@ -1,4 +1,4 @@
-"""V5 Phase 8 â€” news cluster, hypothesis, evidence registry."""
+"""V5 Phase 8 â€?news cluster, hypothesis, evidence registry."""
 
 from __future__ import annotations
 

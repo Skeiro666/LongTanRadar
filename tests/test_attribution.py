@@ -65,7 +65,7 @@ def test_attribution_by_source_descriptive_only():
     attr = pack["attribution"]
     assert "news_only" in attr["by_source_bucket"]
     assert "quant_only" in attr["by_source_bucket"]
-    assert "News â‰  BUY" in " ".join(attr["rules"])
+    assert "News â‰?BUY" in " ".join(attr["rules"])
     assert "trading_action" not in pack
     assert "trading_weights" not in attr
 

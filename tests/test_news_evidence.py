@@ -8,11 +8,11 @@ def test_collect_stock_marks_evidence_role(monkeypatch, tmp_path):
     good = RawNews(
         id=make_id("N"),
         source="baidu",
-        title="汉森制药002412发布半年报预增",
+        title="汉森制药002412发布半年报预�?,
         fetched_at="2026-08-20T00:00:00+00:00",
         summary="净利润预增",
         published_at="2026-08-20 00:00:00",
-        title_hash=title_hash("汉森制药002412发布半年报预增"),
+        title_hash=title_hash("汉森制药002412发布半年报预�?),
         media="证券时报",
     )
 

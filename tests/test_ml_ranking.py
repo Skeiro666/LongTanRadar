@@ -1,4 +1,4 @@
-"""V5 Phase 2 â€” ML ranking before Top-N cutoff."""
+"""V5 Phase 2 â€?ML ranking before Top-N cutoff."""
 
 from __future__ import annotations
 

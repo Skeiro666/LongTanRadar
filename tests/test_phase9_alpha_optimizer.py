@@ -1,4 +1,4 @@
-"""V5 Phase 9 â€” Top-K ablation alpha + optimizer experiment gate."""
+"""V5 Phase 9 â€?Top-K ablation alpha + optimizer experiment gate."""
 
 from __future__ import annotations
 

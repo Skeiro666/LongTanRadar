@@ -116,7 +116,7 @@ def test_forward_labels_and_asof():
     fr = forward_returns(bars, signal_date=sd, horizons=[1, 5, 10])
     assert fr["available"] is True
     assert fr["5"]["available"] is True
-    # last day â€” future missing
+    # last day â€?future missing
     fr2 = forward_returns(bars, signal_date=bars["date"].iloc[-1], horizons=[5])
     assert fr2["5"]["available"] is False
 
@@ -165,7 +165,7 @@ def test_exit_backtest_and_alpha_insufficient_or_ok():
     bars = {"000001.SZ": _synth_bars(100, seed=1)}
     entries = [{"symbol": "000001.SZ", "entry_date": "2024-01-15", "entry_price": 10.0}] * 5
     bt = run_exit_backtest(bars, entries, cfg={"_root": "."}, minimum_sample=30)
-    # 5 samples < 30 â†’ insufficient
+    # 5 samples < 30 â†?insufficient
     assert bt["strategies"]["exit_engine"]["status"] == "INSUFFICIENT_SAMPLE"
     alpha = build_exit_alpha(bars, entries, cfg={"_root": "."})
     assert alpha["strategies"][0]["status"] == "INSUFFICIENT_SAMPLE"

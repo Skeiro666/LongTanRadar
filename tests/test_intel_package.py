@@ -38,7 +38,7 @@ def test_intel_package_marks_unavailable_and_keeps_hypotheses():
             "news_data_incomplete": False,
             "news_ids": ["N1"],
             "event_ids": ["E1"],
-            "expectation": {"available": False, "note": "无一致预期"},
+            "expectation": {"available": False, "note": "无一致预�?},
             "counts": {"last_7d": 1},
             "net_event_score": 0.5,
         },
@@ -54,7 +54,7 @@ def test_intel_package_marks_unavailable_and_keeps_hypotheses():
     assert pkg["data_availability"]["industry_map"]["available"] is False
     assert pkg["research_hypotheses"][0]["type"] == "HYPOTHESIS"
     assert "N1" in pkg["evidence_ids"]
-    assert "News ≠ BUY" in pkg["rules"]
+    assert "News �?BUY" in pkg["rules"]
     assert pkg["candidate_sources"] == ["news", "quant"]
 
 
@@ -78,7 +78,7 @@ def test_council_payload_contains_intel_package():
     assert snap["research_intelligence"]["data_availability"]["value"]["available"] is False
 
     eng = AICouncilEngine(cfg)
-    # unconfigured client → heuristic, but payload path still builds intel in _call_role
+    # unconfigured client �?heuristic, but payload path still builds intel in _call_role
     out = eng._call_role("event", snap)
     assert out["role"] == "event"
     # prompt must resolve to real event_v1 after yaml fix

@@ -7,15 +7,15 @@ from news_intel_fakes import FakeNewsClient, sample_news
 
 
 def test_hypothesis_not_buy(tmp_path):
-    n = sample_news("AI数据中心建设加速，服务器与光模块需求上升")
+    n = sample_news("AI数据中心建设加速，服务器与光模块需求上�?)
     intel = {
-        "hypothesis": "AI数据中心建设加速",
-        "beneficiary_industries": ["服务器", "光模块"],
+        "hypothesis": "AI数据中心建设加�?,
+        "beneficiary_industries": ["服务�?, "光模�?],
         "event_confidence": 0.68,
     }
     hyp = hypothesis_from_intel(intel, n)
     assert hyp["hypothesis"]
-    assert "服务器" in hyp["beneficiary_industries"]
+    assert "服务�? in hyp["beneficiary_industries"]
     assert hyp["confidence"] <= 0.68
     assert "BUY" not in str(hyp)
 
@@ -31,9 +31,9 @@ def test_unmapped_high_value_goes_to_hypothesis(tmp_path, monkeypatch):
             "impact_horizon": "medium",
             "event_confidence": 0.6,
             "summary": "行业景气",
-            "evidence": ["数据中心建设加速"],
-            "hypothesis": "AI数据中心建设加速",
-            "beneficiary_industries": ["服务器"],
+            "evidence": ["数据中心建设加�?],
+            "hypothesis": "AI数据中心建设加�?,
+            "beneficiary_industries": ["服务�?],
         }
     )
     monkeypatch.setattr("ashare.news.llm_mapping.news_llm_client", lambda cfg: client)
@@ -44,7 +44,7 @@ def test_unmapped_high_value_goes_to_hypothesis(tmp_path, monkeypatch):
             "news": {
                 "discovery": {"llm_mapping": True, "enabled": True},
                 "intelligence": {"enabled": True, "max_concurrency": 1},
-                "llm": {"model": "qwen3.5:4b", "base_url": "http://127.0.0.1:11434/v1"},
+                "llm": {"model": "qwen3.5:latest", "base_url": "http://127.0.0.1:11434/v1"},
             },
         }
     )

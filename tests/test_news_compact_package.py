@@ -12,7 +12,7 @@ def test_compact_structure_no_raw_dump():
             "importance": 0.9,
             "news_intelligence_score": 0.85,
             "summary": "签订重大合同",
-            "evidence": ["合同金额10亿"],
+            "evidence": ["合同金额10�?],
         }
     ]
     events = [

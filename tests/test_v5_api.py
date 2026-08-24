@@ -1,4 +1,4 @@
-"""V5 API smoke tests â€” alpha dashboard + ML weight experiments."""
+"""V5 API smoke tests â€?alpha dashboard + ML weight experiments."""
 
 from __future__ import annotations
 

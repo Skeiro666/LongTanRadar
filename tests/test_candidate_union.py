@@ -19,8 +19,8 @@ def _pool_row(sym: str, name: str = "浦发银行"):
         "name": name,
         "source": "tech_leader",
         "sources": ["tech_leader"],
-        "event_tags": ["技术龙头"],
-        "thesis": "技术龙头",
+        "event_tags": ["技术龙�?],
+        "thesis": "技术龙�?,
     }
 
 

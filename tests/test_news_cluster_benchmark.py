@@ -23,7 +23,7 @@ def test_compact_news_dedupes_titles():
     rows = [
         {"title": "公司签订重大合同订单金额10亿元"},
         {"title": "公司签订重大合同订单金额10亿元"},
-        {"title": "另一则新闻"},
+        {"title": "另一则新�?},
     ]
     out = compact_news_headlines(rows, max_items=5)
     assert len(out) == 2

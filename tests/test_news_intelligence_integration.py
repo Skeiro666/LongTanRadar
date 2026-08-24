@@ -13,11 +13,11 @@ def test_collect_stock_merges_intel_into_events(monkeypatch, tmp_path):
     good = RawNews(
         id=make_id("N"),
         source="baidu",
-        title="北新建材000786签订重大合同订单金额10亿",
+        title="北新建材000786签订重大合同订单金额10�?,
         fetched_at="2026-08-20T00:00:00+00:00",
         summary="签订重大合同",
         published_at="2026-08-20 00:00:00",
-        title_hash=title_hash("北新建材000786签订重大合同订单金额10亿"),
+        title_hash=title_hash("北新建材000786签订重大合同订单金额10�?),
         media="证券时报",
     )
 
@@ -36,7 +36,7 @@ def test_collect_stock_merges_intel_into_events(monkeypatch, tmp_path):
             "news": {
                 "fetch": {"min_link_confidence": 0.5},
                 "intelligence": {"enabled": True},
-                "llm": {"model": "qwen3.5:4b", "base_url": "http://127.0.0.1:11434/v1"},
+                "llm": {"model": "qwen3.5:latest", "base_url": "http://127.0.0.1:11434/v1"},
             },
         }
     )
@@ -58,11 +58,11 @@ def test_discover_merge_intel_and_stats(monkeypatch, tmp_path):
             "news": {
                 "discovery": {"llm_mapping": True, "enabled": True},
                 "intelligence": {"enabled": True},
-                "llm": {"model": "qwen3.5:4b", "base_url": "http://127.0.0.1:11434/v1"},
+                "llm": {"model": "qwen3.5:latest", "base_url": "http://127.0.0.1:11434/v1"},
             },
         }
     )
-    out = eng.discover(persist=False, news=[sample_news("000786签订重大合同订单金额10亿")])
+    out = eng.discover(persist=False, news=[sample_news("000786签订重大合同订单金额10�?)])
     assert out["n_events"] >= 1
     assert "intel_stats" in out
     ev = out["events"][0]

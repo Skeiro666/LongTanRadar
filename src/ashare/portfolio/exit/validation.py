@@ -60,7 +60,9 @@ def calibrate_exit_scores(
             bars,
             signal_date=r.get("signal_date"),
             horizons=horizons,
-            entry_price=r.get("exit_price"),
+            base_mode="signal_close",
+            price_field="close",
+            adj_type="qfq",
         )
         item = {
             "exit_score": float(r["exit_score"]),
@@ -200,7 +202,14 @@ def feature_ic_table(
         bars = bars_by_symbol.get(str(r.get("symbol")))
         if bars is None:
             continue
-        fr = forward_returns(bars, signal_date=r.get("signal_date"), horizons=horizons)
+        fr = forward_returns(
+            bars,
+            signal_date=r.get("signal_date"),
+            horizons=horizons,
+            base_mode="signal_close",
+            price_field="close",
+            adj_type="qfq",
+        )
         flat: dict[str, float] = {}
         raw = r.get("features") or {}
         for name, meta in raw.items():
@@ -256,6 +265,7 @@ def feature_redundancy(
 ) -> dict[str, Any]:
     exit_cfg = load_exit_config(cfg)
     thr = float((exit_cfg.get("validation") or {}).get("redundancy_threshold") or 0.8)
+    mid = float((exit_cfg.get("validation") or {}).get("redundancy_medium_threshold") or 0.6)
     min_n = int((exit_cfg.get("validation") or {}).get("minimum_sample") or exit_cfg.get("minimum_sample") or 30)
     groups = dict(exit_cfg.get("feature_groups") or {})
 
@@ -314,6 +324,15 @@ def feature_redundancy(
                     "spearman": spear,
                     "sample_count": len(sub),
                     "high_redundancy": abs(pear) > thr or abs(spear) > thr,
+                    "redundancy": (
+                        "HIGH_REDUNDANCY"
+                        if abs(pear) >= thr or abs(spear) >= thr
+                        else (
+                            "MEDIUM_REDUNDANCY"
+                            if abs(pear) >= mid or abs(spear) >= mid
+                            else "LOW"
+                        )
+                    ),
                 }
             )
     pairs.sort(key=lambda x: abs(x.get("spearman") or 0), reverse=True)
@@ -322,6 +341,7 @@ def feature_redundancy(
         "status": "OK",
         "sample_count": len(records),
         "threshold": thr,
+        "medium_threshold": mid,
         "pairs": pairs[:40],
         "high_redundancy_count": sum(1 for p in pairs if p["high_redundancy"]),
         "feature_groups": groups,

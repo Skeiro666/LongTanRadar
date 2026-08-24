@@ -1,4 +1,4 @@
-"""V5.4 AI ablation â€” council on/off replay."""
+"""V5.4 AI ablation â€?council on/off replay."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""V5.2 Phase 4 â€” unified alpha + role ablation + model benchmark."""
+"""V5.2 Phase 4 â€?unified alpha + role ablation + model benchmark."""
 
 from __future__ import annotations
 

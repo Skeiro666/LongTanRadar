@@ -18,6 +18,8 @@ from ashare.portfolio.exit.calibration import calibrate_exit_scores, feature_ic_
 from ashare.portfolio.exit.ml_exit import train_exit_ml, compare_ml_vs_heuristic
 from ashare.portfolio.exit.report import build_exit_validation_report
 from ashare.portfolio.exit.research_bootstrap import bootstrap_research_entries
+from ashare.portfolio.exit.ic_debug import build_ic_debug_samples
+from ashare.portfolio.exit.risk_group import analyze_risk_group
 from ashare.symbols import to_symbol
 
 logger = logging.getLogger("ashare.services.exit")
@@ -293,6 +295,17 @@ def build_exit_lab(cfg: dict[str, Any] | None = None) -> dict[str, Any]:
         "feature_groups": exit_cfg.get("feature_groups") or {},
     }
 
+    ic_debug = (
+        build_ic_debug_samples(cal_rows, bars_by, cfg=cfg, limit=20)
+        if cal_rows
+        else {"samples": [], "root_cause": {"primary": "F", "label": "Sample filter error"}}
+    )
+    risk_group = (
+        analyze_risk_group(cal_rows, bars_by, cfg=cfg)
+        if cal_rows
+        else {"available": False, "status": "INSUFFICIENT_SAMPLE"}
+    )
+
     samples = _ml_samples_from_entries(cfg, entries, bars_by)
     ml_cmp = compare_ml_vs_heuristic(samples, cfg=cfg) if samples else {
         "available": False,
@@ -312,6 +325,8 @@ def build_exit_lab(cfg: dict[str, Any] | None = None) -> dict[str, Any]:
         "calibration": calibration,
         "feature_ic": feat_ic,
         "redundancy": redundancy,
+        "ic_debug": ic_debug,
+        "risk_group": risk_group,
         "ml": ml_result,
         "ml_vs_heuristic": ml_cmp,
         "minimum_sample": min_n,
@@ -346,6 +361,9 @@ def build_exit_lab(cfg: dict[str, Any] | None = None) -> dict[str, Any]:
             "fixed_stop": _gb(alpha, "fixed_stop"),
             "exit_engine": _gb(alpha, "exit_engine"),
         },
+        "ic_debug": ic_debug,
+        "risk_group": risk_group,
+        "feature_groups": risk_group.get("ui_rows") if isinstance(risk_group, dict) else [],
         "charts": {
             "scatter_t10": calibration.get("scatter_t10") or [],
             "bucket_t10": [

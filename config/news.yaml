@@ -37,7 +37,7 @@ discovery:
 llm:
   provider: local
   base_url: http://127.0.0.1:11434/v1
-  model: qwen3.5:4b
+  model: qwen3.5:latest
   api_key_env: NEWS_AI_API_KEY
   temperature: 0.1
   timeout_sec: 60

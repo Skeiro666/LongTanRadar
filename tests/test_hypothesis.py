@@ -11,7 +11,7 @@ def test_hypothesis_layers_not_disguised_as_fact():
         source="sina",
         title="公司签订重大合同订单",
         fetched_at="2026-08-20T00:00:00+00:00",
-        summary="中标10亿",
+        summary="中标10�?,
         title_hash=title_hash("公司签订重大合同订单"),
     )
     evs = extract_events(n, symbol="000786.SZ", relevance=0.9)

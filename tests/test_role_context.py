@@ -34,10 +34,10 @@ def _sample_snapshot() -> dict:
             "net_event_score": 0.5,
             "timeline": [{"title": "订单新闻", "date": "2026-08-20", "event_type": "order"}],
             "last_7d": [
-                {"title": "长标题" * 20, "date": "2026-08-20", "body": "正文" * 100},
-                {"title": "第二条", "date": "2026-08-19"},
+                {"title": "长标�? * 20, "date": "2026-08-20", "body": "正文" * 100},
+                {"title": "第二�?, "date": "2026-08-19"},
             ],
-            "conflicts": [{"type": "price_in", "note": "已反应"}],
+            "conflicts": [{"type": "price_in", "note": "已反�?}],
         },
         "news_discovery": {"price_in_risk": "HIGH", "events": [{"symbol": "000786.SZ", "event_type": "order"}]},
         "quant": {

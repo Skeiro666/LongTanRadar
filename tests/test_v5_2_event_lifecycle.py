@@ -1,4 +1,4 @@
-"""V5.2 Phase 2 â€” event lifecycle, price_in_score, expected_excess_return, as_of leak fix."""
+"""V5.2 Phase 2 â€?event lifecycle, price_in_score, expected_excess_return, as_of leak fix."""
 
 from __future__ import annotations
 

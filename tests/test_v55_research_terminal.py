@@ -38,7 +38,7 @@ def test_candidate_card_fields():
         outcomes=[],
         cfg={},
     )
-    assert card["news_labels"] == ["新闻发现", "纯新闻"]
+    assert card["news_labels"] == ["新闻发现", "纯新�?]
     assert card["conflict"]["display"] == "新闻/量化冲突"
     assert "相对强弱偏弱" in card["conflict"]["reason_labels"]
 

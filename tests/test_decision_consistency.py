@@ -1,4 +1,4 @@
-"""V5 Phase 1 â€” Canonical Decision chain consistency."""
+"""V5 Phase 1 â€?Canonical Decision chain consistency."""
 
 from __future__ import annotations
 

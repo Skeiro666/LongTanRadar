@@ -312,6 +312,156 @@ export default function AlphaLab() {
                 })()}
               </p>
 
+              {(() => {
+                const icDebug = (ev.ic_debug || lab.ic_debug || {}) as Record<string, unknown>;
+                const root = (icDebug.root_cause || {}) as Record<string, unknown>;
+                const ic5 = (icDebug.ic_t5_close_to_close || {}) as Record<string, unknown>;
+                if (!icDebug || (!root.primary && !ic5.spearman)) return null;
+                return (
+                  <div style={{ marginTop: "0.5rem", fontSize: "0.85rem" }}>
+                    <strong>Exit IC Debug</strong>
+                    <p className="muted" style={{ margin: "0.25rem 0" }}>
+                      根因：{String(root.primary || "—")} · {String(root.label || "")}
+                      {ic5.spearman != null ? ` · T+5 Spearman ${Number(ic5.spearman).toFixed(3)}` : ""}
+                      {icDebug.corr_exit_score_vs_past_5d_return != null
+                        ? ` · corr(score, past5d) ${Number(icDebug.corr_exit_score_vs_past_5d_return).toFixed(3)}`
+                        : ""}
+                    </p>
+                    <p className="muted" style={{ margin: 0, fontSize: "0.8rem" }}>
+                      {String(root.detail || "")}
+                    </p>
+                    <details style={{ marginTop: "0.35rem" }}>
+                      <summary>IC 样本（T close → T+5 close）</summary>
+                      <table className="data-table" style={{ width: "100%", fontSize: "0.75rem" }}>
+                        <thead>
+                          <tr>
+                            <th>symbol</th>
+                            <th>score_time</th>
+                            <th>label_time</th>
+                            <th>score</th>
+                            <th>ret_5d</th>
+                            <th>price_t</th>
+                            <th>price_t5</th>
+                            <th>adj</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {((icDebug.samples as Array<Record<string, unknown>>) || []).slice(0, 20).map((s, i) => (
+                            <tr key={`${s.symbol}-${i}`}>
+                              <td>{String(s.symbol)}</td>
+                              <td>{String(s.score_time)}</td>
+                              <td>{String(s.label_time)}</td>
+                              <td>{s.score != null ? Number(s.score).toFixed(3) : "—"}</td>
+                              <td>
+                                {s.future_return_5d != null
+                                  ? `${(Number(s.future_return_5d) * 100).toFixed(2)}%`
+                                  : "—"}
+                              </td>
+                              <td>{s.price_t != null ? Number(s.price_t).toFixed(2) : "—"}</td>
+                              <td>{s.price_t5 != null ? Number(s.price_t5).toFixed(2) : "—"}</td>
+                              <td>{String(s.adj_type || "qfq")}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </details>
+                  </div>
+                );
+              })()}
+
+              {(() => {
+                const rg = (ev.risk_group || lab.risk_group || {}) as Record<string, unknown>;
+                const uiRows = (rg.ui_rows || ev.feature_groups || []) as Array<Record<string, unknown>>;
+                const matrix = (rg.correlation_matrix_spearman || {}) as Record<string, Record<string, number | null>>;
+                const feats = Object.keys(matrix);
+                if (!rg.available && !uiRows.length) return null;
+                return (
+                  <div style={{ marginTop: "0.75rem" }}>
+                    <h4 style={{ marginBottom: "0.35rem" }}>Exit Feature Groups（RISK）</h4>
+                    <p className="muted" style={{ fontSize: "0.8rem", marginTop: 0 }}>
+                      生产权重未改写 · Candidate only · 冗余阈值 HIGH≥
+                      {String((rg.thresholds as { high?: number })?.high ?? 0.8)}
+                    </p>
+                    {uiRows.length > 0 && (
+                      <table className="data-table" style={{ width: "100%", fontSize: "0.8rem" }}>
+                        <thead>
+                          <tr>
+                            <th>GROUP</th>
+                            <th>FEATURE</th>
+                            <th>WEIGHT</th>
+                            <th>IC_5d</th>
+                            <th>IC_10d</th>
+                            <th>REDUNDANCY</th>
+                            <th>CONTRIBUTION</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {uiRows.map((r) => (
+                            <tr key={String(r.feature)}>
+                              <td>{String(r.group)}</td>
+                              <td>{String(r.feature)}</td>
+                              <td>{r.weight != null ? Number(r.weight).toFixed(2) : "—"}</td>
+                              <td>{r.IC_5d == null ? "—" : Number(r.IC_5d).toFixed(3)}</td>
+                              <td>{r.IC_10d == null ? "—" : Number(r.IC_10d).toFixed(3)}</td>
+                              <td>{String(r.redundancy || "—")}</td>
+                              <td>{String(r.contribution || "—")}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                    {feats.length > 0 && (
+                      <details style={{ marginTop: "0.35rem" }}>
+                        <summary>RISK Spearman Correlation Matrix</summary>
+                        <table className="data-table" style={{ width: "100%", fontSize: "0.7rem" }}>
+                          <thead>
+                            <tr>
+                              <th></th>
+                              {feats.map((f) => (
+                                <th key={f}>{f.slice(0, 8)}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {feats.map((a) => (
+                              <tr key={a}>
+                                <td>{a.slice(0, 10)}</td>
+                                {feats.map((b) => {
+                                  const v = matrix[a]?.[b];
+                                  return (
+                                    <td
+                                      key={b}
+                                      style={{
+                                        background:
+                                          v != null && Math.abs(v) >= 0.8
+                                            ? "rgba(200,80,80,0.25)"
+                                            : v != null && Math.abs(v) >= 0.6
+                                              ? "rgba(200,160,60,0.2)"
+                                              : undefined,
+                                      }}
+                                    >
+                                      {v == null ? "—" : v.toFixed(2)}
+                                    </td>
+                                  );
+                                })}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </details>
+                    )}
+                    {Boolean(rg.answers) && (
+                      <details style={{ marginTop: "0.35rem" }}>
+                        <summary>RISK GROUP 结论</summary>
+                        <pre className="council-expand" style={{ maxHeight: 220, fontSize: "0.75rem" }}>
+                          {JSON.stringify(rg.answers, null, 2)}
+                        </pre>
+                      </details>
+                    )}
+                  </div>
+                );
+              })()}
+
               <div style={{ marginTop: "0.5rem", fontSize: "0.85rem" }}>
                 <strong>Profit Giveback</strong>
                 <ul style={{ margin: "0.25rem 0 0", paddingLeft: "1.1rem" }}>

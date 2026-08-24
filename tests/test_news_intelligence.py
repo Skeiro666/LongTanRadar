@@ -40,7 +40,7 @@ def _news(title: str, **kw) -> RawNews:
 def test_dedup_title_and_url():
     a = _news("重大订单公告", url="http://x/a", source_id="1")
     b = _news("重大订单公告", url="http://x/a?x=1", source_id="2")
-    c = _news("另一条", url="http://x/b", source_id="3")
+    c = _news("另一�?, url="http://x/b", source_id="3")
     out = dedupe_news([a, b, c])
     assert len(out) == 2
 
@@ -53,7 +53,7 @@ def test_entity_linking_not_assumed():
     n2 = _news("北新建材000786获得重大订单")
     ents2 = link_entities(n2, symbol="000786.SZ", name="北新建材")
     assert ents2[0].confidence > 0.9
-    n3 = _news("A股复盘：58只涨停", summary="其中包括北新建材000786、维峰电子等")
+    n3 = _news("A股复盘：58只涨�?, summary="其中包括北新建材000786、维峰电子等")
     ents3 = link_entities(n3, symbol="000786.SZ", name="北新建材")
     assert ents3[0].link_source == "body_only"
     assert ents3[0].confidence < 0.5
@@ -62,7 +62,7 @@ def test_entity_linking_not_assumed():
 def test_collect_stock_filters_query_weak(monkeypatch):
     from ashare.news.engine import NewsIntelligenceEngine
 
-    good = _news("汉森制药002412发布半年报", source="baidu")
+    good = _news("汉森制药002412发布半年�?, source="baidu")
     bad = _news("维峰电子2026年半年报", source="eastmoney")
 
     class FakeP:
@@ -102,7 +102,7 @@ def test_expectation_gap_no_fabricate():
 
 def test_net_score_conflict_not_naive_sum():
     e1 = extract_events(_news("业绩预增"), symbol="X", relevance=0.9)
-    e2 = extract_events(_news("大股东减持"), symbol="X", relevance=0.9)
+    e2 = extract_events(_news("大股东减�?), symbol="X", relevance=0.9)
     for e in e1 + e2:
         e.relevance = 0.9
     s = net_event_score(e1 + e2)
@@ -120,7 +120,7 @@ def test_future_news_filtered():
 
 
 def test_unparsed_published_at_dropped_when_asof():
-    bad = _news("无日期", published_at="not-a-date")
+    bad = _news("无日�?, published_at="not-a-date")
     as_of = datetime(2026, 8, 20, tzinfo=timezone.utc)
     assert filter_asof([bad], as_of) == []
     assert len(filter_asof([bad], None)) == 1
@@ -128,7 +128,7 @@ def test_unparsed_published_at_dropped_when_asof():
 
 def test_source_quality_a_vs_c():
     assert source_quality(_news("上交所公告", media="上交所")) == "A"
-    assert source_quality(_news("市场传闻", media="某论坛")) in {"C", "D"}
+    assert source_quality(_news("市场传闻", media="某论�?)) in {"C", "D"}
     b = _news("订单", media="证券时报", source="baidu")
     assert source_quality(b) == "B"
 
@@ -147,7 +147,7 @@ def test_unix_to_iso_and_iso_freshness():
 
 
 def test_known_stock_news_still_calls_intelligence(tmp_path):
-    n = sample_news("北新建材000786签订重大合同订单金额10亿")
+    n = sample_news("北新建材000786签订重大合同订单金额10�?)
     ents = resolve_entities_open(n, name_map={"000786.SZ": "北新建材"})
     client = FakeNewsClient()
     eng = make_engine(tmp_path, client)

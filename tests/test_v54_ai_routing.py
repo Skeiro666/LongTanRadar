@@ -1,4 +1,4 @@
-"""V5.4 AI routing â€” 0 LLM conflict score."""
+"""V5.4 AI routing â€?0 LLM conflict score."""
 
 from __future__ import annotations
 

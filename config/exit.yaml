@@ -99,9 +99,10 @@ timing_quality:
 
 validation:
   redundancy_threshold: 0.8
+  redundancy_medium_threshold: 0.6
   minimum_sample: 30
   bucket_minimum_sample: 10
-  ic_horizons: [5, 10, 20]
+  ic_horizons: [1, 5, 10, 20]
   calibration_horizons: [1, 5, 10, 20]
 
 feature_groups:

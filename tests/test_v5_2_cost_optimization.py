@@ -1,4 +1,4 @@
-"""V5.2 Phase 3 â€” role-specific cache hash + chairman slim context."""
+"""V5.2 Phase 3 â€?role-specific cache hash + chairman slim context."""
 
 from __future__ import annotations
 

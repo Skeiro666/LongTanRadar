@@ -1,4 +1,4 @@
-"""V5.3 Notification — gate, dedup, channels, outcome, no LLM, no auto trade."""
+"""V5.3 Notification �?gate, dedup, channels, outcome, no LLM, no auto trade."""
 
 from __future__ import annotations
 
@@ -58,7 +58,7 @@ def _snapshot(eer_value=0.04, confidence=0.7) -> dict:
         "council": {
             "quant": {"stance": "bullish", "points": ["趋势改善"]},
             "event": {"stance": "positive", "points": ["重大事件"]},
-            "bear": {"stance": "cautious", "points": ["估值偏高"]},
+            "bear": {"stance": "cautious", "points": ["估值偏�?]},
             "fundamental": {"stance": "buy", "points": ["龙头"]},
         },
         "chairman": {"base_case": "看好", "confidence": confidence, "risks": ["宏观"]},
@@ -277,7 +277,7 @@ def test_formatter_rating_exit(tmp_path):
         snapshot=_snapshot(),
         cfg=_cfg(tmp_path),
     )
-    assert "卖出" in text or "退出" in text
+    assert "卖出" in text or "退�? in text
     assert "建议动作" in text
 
 
@@ -308,7 +308,7 @@ def test_formatter_no_llm(tmp_path):
         snapshot=_snapshot(),
         cfg=_cfg(tmp_path),
     )
-    assert "寻龙尺" in text
+    assert "寻龙�? in text
     assert "600000.SH" in text
     assert "E1001" in text
 

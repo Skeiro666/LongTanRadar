@@ -1,4 +1,4 @@
-"""Phase 10 — offline research-cycle contract (no live broker, no network providers)."""
+"""Phase 10 �?offline research-cycle contract (no live broker, no network providers)."""
 
 from __future__ import annotations
 
@@ -31,7 +31,7 @@ def _news(title: str) -> RawNews:
 def test_phase10_research_cycle_offline(monkeypatch, tmp_path):
     """
     Simulate one research cycle:
-    discovery → union → council session → outcomes/attribution.
+    discovery �?union �?council session �?outcomes/attribution.
     Never places orders; never requires LLM key.
     """
     root = Path(__file__).resolve().parents[1]
@@ -43,7 +43,7 @@ def test_phase10_research_cycle_offline(monkeypatch, tmp_path):
             "tracking": {"horizons_days": [1, 3, 5], "attribution_horizon": 5},
         },
     }
-    # copy minimal yaml loads via root — point _root to project for yaml, persist under tmp
+    # copy minimal yaml loads via root �?point _root to project for yaml, persist under tmp
     cfg_yaml = {"_root": str(root), **{k: v for k, v in cfg.items() if k != "_root"}}
     cfg_yaml["_root"] = str(root)
 
@@ -57,7 +57,7 @@ def test_phase10_research_cycle_offline(monkeypatch, tmp_path):
 
     disc = NewsOpportunityEngine(cfg_yaml).discover(
         persist=False,
-        news=[_news(f"{b[:6]}签订重大合同订单金额10亿")],
+        news=[_news(f"{b[:6]}签订重大合同订单金额10�?)],
         name_map={b: "北新建材"},
     )
     assert disc["available"] is True
@@ -120,7 +120,7 @@ def test_phase10_research_cycle_offline(monkeypatch, tmp_path):
                     "name": "浦发银行",
                     "source": "tech_leader",
                     "sources": ["tech_leader"],
-                    "event_tags": ["技术龙头"],
+                    "event_tags": ["技术龙�?],
                     "thesis": "tech",
                 }
             ],

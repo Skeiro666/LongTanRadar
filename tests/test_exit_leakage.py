@@ -68,10 +68,10 @@ def test_future_news_does_not_change_past_exit_score():
         as_of=as_of,
         position=pos,
         news={"direction": "positive", "score": 0.8},
-        # "future" news would only appear if caller passes it â€” engine must only use provided as-of news
+        # "future" news would only appear if caller passes it â€?engine must only use provided as-of news
     )
     assert s1.get("exit_score") == s2.get("exit_score")
-    # Changing news at same as_of CAN change score (that's current info) â€” but mutating after-the-fact
+    # Changing news at same as_of CAN change score (that's current info) â€?but mutating after-the-fact
     # news object that wasn't available shouldn't be auto-fetched. Verify no side channel via event.
     s3 = eng.evaluate(
         symbol="AAA.SH",

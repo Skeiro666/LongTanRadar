@@ -201,12 +201,21 @@ class LLMClient:
         except Exception as first_exc:
             if not json_mode:
                 raise
-            logger.warning(
-                "JSON mode failed provider=%s model=%s (%s); retry without response_format",
-                self.provider,
-                self.model,
-                first_exc,
-            )
+            msg = str(first_exc)
+            if "not_found" in msg.lower() or "not found" in msg.lower():
+                logger.warning(
+                    "LLM model missing provider=%s model=%s — check Ollama `api/tags` / NEWS_AI_MODEL. (%s)",
+                    self.provider,
+                    self.model,
+                    first_exc,
+                )
+            else:
+                logger.warning(
+                    "JSON mode failed provider=%s model=%s (%s); retry without response_format",
+                    self.provider,
+                    self.model,
+                    first_exc,
+                )
             kwargs.pop("response_format", None)
             if self.use_sdk:
                 content, usage = self._chat_via_openai_sdk(kwargs)

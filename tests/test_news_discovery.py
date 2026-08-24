@@ -34,7 +34,7 @@ def test_opportunity_events_without_symbol_input():
         persist=False,
         news=[
             _n("水泥行业价格波动"),
-            _n("000786签订重大合同订单金额10亿"),
+            _n("000786签订重大合同订单金额10�?),
         ],
     )
     assert out["available"] is True
@@ -75,12 +75,12 @@ def test_alias_maps_maotai():
 
 
 def test_llm_inference_capped_and_not_high_confidence():
-    n = _n("某材料价格大幅上涨")
+    n = _n("某材料价格大幅上�?)
     ents = llm_inference_entities(n, [{"symbol": "000786.SZ", "name": "北新建材", "confidence": 0.99}])
     assert ents[0].mapping_method == "llm_inference"
     assert ents[0].confidence <= LLM_INFERENCE_MAX_CONF
     rule = link_entities_open(n, name_map={"000786.SZ": "北新建材"})
-    # title has no 北新建材 — rule empty; llm must stay below official_name level 0.88
+    # title has no 北新建材 �?rule empty; llm must stay below official_name level 0.88
     assert not rule or rule[0].confidence > ents[0].confidence
     n2 = _n("北新建材签订订单")
     rule2 = link_entities_open(n2, name_map={"000786.SZ": "北新建材"})
@@ -92,14 +92,14 @@ def test_future_news_not_in_discovery_when_injected_filtered():
 
     as_of = datetime(2026, 8, 20, tzinfo=timezone.utc)
     items = [
-        _n("旧订单", published_at="2026-08-19 09:00:00"),
+        _n("旧订�?, published_at="2026-08-19 09:00:00"),
         _n("未来订单", published_at="2026-08-21 09:00:00"),
     ]
     kept = filter_asof(items, as_of)
     eng = NewsOpportunityEngine({"_root": "."})
     out = eng.discover(as_of=as_of, persist=False, news=kept)
     titles = [e["title"] for e in out["events"]]
-    assert any("旧订单" in t for t in titles)
+    assert any("旧订�? in t for t in titles)
     assert not any("未来订单" in t for t in titles)
 
 

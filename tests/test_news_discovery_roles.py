@@ -10,7 +10,7 @@ def test_direct_discovery_code_mapping(tmp_path):
     eng = NewsOpportunityEngine({"_root": str(tmp_path)})
     out = eng.discover(
         persist=False,
-        news=[sample_news("000786签订重大合同订单金额10亿")],
+        news=[sample_news("000786签订重大合同订单金额10�?)],
     )
     assert any(c["symbol"] == "000786.SZ" for c in out["news_candidates"])
     cand = next(c for c in out["news_candidates"] if c["symbol"] == "000786.SZ")
@@ -37,11 +37,11 @@ def test_inferred_not_ordinary_candidate(tmp_path, monkeypatch):
             "news": {
                 "discovery": {"llm_mapping": True, "enabled": True, "aliases": {}},
                 "intelligence": {"enabled": True, "max_concurrency": 1},
-                "llm": {"model": "qwen3.5:4b", "base_url": "http://127.0.0.1:11434/v1"},
+                "llm": {"model": "qwen3.5:latest", "base_url": "http://127.0.0.1:11434/v1"},
             },
         }
     )
-    out = eng.discover(persist=False, news=[sample_news("某材料价格大幅上涨")])
+    out = eng.discover(persist=False, news=[sample_news("某材料价格大幅上�?)])
     assert all(c.get("discovery_grade") != "INFERRED" for c in out["news_candidates"])
     watch = out.get("news_watchlist") or []
     rejected = out.get("rejected") or []

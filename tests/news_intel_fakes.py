@@ -10,7 +10,7 @@ from ashare.news.models import RawNews, make_id, title_hash
 
 class FakeNewsClient:
     configured = True
-    model = "qwen3.5:4b"
+    model = "qwen3.5:latest"
 
     def __init__(self, *, intel: dict | None = None, fail: str | None = None) -> None:
         self.calls = 0
@@ -23,7 +23,7 @@ class FakeNewsClient:
             "impact_horizon": "medium",
             "event_confidence": 0.9,
             "summary": "公司签订重大合同",
-            "evidence": ["签订重大合同订单金额10亿"],
+            "evidence": ["签订重大合同订单金额10�?],
             "hypothesis": "",
             "beneficiary_industries": [],
         }
@@ -59,7 +59,7 @@ def make_engine(tmp_path: Path, client: FakeNewsClient | None, **intel_cfg) -> L
     cfg = {
         "_root": str(tmp_path),
         "news": {
-            "llm": {"model": "qwen3.5:4b", "base_url": "http://127.0.0.1:11434/v1"},
+            "llm": {"model": "qwen3.5:latest", "base_url": "http://127.0.0.1:11434/v1"},
             "intelligence": {"max_concurrency": 1, "max_retries": 0, **intel_cfg},
         },
     }

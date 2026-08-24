@@ -1,4 +1,4 @@
-"""Phase 9 checklist — News Discovery v3 acceptance tests (no network)."""
+"""Phase 9 checklist �?News Discovery v3 acceptance tests (no network)."""
 
 from __future__ import annotations
 
@@ -114,7 +114,7 @@ def test_04_05_union_and_candidate_sources(monkeypatch):
 
 def test_06_hypothesis_type():
     h = ResearchHypothesisEngine().from_event(
-        {"event_type": "ORDER", "direction": "BULLISH", "title": "签大单", "symbol": "000786.SZ"}
+        {"event_type": "ORDER", "direction": "BULLISH", "title": "签大�?, "symbol": "000786.SZ"}
     )
     assert h.to_dict()["type"] == "HYPOTHESIS"
 
@@ -178,7 +178,7 @@ def test_12_council_intel_available_false():
     pkg = build_research_intelligence(snap)
     assert pkg["data_availability"]["value"]["available"] is False
     assert pkg["data_availability"]["industry_map"]["available"] is False
-    assert "News ≠ BUY" in pkg["rules"]
+    assert "News �?BUY" in pkg["rules"]
 
 
 def test_13_reject_reasons():

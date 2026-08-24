@@ -185,6 +185,19 @@ class LocalNewsIntelligence:
             result["total_tokens"] = int(cached.get("total_tokens") or 0)
             result["latency_ms"] = float(cached.get("latency_ms") or 0)
             result["usage_source"] = str(cached.get("usage_source") or "cache")
+            try:
+                from ashare.ai.cost_tracker import get_cost_tracker
+
+                saved = int(result.get("total_tokens") or 0) or 200
+                get_cost_tracker().record_cache_save(
+                    estimated_tokens=saved,
+                    call_site="news_intelligence",
+                    symbol=symbol or None,
+                    role="news_intel",
+                    model=self.model_name,
+                )
+            except Exception:  # noqa: BLE001
+                pass
             return result
 
         if not self.available:

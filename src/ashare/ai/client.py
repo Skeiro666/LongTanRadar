@@ -178,7 +178,11 @@ class LLMClient:
         }
         if self.send_temperature and self.temperature is not None:
             kwargs["temperature"] = float(self.temperature)
-        if json_mode:
+        # Ollama JSON mode (response_format=json_object) often hangs until HTTP
+        # timeout, then we retry without it — doubling wait. Prompt already
+        # requires JSON; parse_json_object() extracts it from the reply.
+        use_response_format = json_mode and self.provider != "ollama"
+        if use_response_format:
             kwargs["response_format"] = {"type": "json_object"}
         if self.extra_body:
             kwargs["extra_body"] = dict(self.extra_body)
@@ -199,7 +203,8 @@ class LLMClient:
             else:
                 content, usage = self._chat_via_http(kwargs)
         except Exception as first_exc:
-            if not json_mode:
+            if not use_response_format:
+                self._record_failed_usage(meta, first_exc, t0)
                 raise
             msg = str(first_exc)
             if "not_found" in msg.lower() or "not found" in msg.lower():
@@ -217,13 +222,41 @@ class LLMClient:
                     first_exc,
                 )
             kwargs.pop("response_format", None)
-            if self.use_sdk:
-                content, usage = self._chat_via_openai_sdk(kwargs)
-            else:
-                content, usage = self._chat_via_http(kwargs)
+            try:
+                if self.use_sdk:
+                    content, usage = self._chat_via_openai_sdk(kwargs)
+                else:
+                    content, usage = self._chat_via_http(kwargs)
+            except Exception as second_exc:
+                self._record_failed_usage(meta, second_exc, t0)
+                raise
         latency_ms = (time.perf_counter() - t0) * 1000.0
         self._record_usage(content, usage, latency_ms, meta)
         return content
+
+    def _record_failed_usage(self, meta: dict[str, Any], exc: Exception, t0: float) -> None:
+        """Count failed local/cloud attempts so Token dashboard is not silently zero."""
+        try:
+            from ashare.ai.cost_tracker import estimate_tokens, get_cost_tracker
+
+            prompt = str(meta.get("prompt_text") or "")
+            inp = estimate_tokens(prompt) if prompt else 0
+            get_cost_tracker().record(
+                model=self.model,
+                provider=self.provider,
+                input_tokens=inp,
+                output_tokens=0,
+                latency_ms=(time.perf_counter() - t0) * 1000.0,
+                usage_source=f"error:{type(exc).__name__}",
+                symbol=meta.get("symbol"),
+                role=meta.get("role"),
+                call_site=meta.get("call_site"),
+                cache_hit=False,
+                cycle_id=meta.get("cycle_id"),
+                research_session_id=meta.get("research_session_id"),
+            )
+        except Exception as rec_exc:  # noqa: BLE001
+            logger.debug("failed-usage record skipped: %s", rec_exc)
 
     @staticmethod
     def _normalize_usage(raw: dict[str, Any] | None, prompt_text: str, output_text: str) -> tuple[int, int, str]:

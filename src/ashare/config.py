@@ -136,8 +136,18 @@ def load_config(path: str | Path | None = None) -> dict[str, Any]:
             ml["model_path"] = str(root / mp)
 
     # News Intelligence Engine — local LLM (NEWS_AI_*), independent of Council ai.*
+    # Deep-merge discovery/llm so env flags do not wipe config/news.yaml sections.
     news_override = cfg.setdefault("news", {})
-    news_llm = dict(news_override.get("llm") or {})
+    base_news: dict[str, Any] = {}
+    news_yaml = root / "config" / "news.yaml"
+    if news_yaml.exists():
+        try:
+            with news_yaml.open(encoding="utf-8") as f:
+                base_news = dict(yaml.safe_load(f) or {})
+        except Exception:  # noqa: BLE001
+            base_news = {}
+
+    news_llm = {**(base_news.get("llm") or {}), **dict(news_override.get("llm") or {})}
     if os.getenv("NEWS_AI_BASE_URL"):
         news_llm["base_url"] = os.getenv("NEWS_AI_BASE_URL")
     if os.getenv("NEWS_AI_MODEL"):
@@ -150,7 +160,8 @@ def load_config(path: str | Path | None = None) -> dict[str, Any]:
         news_llm["api_key_env"] = "NEWS_AI_API_KEY"
     if news_llm:
         news_override["llm"] = news_llm
-    disc = dict(news_override.get("discovery") or {})
+
+    disc = {**(base_news.get("discovery") or {}), **dict(news_override.get("discovery") or {})}
     if news_llm.get("base_url") and news_llm.get("model"):
         flag = os.getenv("NEWS_AI_LLM_MAPPING", "").strip().lower()
         if flag in {"0", "false", "no", "off"}:

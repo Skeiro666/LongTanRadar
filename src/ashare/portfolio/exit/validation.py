@@ -3,9 +3,11 @@ from __future__ import annotations
 """Exit validation: calibration, IC, redundancy, monotonicity. Research only."""
 
 from typing import Any
+import warnings
 
 import numpy as np
 import pandas as pd
+from scipy.stats import ConstantInputWarning
 
 from ashare.portfolio.exit.config import load_exit_config
 from ashare.portfolio.exit.labels import forward_returns
@@ -14,14 +16,29 @@ _BUCKETS = [(0.0, 0.2), (0.2, 0.4), (0.4, 0.6), (0.6, 0.8), (0.8, 1.01)]
 
 
 def _corr(x: list[float], y: list[float], method: str = "spearman") -> float | None:
+    """Safe corr — returns None on constant input (avoids ConstantInputWarning spam)."""
     if len(x) < 3 or len(y) < 3 or len(x) != len(y):
         return None
-    a, b = pd.Series(x), pd.Series(y)
-    if a.std() == 0 or b.std() == 0:
+    a, b = pd.Series(x, dtype="float64"), pd.Series(y, dtype="float64")
+    # nunique catches constants better than std (and avoids spearman ConstantInputWarning)
+    if int(a.nunique(dropna=True)) < 2 or int(b.nunique(dropna=True)) < 2:
         return None
-    if method == "pearson":
-        return float(a.corr(b, method="pearson"))
-    return float(a.corr(b, method="spearman"))
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=ConstantInputWarning)
+        if method == "pearson":
+            val = a.corr(b, method="pearson")
+        else:
+            val = a.corr(b, method="spearman")
+    if val is None or (isinstance(val, float) and (val != val)):  # NaN
+        return None
+    return float(val)
+
+
+def _pair_corr(a: pd.Series, b: pd.Series, method: str = "spearman") -> float | None:
+    sub = pd.concat([a, b], axis=1).dropna()
+    if len(sub) < 3:
+        return None
+    return _corr(sub.iloc[:, 0].tolist(), sub.iloc[:, 1].tolist(), method=method)
 
 
 def _mdd_of_path(prices: list[float]) -> float | None:
@@ -314,8 +331,10 @@ def feature_redundancy(
             sub = df[[a, b]].dropna()
             if len(sub) < min_n:
                 continue
-            pear = float(sub[a].corr(sub[b], method="pearson"))
-            spear = float(sub[a].corr(sub[b], method="spearman"))
+            pear = _pair_corr(sub[a], sub[b], "pearson")
+            spear = _pair_corr(sub[a], sub[b], "spearman")
+            if pear is None and spear is None:
+                continue
             pairs.append(
                 {
                     "a": a,
@@ -323,13 +342,13 @@ def feature_redundancy(
                     "pearson": pear,
                     "spearman": spear,
                     "sample_count": len(sub),
-                    "high_redundancy": abs(pear) > thr or abs(spear) > thr,
+                    "high_redundancy": abs(pear or 0) >= thr or abs(spear or 0) >= thr,
                     "redundancy": (
                         "HIGH_REDUNDANCY"
-                        if abs(pear) >= thr or abs(spear) >= thr
+                        if abs(pear or 0) >= thr or abs(spear or 0) >= thr
                         else (
                             "MEDIUM_REDUNDANCY"
-                            if abs(pear) >= mid or abs(spear) >= mid
+                            if abs(pear or 0) >= mid or abs(spear or 0) >= mid
                             else "LOW"
                         )
                     ),

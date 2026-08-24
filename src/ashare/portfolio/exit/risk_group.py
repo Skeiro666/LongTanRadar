@@ -10,7 +10,7 @@ import pandas as pd
 from ashare.portfolio.exit.config import load_exit_config
 from ashare.portfolio.exit.heuristic import compute_exit_score
 from ashare.portfolio.exit.labels import forward_returns
-from ashare.portfolio.exit.validation import _corr
+from ashare.portfolio.exit.validation import _corr, _pair_corr
 
 
 def _flat_features(raw: dict[str, Any]) -> dict[str, float]:
@@ -157,18 +157,12 @@ def analyze_risk_group(
                 corr_pearson[a][b] = None
                 corr_spearman[a][b] = None
                 continue
-            sa = float(sub[a].std())
-            sb = float(sub[b].std())
-            if sa == 0 or sb == 0 or sa != sa or sb != sb:
-                corr_pearson[a][b] = None
-                corr_spearman[a][b] = None
-                continue
-            p = float(sub[a].corr(sub[b], method="pearson"))
-            s = float(sub[a].corr(sub[b], method="spearman"))
+            p = _pair_corr(sub[a], sub[b], "pearson")
+            s = _pair_corr(sub[a], sub[b], "spearman")
             corr_pearson[a][b] = p
             corr_spearman[a][b] = s
-            if a < b:
-                abs_s = abs(s)
+            if a < b and (p is not None or s is not None):
+                abs_s = abs(s or 0)
                 pairs.append(
                     {
                         "a": a,

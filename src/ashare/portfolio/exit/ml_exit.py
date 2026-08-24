@@ -82,7 +82,12 @@ def _metrics_vs_labels(pred: np.ndarray, y: np.ndarray, fwd: np.ndarray | None) 
     try:
         import pandas as pd
 
-        rank_ic = float(pd.Series(pred).corr(pd.Series(y), method="spearman"))
+        if pd.Series(pred).nunique(dropna=True) < 2 or pd.Series(y).nunique(dropna=True) < 2:
+            rank_ic = None
+        else:
+            rank_ic = float(pd.Series(pred).corr(pd.Series(y), method="spearman"))
+            if rank_ic != rank_ic:
+                rank_ic = None
     except Exception:  # noqa: BLE001
         rank_ic = None
     # Hit rate: same side of median

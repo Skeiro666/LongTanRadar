@@ -32,9 +32,10 @@ cooldown:
   same_event_hours: 72
   allow_upgrade: true  # WATCH→BUY, BUY→STRONG_BUY, BUY→RISK_EXIT, BUY→RATING_EXIT
 
-# Channels
+# Channels — 研究结束后异步发送；0 LLM
+# BUY / STRONG_BUY / 退出类均可走邮箱
 channels:
-  buy: [wechat]
+  buy: [wechat, email]
   strong_buy: [wechat, email]
   rating_exit: [wechat, email]
   risk_exit: [wechat, email]
@@ -52,6 +53,8 @@ email:
   max_retries: 3
   retry_delay_sec: 3
   use_tls: true
+  # QQ 邮箱推荐：SMTP_HOST=smtp.qq.com SMTP_PORT=587
+  # 密码必须用「授权码」，不是 QQ 登录密码（在 QQ 邮箱设置 → 账户 → POP3/SMTP 服务 生成）
 
 # Async job
 async:

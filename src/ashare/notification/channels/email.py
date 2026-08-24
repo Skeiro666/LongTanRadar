@@ -42,6 +42,7 @@ def send_email(subject: str, body: str, cfg: dict[str, Any] | None = None) -> di
     retries = int(ecfg.get("max_retries", 3))
     delay = float(ecfg.get("retry_delay_sec", 3))
     use_tls = bool(ecfg.get("use_tls", True))
+    use_ssl = port == 465 or str(_env("SMTP_SSL") or "").lower() in {"1", "true", "yes"}
 
     msg = MIMEText(body, "plain", "utf-8")
     msg["Subject"] = subject[:200]
@@ -51,11 +52,16 @@ def send_email(subject: str, body: str, cfg: dict[str, Any] | None = None) -> di
     last_err = ""
     for attempt in range(retries):
         try:
-            with smtplib.SMTP(host, port, timeout=timeout) as smtp:
-                if use_tls:
-                    smtp.starttls()
-                smtp.login(user, password)
-                smtp.sendmail(from_addr, [to_addr], msg.as_string())
+            if use_ssl:
+                with smtplib.SMTP_SSL(host, port, timeout=timeout) as smtp:
+                    smtp.login(user, password)
+                    smtp.sendmail(from_addr, [to_addr], msg.as_string())
+            else:
+                with smtplib.SMTP(host, port, timeout=timeout) as smtp:
+                    if use_tls:
+                        smtp.starttls()
+                    smtp.login(user, password)
+                    smtp.sendmail(from_addr, [to_addr], msg.as_string())
             logger.info("email sent ok to=%s host=%s", to_addr.split("@")[0] + "@***", host)
             return {"ok": True, "channel": "email"}
         except Exception as exc:  # noqa: BLE001

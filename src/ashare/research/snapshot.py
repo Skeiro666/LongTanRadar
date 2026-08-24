@@ -74,8 +74,14 @@ def build_snapshot(candidate: dict[str, Any], cfg: dict[str, Any] | None = None)
         "snapshot_time": datetime.now(timezone.utc).isoformat(),
         "versions": {
             "factor_version": snap_cfg.get("factor_version") or candidate.get("factor_version") or "factor_v1",
+            "news_version": ((candidate.get("news_package") or {}).get("versions") or {}).get("news_data_version")
+            or snap_cfg.get("news_version")
+            or "news_v1",
+            "prompt_version": snap_cfg.get("prompt_bundle") or "prompts_v1",
             "prompt_bundle": snap_cfg.get("prompt_bundle") or "prompts_v1",
+            "model_version": snap_cfg.get("model_bundle") or "models_v1",
             "model_bundle": snap_cfg.get("model_bundle") or "models_v1",
+            "config_version": research_cfg.get("research_version") or "research_v1",
             "research_version": research_cfg.get("research_version") or "research_v1",
         },
         "trigger": candidate.get("trigger") or {},

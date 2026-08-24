@@ -459,10 +459,15 @@ def run_research(cfg: dict[str, Any], top_n: int | None = None) -> dict[str, Any
                 "gate": r.get("gate"),
                 "candidate_sources": r.get("candidate_sources") or [],
                 "research_hypotheses": r.get("research_hypotheses") or [],
+                "news_conflict": r.get("news_conflict"),
+                "cloud_escalation": r.get("cloud_escalation"),
+                "ai_routing": r.get("ai_routing"),
                 "chairman": {
                     "confidence": (r.get("chairman") or {}).get("confidence"),
                     "base_case": (r.get("chairman") or {}).get("base_case"),
                     "risks": (r.get("chairman") or {}).get("risks"),
+                    "trading_action": (r.get("chairman") or {}).get("trading_action"),
+                    "rating": (r.get("chairman") or {}).get("rating"),
                 },
                 "news": _news_from_package(r.get("news_package") or {}),
             }

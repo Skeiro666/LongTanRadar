@@ -4,6 +4,8 @@ import AlphaLab from "./pages/AlphaLab";
 import Notifications from "./pages/Notifications";
 import Overview from "./pages/Overview";
 import Research from "./pages/Research";
+import ResearchDetail from "./pages/ResearchDetail";
+import TokenDashboard from "./pages/TokenDashboard";
 
 export default function App() {
   return (
@@ -23,6 +25,7 @@ export default function App() {
           <NavLink to="/research">圆桌研报</NavLink>
           <NavLink to="/notifications">通知</NavLink>
           <NavLink to="/alpha-lab">Alpha Lab</NavLink>
+          <NavLink to="/token">Token</NavLink>
           <NavLink to="/agent">研究循环</NavLink>
         </nav>
       </header>
@@ -30,8 +33,10 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Overview />} />
           <Route path="/research" element={<Research />} />
+          <Route path="/research/:researchId/:symbol" element={<ResearchDetail />} />
           <Route path="/notifications" element={<Notifications />} />
           <Route path="/alpha-lab" element={<AlphaLab />} />
+          <Route path="/token" element={<TokenDashboard />} />
           <Route path="/agent" element={<Agent />} />
           <Route path="*" element={<Overview />} />
         </Routes>

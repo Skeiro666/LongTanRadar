@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, num, pct } from "../api";
+import NewsQuantMatrix from "../components/research/NewsQuantMatrix";
 import { EquityLineChart, type PnlPoint } from "../components/Charts";
 import PageShell from "../components/layout/PageShell";
 import PageTabs from "../components/layout/PageTabs";
 import ScrollPane from "../components/layout/ScrollPane";
+import type { ResearchTerminal } from "../types/terminal";
 
 type AgentState = {
   running?: boolean;
@@ -49,6 +51,7 @@ export default function Overview() {
   const [err, setErr] = useState("");
   const [tab, setTab] = useState("chart");
   const [chartKey, setChartKey] = useState<"equity" | "pnl_day">("equity");
+  const [terminal, setTerminal] = useState<ResearchTerminal | null>(null);
 
   async function refresh() {
     try {
@@ -59,9 +62,10 @@ export default function Overview() {
       return;
     }
     try {
-      const [a, p] = await Promise.all([api.agent(), api.pnl()]);
+      const [a, p, term] = await Promise.all([api.agent(), api.pnl(), api.researchTerminal().catch(() => null)]);
       setAgent(a);
       setPnl(p);
+      setTerminal(term as ResearchTerminal | null);
       setErr("");
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
@@ -78,11 +82,13 @@ export default function Overview() {
   const totalTone = (pnl?.pnl_total ?? 0) > 0 ? "up" : (pnl?.pnl_total ?? 0) < 0 ? "down" : undefined;
   const rt = agent?.last_result?.roundtable || agent?.last_result?.picks?.roundtable;
   const picks = agent?.last_result?.picks?.picks || [];
+  const ratings = terminal?.counts?.ratings || {};
+  const buyN = (ratings.BUY || 0) + (ratings.STRONG_BUY || 0);
 
   return (
     <PageShell
-      title="总览 · COMMAND"
-      subtitle="模拟盘盯市 · 盈亏曲线 · 持仓 · 最新投委会结论"
+      title="Command · Research Terminal"
+      subtitle="Market / Research Status · 模拟盘 · Alpha · 通知"
       actions={
         <>
           <Link className="btn btn-primary" to="/research">
@@ -120,6 +126,23 @@ export default function Overview() {
           {err}
           {agent?.last_error ? ` · ${agent.last_error}` : ""}
         </p>
+      )}
+
+      {terminal && (
+        <div className="home-research-strip">
+          <div className="home-strip-row">
+            <span>BUY {buyN}</span>
+            <span>WATCH {ratings.WATCH ?? 0}</span>
+            <span>PASS {ratings.PASS ?? 0}</span>
+            <span className="muted">News Discovery {terminal.counts?.news_discovery ?? 0}</span>
+            <Link to="/research" className="btn btn-ghost">Research →</Link>
+            <Link to="/alpha-lab" className="btn btn-ghost">Alpha Lab →</Link>
+            <Link to="/token" className="btn btn-ghost">Token →</Link>
+          </div>
+          {terminal.matrix && (
+            <NewsQuantMatrix matrix={terminal.matrix} candidates={terminal.candidates} />
+          )}
+        </div>
       )}
 
       <PageTabs

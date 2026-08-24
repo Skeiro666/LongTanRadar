@@ -86,6 +86,11 @@ export const api = {
   researchRefreshNews: () => req<any>("/api/research/refresh-news", { method: "POST", body: "{}" }),
   researchSessions: (limit = 50) => req<any>(`/api/research/sessions?limit=${limit}`),
   researchSession: (id: string) => req<any>(`/api/research/session/${id}`),
+  researchDetail: (researchId: string, symbol: string) =>
+    req<any>(`/api/research/detail/${encodeURIComponent(researchId)}/${encodeURIComponent(symbol)}`),
+  researchTerminal: () => req<any>("/api/research/terminal"),
+  notificationHistory: (limit = 100) => req<any>(`/api/notifications/history?limit=${limit}`),
+  tokenDashboard: () => req<any>("/api/token-dashboard"),
   researchCandidates: (candidateSource = "") =>
     req<any>(
       `/api/research/candidates${candidateSource ? `?candidate_source=${encodeURIComponent(candidateSource)}` : ""}`

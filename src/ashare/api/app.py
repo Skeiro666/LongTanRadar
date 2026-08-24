@@ -594,6 +594,30 @@ def create_app(config_path: str | None = None) -> FastAPI:
             raise HTTPException(status_code=404, detail="snapshot not found")
         return json.loads(path.read_text(encoding="utf-8"))
 
+    @app.get("/api/research/terminal")
+    def api_research_terminal() -> dict[str, Any]:
+        from ashare.services.research_terminal import build_research_terminal
+
+        return build_research_terminal(get_cfg())
+
+    @app.get("/api/research/detail/{research_id}/{symbol}")
+    def api_research_detail(research_id: str, symbol: str) -> dict[str, Any]:
+        from ashare.services.research_terminal import build_research_detail
+
+        return build_research_detail(get_cfg(), research_id, symbol)
+
+    @app.get("/api/notifications/history")
+    def api_notifications_history(limit: int = 100) -> dict[str, Any]:
+        from ashare.services.notification_history import build_notification_history
+
+        return build_notification_history(get_cfg(), limit=limit)
+
+    @app.get("/api/token-dashboard")
+    def api_token_dashboard() -> dict[str, Any]:
+        from ashare.services.token_dashboard import build_token_dashboard
+
+        return build_token_dashboard(get_cfg())
+
     @app.get("/api/notifications")
     def api_notifications(limit: int = 100) -> dict[str, Any]:
         from ashare.notification.store import NotificationStore

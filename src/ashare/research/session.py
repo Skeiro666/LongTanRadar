@@ -88,6 +88,8 @@ class ResearchSessionEngine:
         }
         # persist full snapshot including AI outputs for replay
         full = {**snap, "council": opinions, "debate": debate, "chairman": chairman, "report": report}
+        full["cloud_escalation"] = candidate.get("cloud_escalation")
+        full["news_conflict"] = candidate.get("news_conflict")
         self.store.save(full)
         self._append_index(report)
         return report
@@ -156,6 +158,11 @@ class ResearchSessionEngine:
                 c["compact_news"] = esc.get("extra_context", {}).get("compact_news") or c.get("compact_news")
             rep = self.run_session(c)
             rep["ai_routing"] = routing
+            rep["cloud_escalation"] = c.get("cloud_escalation")
+            rep["news_conflict"] = c.get("news_conflict")
+            rep["news_intelligence"] = c.get("news_intelligence")
+            rep["news_intelligence_score"] = c.get("news_intelligence_score")
+            rep["conflict_score"] = c.get("conflict_score")
             meta = dict((rep.get("council_meta") or {}))
             llm_used += len(meta.get("roles_called") or [])
             if (rep.get("chairman") or {}).get("source") not in {"incremental_reuse", "cache"}:

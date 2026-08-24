@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import CalibrationBarChart from "../components/research/CalibrationBarChart";
 import { api } from "../api";
 import PageShell from "../components/layout/PageShell";
 import ScrollPane from "../components/layout/ScrollPane";
@@ -11,69 +13,61 @@ type SourceRow = {
   t10_alpha?: number | null;
   t20_alpha?: number | null;
   win_rate?: number | null;
-  median_return?: number | null;
-  cost_usd?: number | null;
-  incremental_alpha?: number | null;
-  efficiency?: number | null;
   status: string;
 };
 
-type LabData = {
-  window?: string;
-  minimum_sample_size?: number;
-  as_of?: string;
-  source_alpha?: SourceRow[];
-  ai_council_ablation?: Record<string, unknown>;
-  ml_ablation?: Record<string, unknown>;
-  calibration?: Record<string, unknown>;
-  token_efficiency?: Record<string, unknown>;
-  ai_routing?: Record<string, unknown>;
-  lab_summary?: string[];
-  news_alpha?: Record<string, unknown>;
-  news_calibration?: Record<string, unknown>;
-  news_ablation?: Record<string, unknown>;
-  news_ab_buckets?: Record<string, unknown>;
-  news_token_stats?: Record<string, unknown>;
-  cloud_token_stats?: Record<string, unknown>;
-  token_saved_pct?: number;
-  news_discovery?: Record<string, unknown>;
-  news_evidence?: Record<string, unknown>;
+type PerfRow = {
+  lane: string;
+  sample_count: number;
+  t5_excess_return?: number | null;
+  t10_excess_return?: number | null;
+  t5_status?: string;
+  t10_status?: string;
+  minimum_sample?: number;
 };
 
-function horizonCell(hz: Record<string, unknown> | undefined, key: string) {
-  const h = (hz || {})[key] as Record<string, unknown> | undefined;
-  if (!h) return "—";
-  if (h.status === "INSUFFICIENT_SAMPLE") return `n=${h.sample_count}`;
-  const ex = h.excess_return as Record<string, number> | undefined;
-  if (ex?.mean != null) return fmtPct(ex.mean);
-  const sel = h.selection_alpha as Record<string, number> | undefined;
-  if (sel?.mean != null) return fmtPct(sel.mean);
-  return String(h.status || "—");
-}
+type ExpRow = {
+  id: string;
+  label: string;
+  sample_count: number;
+  status: string;
+  horizons: Record<
+    string,
+    {
+      excess_return_mean?: number | null;
+      delta_vs_baseline?: number | null;
+      baseline_excess_return_mean?: number | null;
+      status?: string;
+      sample_count?: number;
+    }
+  >;
+};
 
-function fmtPct(v: number | null | undefined) {
+function fmtPct(v: number | null | undefined, status?: string, n?: number, minN?: number) {
+  if (status === "INSUFFICIENT_SAMPLE" || (minN != null && n != null && n < minN)) return `INSUFFICIENT SAMPLE (n=${n ?? 0})`;
   if (v == null) return "—";
   return `${(v * 100).toFixed(2)}%`;
 }
 
 export default function AlphaLab() {
   const [window, setWindow] = useState("all");
-  const [data, setData] = useState<LabData | null>(null);
+  const [data, setData] = useState<Record<string, unknown> | null>(null);
   const [err, setErr] = useState("");
 
   useEffect(() => {
-    api
-      .alphaLab(window)
-      .then(setData)
-      .catch((e) => setErr(String(e)));
+    api.alphaLab(window).then(setData).catch((e) => setErr(String(e)));
   }, [window]);
 
-  const rows = data?.source_alpha || [];
+  const rows = (data?.source_alpha || []) as SourceRow[];
+  const perf = (data?.performance_dashboard || []) as PerfRow[];
+  const minN = Number(data?.minimum_sample_size ?? 30);
+  const expLab = data?.experiment_lab as { baseline_row?: ExpRow; experiments?: ExpRow[] } | undefined;
+  const charts = data?.calibration_charts as Record<string, Array<Record<string, unknown>>> | undefined;
 
   return (
-    <PageShell title="Alpha Lab" subtitle="V5.4 · Source Alpha · Ablation · Routing · Evidence > Opinion">
+    <PageShell title="Alpha Lab" subtitle="系统现在真的有效吗？— 10 秒内看 T+5 / T+10">
       <ScrollPane>
-        <div style={{ marginBottom: "0.75rem", display: "flex", gap: "0.5rem", alignItems: "center" }}>
+        <div style={{ marginBottom: "0.75rem", display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
           <span className="muted">窗口</span>
           {(["7d", "30d", "90d", "all"] as const).map((w) => (
             <button
@@ -85,20 +79,44 @@ export default function AlphaLab() {
               {w === "all" ? "全部" : w.toUpperCase()}
             </button>
           ))}
-          {data?.minimum_sample_size != null && (
-            <span className="muted" style={{ marginLeft: "auto" }}>
-              min n = {data.minimum_sample_size}
-            </span>
-          )}
+          <Link className="btn btn-ghost" to="/token" style={{ marginLeft: "auto" }}>
+            Token Dashboard →
+          </Link>
         </div>
 
         {err && <p className="error">{err}</p>}
-        {data?.as_of && <p className="muted">As of {data.as_of}</p>}
+        {Boolean(data?.as_of) && <p className="muted">As of {String(data?.as_of)} · min n = {minN}</p>}
 
         <div className="persona-panel compact">
+          <h3>Research Performance Dashboard</h3>
+          <table className="data-table" style={{ width: "100%", fontSize: "0.85rem" }}>
+            <thead>
+              <tr>
+                <th>Lane</th>
+                <th>Sample</th>
+                <th>T+5 Excess</th>
+                <th>T+10 Excess</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {perf.map((r) => (
+                <tr key={r.lane} className={r.t5_status === "INSUFFICIENT_SAMPLE" ? "insufficient-row" : ""}>
+                  <td>{r.lane}</td>
+                  <td>{r.sample_count}</td>
+                  <td>{fmtPct(r.t5_excess_return, r.t5_status, r.sample_count, minN)}</td>
+                  <td>{fmtPct(r.t10_excess_return, r.t10_status, r.sample_count, minN)}</td>
+                  <td>{r.t10_status || r.t5_status || "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="persona-panel compact" style={{ marginTop: "0.75rem" }}>
           <h3>Source Alpha</h3>
           {rows.length === 0 ? (
-            <p className="muted">跑完一轮研究后显示模块 Alpha 表。</p>
+            <p className="muted">跑完一轮研究后显示。</p>
           ) : (
             <table className="data-table" style={{ width: "100%", fontSize: "0.85rem" }}>
               <thead>
@@ -110,25 +128,19 @@ export default function AlphaLab() {
                   <th>T+10</th>
                   <th>T+20</th>
                   <th>Win%</th>
-                  <th>Median</th>
-                  <th>Δα</th>
-                  <th>Cost</th>
                   <th>Status</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.map((r) => (
-                  <tr key={r.source}>
+                  <tr key={r.source} className={r.status === "INSUFFICIENT_SAMPLE" ? "insufficient-row" : ""}>
                     <td>{r.source}</td>
                     <td>{r.sample_count}</td>
-                    <td>{fmtPct(r.t1_alpha)}</td>
-                    <td>{fmtPct(r.t5_alpha)}</td>
-                    <td>{fmtPct(r.t10_alpha)}</td>
-                    <td>{fmtPct(r.t20_alpha)}</td>
-                    <td>{r.win_rate != null ? `${(r.win_rate * 100).toFixed(0)}%` : "—"}</td>
-                    <td>{fmtPct(r.median_return)}</td>
-                    <td>{fmtPct(r.incremental_alpha)}</td>
-                    <td>{r.cost_usd != null ? `$${Number(r.cost_usd).toFixed(2)}` : "$0"}</td>
+                    <td>{fmtPct(r.t1_alpha, r.status, r.sample_count, minN)}</td>
+                    <td>{fmtPct(r.t5_alpha, r.status, r.sample_count, minN)}</td>
+                    <td>{fmtPct(r.t10_alpha, r.status, r.sample_count, minN)}</td>
+                    <td>{fmtPct(r.t20_alpha, r.status, r.sample_count, minN)}</td>
+                    <td>{r.win_rate != null && r.status !== "INSUFFICIENT_SAMPLE" ? `${(r.win_rate * 100).toFixed(0)}%` : "—"}</td>
                     <td>{r.status}</td>
                   </tr>
                 ))}
@@ -137,54 +149,35 @@ export default function AlphaLab() {
           )}
         </div>
 
-        {data?.news_token_stats && (
+        {expLab && (
           <div className="persona-panel compact" style={{ marginTop: "0.75rem" }}>
-            <h3>News Token (Local Ollama)</h3>
-            <p className="muted" style={{ fontSize: "0.85rem" }}>
-              calls={String(data.news_token_stats.calls ?? 0)} · cache_hits=
-              {String(data.news_token_stats.cache_hits ?? 0)} · tokens=
-              {String(data.news_token_stats.total_tokens ?? 0)} · saved{" "}
-              {data.token_saved_pct != null ? `${data.token_saved_pct}%` : "—"}
-            </p>
-            {data.cloud_token_stats && (
-              <p className="muted" style={{ fontSize: "0.85rem" }}>
-                Cloud: calls={String(data.cloud_token_stats.calls ?? 0)} · tokens=
-                {String(data.cloud_token_stats.total_tokens ?? 0)} · cost $
-                {Number(data.cloud_token_stats.cost_usd ?? 0).toFixed(2)}
-              </p>
-            )}
-          </div>
-        )}
-
-        {data?.news_alpha && (
-          <div className="persona-panel compact" style={{ marginTop: "0.75rem" }}>
-            <h3>News Alpha (Discovery / Evidence / Factor / Council)</h3>
+            <h3>Experiment Lab (vs {expLab.baseline_row?.label || "No News"})</h3>
             <table className="data-table" style={{ width: "100%", fontSize: "0.85rem" }}>
               <thead>
                 <tr>
-                  <th>Lane</th>
+                  <th>Arm</th>
+                  <th>n</th>
                   <th>T+5</th>
+                  <th>Δ vs baseline</th>
                   <th>T+10</th>
+                  <th>Δ vs baseline</th>
                   <th>Status</th>
                 </tr>
               </thead>
               <tbody>
-                {(
-                  [
-                    ["Discovery", data.news_alpha.news_discovery_alpha],
-                    ["Evidence", data.news_alpha.news_evidence_alpha],
-                    ["News+Factor", data.news_alpha.news_factor_alpha],
-                    ["News+Council", data.news_alpha.news_council_alpha],
-                  ] as const
-                ).map(([label, hz]) => {
-                  const h5 = (hz as Record<string, unknown>)?.["5"] as Record<string, unknown> | undefined;
-                  const h10 = (hz as Record<string, unknown>)?.["10"] as Record<string, unknown> | undefined;
+                {[expLab.baseline_row, ...(expLab.experiments || [])].filter(Boolean).map((r) => {
+                  const row = r as ExpRow;
+                  const h5 = row.horizons?.["5"] || {};
+                  const h10 = row.horizons?.["10"] || {};
                   return (
-                    <tr key={label}>
-                      <td>{label}</td>
-                      <td>{horizonCell(hz as Record<string, unknown>, "5")}</td>
-                      <td>{horizonCell(hz as Record<string, unknown>, "10")}</td>
-                      <td>{String(h5?.status || h10?.status || "—")}</td>
+                    <tr key={row.id} className={row.status === "INSUFFICIENT_SAMPLE" ? "insufficient-row" : ""}>
+                      <td>{row.label}</td>
+                      <td>{row.sample_count}</td>
+                      <td>{fmtPct(h5.excess_return_mean, h5.status, h5.sample_count, minN)}</td>
+                      <td>{fmtPct(h5.delta_vs_baseline, h5.status, h5.sample_count, minN)}</td>
+                      <td>{fmtPct(h10.excess_return_mean, h10.status, h10.sample_count, minN)}</td>
+                      <td>{fmtPct(h10.delta_vs_baseline, h10.status, h10.sample_count, minN)}</td>
+                      <td>{row.status}</td>
                     </tr>
                   );
                 })}
@@ -193,65 +186,17 @@ export default function AlphaLab() {
           </div>
         )}
 
-        {data?.news_ab_buckets && (
-          <div className="persona-panel compact" style={{ marginTop: "0.75rem" }}>
-            <h3>News A/B/C/D (News Only = B)</h3>
-            <pre style={{ fontSize: "0.8rem", whiteSpace: "pre-wrap" }}>
-              {JSON.stringify(data.news_ab_buckets, null, 2)}
-            </pre>
-          </div>
-        )}
+        <div className="dash-grid-2" style={{ marginTop: "0.75rem" }}>
+          <CalibrationBarChart title="News Score" series={charts?.news_score as never} />
+          <CalibrationBarChart title="Importance" series={charts?.importance as never} />
+          <CalibrationBarChart title="Novelty" series={charts?.novelty as never} />
+        </div>
 
-        {data?.news_calibration && (
+        {Array.isArray(data?.lab_summary) && (data?.lab_summary as string[]).length > 0 && (
           <div className="persona-panel compact" style={{ marginTop: "0.75rem" }}>
-            <h3>News Score / Importance / Novelty Calibration</h3>
-            <pre style={{ fontSize: "0.8rem", whiteSpace: "pre-wrap" }}>
-              {JSON.stringify(data.news_calibration, null, 2)}
-            </pre>
-          </div>
-        )}
-
-        {data?.ai_council_ablation && (
-          <div className="persona-panel compact" style={{ marginTop: "0.75rem" }}>
-            <h3>AI Ablation</h3>
-            <pre style={{ fontSize: "0.8rem", whiteSpace: "pre-wrap" }}>
-              {JSON.stringify(data.ai_council_ablation, null, 2)}
-            </pre>
-          </div>
-        )}
-
-        {data?.calibration && (
-          <div className="persona-panel compact" style={{ marginTop: "0.75rem" }}>
-            <h3>Prediction Calibration</h3>
-            <pre style={{ fontSize: "0.8rem", whiteSpace: "pre-wrap" }}>
-              {JSON.stringify(data.calibration, null, 2)}
-            </pre>
-          </div>
-        )}
-
-        {data?.token_efficiency && (
-          <div className="persona-panel compact" style={{ marginTop: "0.75rem" }}>
-            <h3>Token Efficiency</h3>
-            <pre style={{ fontSize: "0.8rem", whiteSpace: "pre-wrap" }}>
-              {JSON.stringify(data.token_efficiency, null, 2)}
-            </pre>
-          </div>
-        )}
-
-        {data?.ai_routing && Object.keys(data.ai_routing).length > 0 && (
-          <div className="persona-panel compact" style={{ marginTop: "0.75rem" }}>
-            <h3>AI Routing</h3>
-            <pre style={{ fontSize: "0.8rem", whiteSpace: "pre-wrap" }}>
-              {JSON.stringify(data.ai_routing, null, 2)}
-            </pre>
-          </div>
-        )}
-
-        {data?.lab_summary && data.lab_summary.length > 0 && (
-          <div className="persona-panel compact" style={{ marginTop: "0.75rem" }}>
-            <h3>研究结论（程序生成）</h3>
+            <h3>程序结论</h3>
             <ul style={{ margin: 0, paddingLeft: "1.2rem", fontSize: "0.9rem" }}>
-              {data.lab_summary.map((line) => (
+              {(data?.lab_summary as string[]).map((line) => (
                 <li key={line}>{line}</li>
               ))}
             </ul>

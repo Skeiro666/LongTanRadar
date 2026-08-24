@@ -297,4 +297,14 @@ def build_alpha_lab(cfg: dict[str, Any] | None = None, *, window: str = "all") -
         "token_saved_pct": token_stats.get("token_saved_pct"),
         "lab_summary": pack.get("lab_summary") or build_lab_summary(pack),
         "notification_llm_cost": 0,
+        "exit_lab": _safe_exit_lab(cfg),
     }
+
+
+def _safe_exit_lab(cfg: dict[str, Any]) -> dict[str, Any]:
+    try:
+        from ashare.services.exit_lab import build_exit_lab
+
+        return build_exit_lab(cfg)
+    except Exception as exc:  # noqa: BLE001
+        return {"available": False, "note": str(exc)}

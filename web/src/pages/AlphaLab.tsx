@@ -193,6 +193,70 @@ export default function AlphaLab() {
           <CalibrationBarChart title="新颖度" series={charts?.novelty as never} />
         </div>
 
+        {Boolean(data?.exit_lab) && (
+          <div className="persona-panel compact" style={{ marginTop: "0.75rem" }}>
+            <h3>Exit 表现（卖出引擎）</h3>
+            <p className="muted" style={{ marginTop: 0 }}>
+              样本入口 {(data?.exit_lab as { n_entries?: number })?.n_entries ?? 0} · 最小样本{" "}
+              {(data?.exit_lab as { minimum_sample?: number })?.minimum_sample ?? minN}
+            </p>
+            <table className="data-table" style={{ width: "100%", fontSize: "0.85rem" }}>
+              <thead>
+                <tr>
+                  <th>策略</th>
+                  <th>样本</th>
+                  <th>总收益</th>
+                  <th>Sharpe</th>
+                  <th>最大回撤</th>
+                  <th>平均回吐</th>
+                  <th>相对无退出</th>
+                  <th>状态</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(((data?.exit_lab as { exit_alpha?: { strategies?: Array<Record<string, unknown>> } })?.exit_alpha
+                  ?.strategies) || []).map((r) => (
+                  <tr key={String(r.id)} className={r.status === "INSUFFICIENT_SAMPLE" ? "insufficient-row" : ""}>
+                    <td>{String(r.label)}</td>
+                    <td>{String(r.sample_count ?? 0)}</td>
+                    <td>{fmtPct(r.total_return as number | null, String(r.status), Number(r.sample_count), minN)}</td>
+                    <td>
+                      {r.status === "INSUFFICIENT_SAMPLE" || r.sharpe == null
+                        ? "—"
+                        : Number(r.sharpe).toFixed(2)}
+                    </td>
+                    <td>{fmtPct(r.max_drawdown as number | null, String(r.status), Number(r.sample_count), minN)}</td>
+                    <td>{fmtPct(r.mean_giveback as number | null, String(r.status), Number(r.sample_count), minN)}</td>
+                    <td>
+                      {fmtPct(
+                        r.delta_return_vs_no_exit as number | null,
+                        String(r.status),
+                        Number(r.sample_count),
+                        minN
+                      )}
+                    </td>
+                    <td>{labelStatus(String(r.status))}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {(() => {
+              const ml = (data?.exit_lab as { ml?: Record<string, unknown> })?.ml;
+              if (!ml) return null;
+              return (
+                <p className="muted" style={{ fontSize: "0.85rem" }}>
+                  Exit ML：{String(ml.status || (ml.available ? "OK" : "未训练"))}
+                  {ml.sample_count != null ? ` · 样本 ${String(ml.sample_count)}` : ""}
+                  {ml.mse != null ? ` · MSE ${Number(ml.mse).toFixed(4)}` : ""}
+                </p>
+              );
+            })()}
+            <Link className="btn btn-ghost" to="/positions">
+              打开持仓/退出 →
+            </Link>
+          </div>
+        )}
+
         {Array.isArray(data?.lab_summary) && (data?.lab_summary as string[]).length > 0 && (
           <div className="persona-panel compact" style={{ marginTop: "0.75rem" }}>
             <h3>程序结论</h3>

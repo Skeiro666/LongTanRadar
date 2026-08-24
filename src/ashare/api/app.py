@@ -697,6 +697,31 @@ def create_app(config_path: str | None = None) -> FastAPI:
 
         return build_alpha_lab(get_cfg(), window=window)
 
+    @app.get("/api/exit/book")
+    def api_exit_book() -> dict[str, Any]:
+        from ashare.services.exit_lab import evaluate_exit_book
+
+        return evaluate_exit_book(get_cfg())
+
+    @app.get("/api/exit/lab")
+    def api_exit_lab() -> dict[str, Any]:
+        from ashare.services.exit_lab import build_exit_lab
+
+        return build_exit_lab(get_cfg())
+
+    @app.get("/api/exit/{symbol}")
+    def api_exit_symbol(symbol: str) -> dict[str, Any]:
+        from ashare.services.exit_lab import evaluate_exit_book
+
+        pack = evaluate_exit_book(get_cfg())
+        for row in pack.get("positions") or []:
+            if str(row.get("symbol")) == symbol or str(row.get("symbol")).endswith(symbol):
+                return {
+                    **row,
+                    "chart": (pack.get("charts") or {}).get(row.get("symbol")),
+                }
+        raise HTTPException(status_code=404, detail="position or exit signal not found")
+
     @app.post("/api/ml/rank/train")
     def api_ml_rank_train() -> dict[str, Any]:
         from ashare.data.provider import ensure_panel

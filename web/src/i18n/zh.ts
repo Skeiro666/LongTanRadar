@@ -95,6 +95,7 @@ const NOTIFY_LEVEL: Record<string, string> = {
   STRONG_BUY: "强买",
   RISK_EXIT: "风险退出",
   RATING_EXIT: "评级退出",
+  ALPHA_EXIT: "Alpha退出",
 };
 
 const SOURCE_ALPHA: Record<string, string> = {

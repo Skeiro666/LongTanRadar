@@ -136,6 +136,7 @@ export default function Overview() {
             <span>放弃 {ratings.PASS ?? 0}</span>
             <span className="muted">新闻发现 {terminal.counts?.news_discovery ?? 0}</span>
             <Link to="/research" className="btn btn-ghost">研究终端 →</Link>
+            <Link to="/positions" className="btn btn-ghost">持仓/退出 →</Link>
             <Link to="/alpha-lab" className="btn btn-ghost">Alpha 实验室 →</Link>
             <Link to="/token" className="btn btn-ghost">Token 成本 →</Link>
           </div>

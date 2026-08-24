@@ -1,0 +1,90 @@
+# Exit Engine — configuration (no hardcoded thresholds in code)
+
+enabled: true
+mode: heuristic   # heuristic | ml | hybrid
+
+# Exit score → action (higher = weaker hold thesis)
+thresholds:
+  hold_max: 0.30
+  hold_reduce_max: 0.60
+  reduce_max: 0.80
+  # > reduce_max → EXIT
+
+confidence:
+  min_features: 4          # available features needed for full confidence
+  default: 0.55
+
+lookback:
+  bars: 60
+  ma_short: 5
+  ma_mid: 10
+  ma_long: 20
+  ma_xlong: 60
+
+holding_period:
+  # calibration hint only — not a hard sell rule
+  soft_days: 10
+  hard_days: 40
+
+trailing_atr:
+  enabled: true
+  multiplier: 2.5
+  # RISK_EXIT only — does not replace Exit Engine
+
+ml:
+  enabled: true
+  minimum_sample: 80
+  target_horizon: 10
+  model_name: exit_lgbm_v1
+
+news:
+  reversal_weight: 0.18
+  positive_to_negative: true
+
+event:
+  completion_weight: 0.15
+  states_that_raise_exit:
+    - COMPLETED
+    - INVALIDATED
+
+portfolio:
+  concentration_weight: 0.08
+  max_single_weight: 0.35
+
+weights:
+  trend_decay: 0.12
+  momentum_decay: 0.14
+  relative_strength_decay: 0.10
+  volume_distribution: 0.08
+  price_extension: 0.08
+  drawdown: 0.10
+  volatility: 0.06
+  breakout_failure: 0.08
+  moving_average_break: 0.08
+  news_reversal: 0.10
+  event_completion: 0.08
+  time_in_position: 0.05
+  profit_loss: 0.04
+  portfolio_concentration: 0.04
+  ml_forward_return: 0.15   # only when ML available
+
+backtest:
+  fixed_hold_days: 10
+  fixed_stop_pct: 0.08
+  fixed_take_pct: 0.15
+  horizons: [1, 5, 10, 20]
+
+notification:
+  alpha_exit_enabled: true
+  exit_score_threshold: 0.60
+  levels:
+    - ALPHA_EXIT
+
+explain:
+  # Local/Cloud LLM only when score high or conflict — never changes exit_score
+  local_score_threshold: 0.70
+  cloud_score_threshold: 0.85
+  allow_cloud: false
+
+minimum_sample: 30
+version: exit_v1

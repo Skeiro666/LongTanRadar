@@ -55,7 +55,12 @@ def _paper_positions(cfg: dict[str, Any]) -> set[str]:
 
         broker = build_live_or_paper(cfg)
         broker.connect()
-        return {to_symbol(p.symbol) for p in broker.get_positions() if getattr(p, "quantity", 0) > 0}
+        out = set()
+        for p in broker.get_positions():
+            shares = int(getattr(p, "shares", 0) or getattr(p, "quantity", 0) or 0)
+            if shares > 0:
+                out.add(to_symbol(p.symbol))
+        return out
     except Exception:  # noqa: BLE001
         return set()
 

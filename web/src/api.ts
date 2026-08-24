@@ -117,6 +117,9 @@ export const api = {
   mlWeightExperimentRun: () =>
     req<any>("/api/ml/weight-experiment", { method: "POST", body: "{}" }),
   aiCost: () => req<any>("/api/ai/cost"),
+  exitBook: () => req<any>("/api/exit/book"),
+  exitLab: () => req<any>("/api/exit/lab"),
+  exitSymbol: (symbol: string) => req<any>(`/api/exit/${encodeURIComponent(symbol)}`),
 };
 
 export function pct(n: number | undefined) {

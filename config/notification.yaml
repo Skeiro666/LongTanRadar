@@ -38,6 +38,7 @@ channels:
   strong_buy: [wechat, email]
   rating_exit: [wechat, email]
   risk_exit: [wechat, email]
+  alpha_exit: [wechat, email]
 
 wechat:
   enabled: true

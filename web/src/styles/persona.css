@@ -1217,3 +1217,56 @@ a {
 
 .cal-label { display: block; margin-top: 0.25rem; }
 .cal-n { font-size: 0.68rem; }
+
+/* V6 Exit Engine */
+.positions-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 0.75rem;
+}
+
+.exit-score-card {
+  margin-bottom: 0.5rem;
+}
+
+.exit-score-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.exit-score-meter {
+  text-align: center;
+  margin: 0.5rem 0;
+}
+
+.exit-score-value {
+  font-size: 2rem;
+  font-family: var(--p-font-display);
+  color: var(--p-red-glow, #ff6b6b);
+}
+
+.exit-bar {
+  height: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-top: 0.35rem;
+}
+
+.exit-bar-fill {
+  height: 100%;
+  background: var(--p-red, #c41e3a);
+}
+
+.exit-reasons ol {
+  margin: 0.25rem 0 0;
+  padding-left: 1.2rem;
+  font-size: 0.88rem;
+}
+
+.position-exit-chart {
+  margin-top: 0.5rem;
+}

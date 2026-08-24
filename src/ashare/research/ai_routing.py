@@ -79,6 +79,11 @@ def compute_ai_routing(candidate: dict[str, Any], cfg: dict[str, Any] | None = N
 
     conflict_pack = compute_conflict_score(candidate, cfg)
     conflict = float(conflict_pack["conflict_score"])
+    news_c = candidate.get("news_conflict") if isinstance(candidate.get("news_conflict"), dict) else {}
+    news_conflict = float(news_c.get("conflict_score") or candidate.get("conflict_score") or 0)
+    if news_conflict > conflict:
+        conflict = news_conflict
+        conflict_pack = {**conflict_pack, "news_conflict": news_c, "conflict_score": conflict}
     cs = float(conflict_pack["signals"].get("candidate_score") or 0)
 
     dq = 1.0

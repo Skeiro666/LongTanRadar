@@ -70,28 +70,56 @@ class NewsOpportunityEngine:
         registry = EvidenceRegistry(self.cfg)
 
         use_llm = bool(disc.get("llm_mapping", False))
+        intel_cfg = dict(self.news_cfg.get("intelligence") or {})
+        use_intel = bool(intel_cfg.get("enabled", True))
         news_client = None
-        if use_llm:
+        intel_engine = None
+        if use_llm or use_intel:
             from ashare.news.llm_mapping import news_llm_client
+            from ashare.news.intelligence import LocalNewsIntelligence
 
             news_client = news_llm_client(self.cfg)
+            if use_intel and news_client is not None:
+                intel_engine = LocalNewsIntelligence(self.cfg, news_client)
 
         events: list[ExtractedEvent] = []
         candidates: list[NewsCandidate] = []
         rejected: list[dict[str, Any]] = []
+        watchlist: list[dict[str, Any]] = []
+        hypotheses: list[dict[str, Any]] = []
+
+        from ashare.news.entity_resolve import annotate_entity_source
+        from ashare.news.enrich import (
+            entity_source_of,
+            extract_for_news,
+            hypothesis_from_intel,
+            is_direct_entity,
+            is_inferred_entity,
+        )
+        from ashare.news.schema import discovery_grade
 
         for n in news:
             cat = classify_news(n)
-            ents = link_entities_open(n, name_map=names, aliases=als)
-            if not ents and news_client is not None:
+            ents = [annotate_entity_source(e) for e in link_entities_open(n, name_map=names, aliases=als)]
+            if not ents and use_llm and news_client is not None:
                 from ashare.news.llm_mapping import infer_entities_from_news
 
                 ents = infer_entities_from_news(n, news_client)
+            intel = extract_for_news(n, intel_engine, ents, classification=cat)
+            if intel and not ents:
+                hyp = hypothesis_from_intel(intel, n)
+                if hyp:
+                    hypotheses.append({"news_id": n.id, "title": n.title, **hyp})
             extracted = extract_events(
                 n,
                 symbol=ents[0].symbol if ents else "",
                 relevance=ents[0].confidence if ents else 0.35,
             )
+            if intel and intel.get("event_type") and intel.get("event_type") != "unknown":
+                for ev in extracted:
+                    ev.event_type = str(intel.get("event_type") or ev.event_type)
+                    if intel.get("direction") and intel.get("direction") != "unknown":
+                        ev.direction = str(intel["direction"])
             for ev in extracted:
                 link_conf = ents[0].confidence if ents else 0.0
                 ev = annotate_event(ev, n, link_confidence=link_conf, classification=cat)
@@ -108,12 +136,19 @@ class NewsOpportunityEngine:
                             "reject_reason": reason,
                             "mapping_method": "none",
                             "mapping_status": "unavailable",
+                            "entity_source": "unknown",
+                            "discovery_grade": "NONE",
+                            "news_role": "none",
                             "evidence_ids": [n.id],
+                            "news_intelligence": intel or {},
+                            "hypothesis": hypothesis_from_intel(intel, n),
                         }
                     )
                     continue
                 for ent in ents:
                     method = ent.mapping_method or ent.link_source or "none"
+                    src = entity_source_of(ent)
+                    grade = discovery_grade(src)
                     ev_dict = ev.to_dict()
                     ekey = EvidenceRegistry.evidence_key(n.id, n.title)
                     evidence_id = registry.register(
@@ -132,6 +167,7 @@ class NewsOpportunityEngine:
                     hyp = hyp_obj.to_dict(ev)
                     inv_hyp = hyp_obj.to_investment_hypothesis(ev)
                     news_score = float(ev.impact_score) * max(float(ent.confidence), 0.2)
+                    intel_score = float((intel or {}).get("news_intelligence_score") or 0)
                     cand = NewsCandidate(
                         symbol=ent.symbol,
                         candidate_source="news",
@@ -142,11 +178,11 @@ class NewsOpportunityEngine:
                         event_direction=ev.direction,
                         direction=ev.direction,
                         event_impact=float(ev.impact_score),
-                        news_score=news_score,
+                        news_score=max(news_score, intel_score),
                         relevance_score=float(ev.relevance),
-                        novelty_score=None,
-                        novelty=None,
-                        novelty_available=False,
+                        novelty_score=(intel or {}).get("novelty"),
+                        novelty=(intel or {}).get("novelty"),
+                        novelty_available=bool(intel),
                         source_quality=str(ev.source_quality or "C"),
                         confidence=float(ent.confidence),
                         time_horizon=ev.time_horizon,
@@ -158,13 +194,22 @@ class NewsOpportunityEngine:
                         investment_hypothesis=inv_hyp,
                         related_symbols=[ent.symbol],
                         mapping_method=method,
-                        status="REJECTED" if method == "llm_inference" else "DISCOVERED",
+                        entity_source=src,
+                        discovery_grade=grade,
+                        news_role="discovery" if is_direct_entity(ent) else "none",
+                        news_intelligence=intel or {},
+                        news_intelligence_score=intel_score,
+                        evidence_direction=str((intel or {}).get("direction") or "unknown"),
+                        hypothesis=hypothesis_from_intel(intel, n) if is_inferred_entity(ent) else {},
+                        status="REJECTED" if is_inferred_entity(ent) else "DISCOVERED",
                         lifecycle_status="NEW",
                         lifecycle_reason="fresh_discovery",
-                        reject_reason="LOW_CONFIDENCE" if method == "llm_inference" else "",
+                        reject_reason="INFERRED_DISCOVERY" if is_inferred_entity(ent) else "",
                     )
-                    if method == "llm_inference":
-                        rejected.append(cand.to_dict())
+                    row = cand.to_dict()
+                    if is_inferred_entity(ent):
+                        watchlist.append(row)
+                        rejected.append(row)
                     else:
                         candidates.append(cand)
 
@@ -199,11 +244,15 @@ class NewsOpportunityEngine:
             "n_event_clusters": len(event_clusters),
             "n_candidates": len(candidates),
             "n_rejected": len(rejected),
+            "n_watchlist": len(watchlist),
+            "n_hypotheses": len(hypotheses),
             "events": [e.to_dict() for e in events],
             "event_clusters": event_clusters,
             "news_candidates": [c.to_dict() for c in candidates],
+            "news_watchlist": watchlist[:80],
+            "hypotheses": hypotheses[:80],
             "rejected": rejected[:200],
-            "note": "NewsCandidate is discovery only — not a trading action.",
+            "note": "NewsCandidate is DIRECT discovery only — inferred entities go to watchlist/hypothesis, never a trade action.",
         }
         if persist:
             try:
@@ -223,8 +272,12 @@ class NewsOpportunityEngine:
             "n_events": 0,
             "n_candidates": 0,
             "n_rejected": 0,
+            "n_watchlist": 0,
+            "n_hypotheses": 0,
             "events": [],
             "news_candidates": [],
+            "news_watchlist": [],
+            "hypotheses": [],
             "rejected": [],
             "error": error,
             "note": "News discovery unavailable; quant/event/profit path must continue.",

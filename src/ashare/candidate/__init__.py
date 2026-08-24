@@ -122,6 +122,9 @@ class CandidateEngine:
             if str(nc_raw.get("status") or "") == "REJECTED":
                 rejected.append(dict(nc_raw))
                 continue
+            if str(nc_raw.get("discovery_grade") or "") == "INFERRED":
+                rejected.append({**nc_raw, "reject_reason": "INFERRED_DISCOVERY"})
+                continue
             try:
                 sym = to_symbol(nc_raw.get("symbol"))
             except Exception:  # noqa: BLE001
@@ -257,6 +260,19 @@ class CandidateEngine:
             net = float(pkg.get("net_event_score") or 0)
             if net:
                 r["news_score"] = net
+            from ashare.news.conflict import compute_news_conflict
+
+            conflict = compute_news_conflict(
+                intelligence=(pkg.get("news_intelligence") or [None])[0] if pkg.get("news_intelligence") else None,
+                events=list(pkg.get("events") or []),
+                candidate=r,
+            )
+            r["news_conflict"] = conflict
+            r["conflict_score"] = float(conflict.get("conflict_score") or 0)
+            if (r.get("news_discovery") or {}).get("news_role") == "discovery" and pkg.get("news_role") == "evidence":
+                nd = dict(r.get("news_discovery") or {})
+                nd["news_role"] = "both"
+                r["news_discovery"] = nd
             r["candidate_score"] = compute_candidate_score(r, cw, ml_weight=ml_weight)
             r["in_council"] = True
         research.sort(key=lambda x: x["candidate_score"], reverse=True)

@@ -62,6 +62,7 @@ class NewsEntity:
     confidence: float = 0.0
     link_source: str = ""  # title | content | code | query_weak | official_name | alias | llm_inference
     mapping_method: str = ""
+    entity_source: str = ""  # explicit_code | explicit_company | alias | fuzzy | llm_inferred | unknown
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -131,6 +132,14 @@ class NewsCandidate:
     investment_hypothesis: dict[str, Any] = field(default_factory=dict)
     related_symbols: list[str] = field(default_factory=list)
     mapping_method: str = "none"
+    entity_source: str = "unknown"
+    discovery_grade: str = "NONE"
+    news_role: str = "none"
+    news_intelligence: dict[str, Any] = field(default_factory=dict)
+    news_intelligence_score: float = 0.0
+    news_conflict: dict[str, Any] = field(default_factory=dict)
+    evidence_direction: str = "unknown"
+    hypothesis: dict[str, Any] = field(default_factory=dict)
     status: str = "DISCOVERED"
     reject_reason: str = ""
 

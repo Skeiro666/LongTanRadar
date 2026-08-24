@@ -37,10 +37,27 @@ discovery:
 llm:
   provider: local
   base_url: http://127.0.0.1:11434/v1
-  model: qwen3.5:latest
+  model: qwen3.5:4b
   api_key_env: NEWS_AI_API_KEY
   temperature: 0.1
-  timeout_sec: 120
+  timeout_sec: 60
+
+# Local News Intelligence (Task B). Never calls Council.
+intelligence:
+  enabled: true
+  prompt_version: news_intel_v1
+  max_concurrency: 2
+  max_retries: 1
+  max_llm_per_cycle: 24
+  max_tokens_per_cycle: 80000
+  timeout_sec: 60
+  score_weights:
+    importance: 0.22
+    novelty: 0.18
+    market_relevance: 0.22
+    event_confidence: 0.16
+    entity_confidence: 0.12
+    source_quality: 0.10
 
 windows_hours:
   last_24h: 24

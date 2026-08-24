@@ -68,8 +68,22 @@ class NewsIntelligenceEngine:
         events: list[ExtractedEvent] = []
         classifications: dict[str, str] = {}
         entities_out: list[dict[str, Any]] = []
+        intel_client = None
+        intel_engine = None
+        try:
+            from ashare.news.intelligence import LocalNewsIntelligence
+            from ashare.news.llm_mapping import news_llm_client
+
+            intel_client = news_llm_client(self.cfg)
+            if intel_client is not None:
+                intel_engine = LocalNewsIntelligence(self.cfg, intel_client)
+        except Exception:  # noqa: BLE001
+            intel_engine = None
         for n in fetched:
             ents = link_entities(n, symbol=sym, name=name)
+            from ashare.news.entity_resolve import annotate_entity_source
+
+            ents = [annotate_entity_source(e) for e in ents]
             conf = ents[0].confidence if ents else 0.0
             if conf < min_link:
                 weak_dropped.append(
@@ -78,6 +92,7 @@ class NewsIntelligenceEngine:
                         "title": n.title[:160],
                         "link_confidence": conf,
                         "link_source": ents[0].link_source if ents else "none",
+                        "entity_source": getattr(ents[0], "entity_source", "") if ents else "unknown",
                         "source": n.source,
                     }
                 )
@@ -86,6 +101,11 @@ class NewsIntelligenceEngine:
             entities_out.extend(e.to_dict() for e in ents)
             cat = classify_news(n)
             classifications[n.id] = cat
+            intel_row = None
+            if intel_engine is not None:
+                from ashare.news.enrich import extract_for_news
+
+                intel_row = extract_for_news(n, intel_engine, ents, classification=cat)
             for ev in extract_events(n, symbol=sym, relevance=conf):
                 ev = annotate_event(ev, n, link_confidence=conf, classification=cat)
                 gap = expectation_gap()
@@ -93,6 +113,8 @@ class NewsIntelligenceEngine:
                 ev.expectation_gap = gap["gap"]
                 ev.expectation_note = gap["note"]
                 events.append(ev)
+            if intel_row:
+                n.raw_payload = {**(n.raw_payload or {}), "news_intelligence": intel_row, "news_role": "evidence"}
 
         net = net_event_score(events)
         pkg = build_package(
@@ -119,6 +141,25 @@ class NewsIntelligenceEngine:
             "event_engine_version": self.news_cfg.get("event_engine_version"),
             "provider_version": self.news_cfg.get("provider_version"),
         }
+        intel_rows = [
+            {
+                **(n.raw_payload.get("news_intelligence") or {}),
+                "news_id": n.id,
+                "news_role": "evidence",
+                "evidence_direction": (n.raw_payload.get("news_intelligence") or {}).get("direction") or "unknown",
+            }
+            for n in linked
+            if (n.raw_payload or {}).get("news_intelligence")
+        ]
+        pkg["news_intelligence"] = intel_rows
+        pkg["news_role"] = "evidence"
+        if intel_rows:
+            from ashare.news.conflict import compute_news_conflict
+
+            pkg["news_conflict"] = compute_news_conflict(
+                intelligence=intel_rows[0],
+                events=[e.to_dict() for e in events],
+            )
         return pkg
 
     def collect_latest(

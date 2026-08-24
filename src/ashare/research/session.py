@@ -117,12 +117,22 @@ class ResearchSessionEngine:
         cost_tracker = get_cost_tracker(self.cfg)
 
         reports: list[dict[str, Any]] = []
+        from ashare.research.ai_routing import compute_ai_routing, quant_only_decision
         from ashare.research.progress import get_research_progress
 
         prog = get_research_progress()
+        routing_skips = 0
         for i, c in enumerate(council_candidates):
             sym = str(c.get("symbol") or "")
             name = str(c.get("name") or sym)
+            routing = compute_ai_routing(c, self.cfg)
+            c["ai_routing"] = routing
+            if routing.get("skip_council"):
+                routing_skips += 1
+                rep = self._routing_skip_report(c, routing)
+                prog.log("council", f"跳过 {name} — Routing LOW (0 LLM)", detail=routing)
+                reports.append(rep)
+                continue
             if llm_used >= max_llm:
                 reports.append(self._budget_skip_report(c, llm_used))
                 prog.log("council", f"跳过 {name} — LLM 预算用尽", level="warn")
@@ -134,6 +144,7 @@ class ResearchSessionEngine:
                 continue
             prog.log("council", f"[{i + 1}/{len(council_candidates)}] 研究 {name} ({sym})")
             rep = self.run_session(c)
+            rep["ai_routing"] = routing
             meta = dict((rep.get("council_meta") or {}))
             llm_used += len(meta.get("roles_called") or [])
             if (rep.get("chairman") or {}).get("source") not in {"incremental_reuse", "cache"}:
@@ -148,8 +159,44 @@ class ResearchSessionEngine:
 
         summary["llm_budget"] = budget_snapshot(cost_tracker.cycle_summary(), self.cfg)
         summary["llm_budget"]["call_budget"] = {"max": max_llm, "used": llm_used}
+        from ashare.research.token_efficiency import routing_outcome_summary
+
+        summary["ai_routing"] = {**routing_outcome_summary(reports), "n_skip_low": routing_skips}
         self._last_gate_summary = summary
         return reports
+
+    def _routing_skip_report(self, candidate: dict[str, Any], routing: dict[str, Any]) -> dict[str, Any]:
+        rid = f"R{datetime.now(timezone.utc).strftime('%Y%m%d')}{uuid4().hex[:6].upper()}"
+        chair = quant_only_decision(candidate)
+        rating = str(chair.get("rating") or "WATCH")
+        return {
+            "research_id": rid,
+            "symbol": candidate.get("symbol"),
+            "name": candidate.get("name"),
+            "research_time": datetime.now(timezone.utc).isoformat(),
+            "trigger": candidate.get("trigger"),
+            "quant": {
+                "leader_score": candidate.get("leader_score"),
+                "ml_prediction": candidate.get("ml_prediction"),
+                "factor_score": candidate.get("candidate_score"),
+            },
+            "profit_inflection": candidate.get("profit_inflection") or {},
+            "event": candidate.get("event") or {},
+            "gate": candidate.get("gate") or {},
+            "candidate_sources": candidate.get("candidate_sources") or [],
+            "research_hypotheses": candidate.get("research_hypotheses") or [],
+            "council": {},
+            "debate": [],
+            "chairman": chair,
+            "decision": {
+                "research_rating": rating,
+                "action": chair.get("trading_action"),
+                "position_suggestion": 0,
+            },
+            "news_package": candidate.get("news_package") or {},
+            "ai_routing": routing,
+            "council_meta": {"roles_called": [], "routing_skip": True},
+        }
 
     def gate_summary(self) -> dict[str, Any]:
         return getattr(self, "_last_gate_summary", {})

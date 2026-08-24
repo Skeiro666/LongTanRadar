@@ -20,8 +20,10 @@ def resolve_primary_horizons(outcome: dict[str, Any]) -> tuple[dict[str, Any], s
 def apply_primary_truth(outcomes: list[dict[str, Any]]) -> list[dict[str, Any]]:
     for outcome in outcomes:
         horizons, source = resolve_primary_horizons(outcome)
-        outcome["primary_source"] = source
+        outcome["primary_entry_source"] = source
         outcome["primary_horizons"] = horizons
+        # Legacy alias — entry type only (do not use for discovery source)
+        outcome["primary_source"] = source
     return outcomes
 
 
@@ -37,8 +39,8 @@ def summarize_portfolio_attribution(
     n_fill = 0
     n_signal = 0
     for o in outcomes:
-        source = str(o.get("primary_source") or PRIMARY_SIGNAL_CLOSE)
-        if source == PRIMARY_PAPER_FILL:
+        source = str(o.get("primary_entry_source") or o.get("primary_source") or PRIMARY_SIGNAL_CLOSE)
+        if source in {PRIMARY_PAPER_FILL, "paper_fill"}:
             n_fill += 1
         else:
             n_signal += 1

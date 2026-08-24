@@ -279,6 +279,11 @@ class ReviewEngine:
             pass
         council_ablation = run_council_ablation(reports, outcomes, self.cfg, llm_cost_usd=llm_cost)
         calibration = build_calibration(reports, outcomes, self.cfg)
+        from ashare.research.ml_ablation import run_ml_ablation
+        from ashare.research.unified_attribution import build_unified_attribution
+
+        unified = build_unified_attribution(reports, outcomes, self.cfg)
+        ml_ab = run_ml_ablation(reports, outcomes, self.cfg)
         # V5.2 P2-1: canonical ai_incremental_alpha = same-universe Top-K ablation
         unified_alpha = dict(topk_alpha)
         unified_alpha["canonical"] = True
@@ -297,7 +302,9 @@ class ReviewEngine:
             "discovery_attribution": discovery_attr,
             "signal_attribution": signal_attr,
             "ai_council_ablation": council_ablation,
+            "ml_ablation": ml_ab,
             "calibration": calibration,
+            "unified_attribution": unified,
             "horizon": str(horizon),
             "benchmark_snapshot": benchmark_snapshot,
             "portfolio_attribution": portfolio_truth,
@@ -498,7 +505,39 @@ class ReviewEngine:
         path = root / "data" / "research_outcomes.json"
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(outcomes, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
+        hist = root / "data" / "research_outcomes.jsonl"
+        with hist.open("a", encoding="utf-8") as f:
+            for o in outcomes:
+                f.write(json.dumps(o, ensure_ascii=False, default=str) + "\n")
         return path
+
+    def load_outcomes_window(self, *, days: int | None = None) -> list[dict[str, Any]]:
+        """Load outcomes from jsonl history; filter by signal_time if days set."""
+        root = Path(self.cfg.get("_root") or Path(__file__).resolve().parents[2])
+        hist = root / "data" / "research_outcomes.jsonl"
+        rows: list[dict[str, Any]] = []
+        if hist.exists():
+            for line in hist.read_text(encoding="utf-8").splitlines():
+                if line.strip():
+                    try:
+                        rows.append(json.loads(line))
+                    except json.JSONDecodeError:
+                        pass
+        if not rows:
+            rows = self.load_outcomes()
+        if days is None or days <= 0:
+            return rows
+        import pandas as pd
+
+        cutoff = pd.Timestamp.now(tz="UTC") - pd.Timedelta(days=days)
+        out = []
+        for o in rows:
+            ts = pd.Timestamp(str(o.get("signal_time") or "")[:19], tz="UTC")
+            if ts.tzinfo is None:
+                ts = ts.tz_localize("UTC")
+            if ts >= cutoff:
+                out.append(o)
+        return out or rows
 
     def load_outcomes(self) -> list[dict[str, Any]]:
         root = Path(self.cfg.get("_root") or Path(__file__).resolve().parents[2])

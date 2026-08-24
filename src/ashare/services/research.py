@@ -339,6 +339,19 @@ def run_research(cfg: dict[str, Any], top_n: int | None = None) -> dict[str, Any
                         outcome_pack["factor_attribution"] = fr
                     except Exception as fac_exc:  # noqa: BLE001
                         logger.debug("factor attribution skipped: %s", fac_exc)
+                    try:
+                        from ashare.research.lab_summary import build_lab_summary
+                        from ashare.research.token_efficiency import compute_token_efficiency
+
+                        outcome_pack["token_efficiency"] = compute_token_efficiency(
+                            cfg,
+                            gate_summary=gate_summary,
+                            routing_summary=gate_summary.get("ai_routing"),
+                            outcome_pack=outcome_pack,
+                        )
+                        outcome_pack["lab_summary"] = build_lab_summary(outcome_pack)
+                    except Exception as te_exc:  # noqa: BLE001
+                        logger.debug("token efficiency skipped: %s", te_exc)
             except Exception as exc:  # noqa: BLE001
                 logger.warning("outcome attribution skipped: %s", exc)
                 outcome_pack = {"available": False, "error": str(exc)[:300]}

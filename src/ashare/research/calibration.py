@@ -62,7 +62,9 @@ def build_calibration(
 ) -> dict[str, Any]:
     acfg = dict(load_yaml_config(cfg, "research").get("attribution") or {})
     horizons = list(acfg.get("horizons_days") or [1, 5, 10, 20])
-    minimum_sample = int(acfg.get("minimum_sample") or 5)
+    from ashare.research.signal_attribution import minimum_sample_size
+
+    minimum_sample = minimum_sample_size(cfg)
 
     outcome_by_sym = {str(o.get("symbol")): o for o in outcomes}
     report_by_sym = {str(r.get("symbol")): r for r in reports}

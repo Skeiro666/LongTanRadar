@@ -11,7 +11,11 @@ from ashare.research.signal_attribution import horizon_metrics
 
 
 def _attribution_cfg(cfg: dict[str, Any] | None) -> dict[str, Any]:
-    return dict(load_yaml_config(cfg, "research").get("attribution") or {})
+    from ashare.research.signal_attribution import minimum_sample_size
+
+    acfg = dict(load_yaml_config(cfg, "research").get("attribution") or {})
+    acfg["_min_sample"] = minimum_sample_size(cfg)
+    return acfg
 
 
 def _no_council_score(r: dict[str, Any]) -> float:
@@ -57,6 +61,8 @@ def _mean_stats(values: list[float]) -> dict[str, Any]:
 def _efficiency_status(incremental: float | None, llm_cost: float, n: int, min_sample: int) -> str:
     if n < min_sample or incremental is None:
         return "UNPROVEN"
+    if incremental < 0:
+        return "NEGATIVE_INCREMENTAL_ALPHA"
     if llm_cost <= 0:
         return "UNPROVEN"
     eff = incremental / llm_cost
@@ -82,7 +88,7 @@ def run_council_ablation(
     """
     acfg = _attribution_cfg(cfg)
     horizons = list(acfg.get("horizons_days") or [1, 5, 10, 20])
-    minimum_sample = int(acfg.get("minimum_sample") or 5)
+    minimum_sample = int(acfg.get("_min_sample") or 30)
     k = int(top_k or (load_yaml_config(cfg, "research").get("role_ablation") or {}).get("top_k") or 5)
 
     outcome_by_sym = {str(o.get("symbol")): o for o in outcomes}
@@ -124,12 +130,16 @@ def run_council_ablation(
         if a_stats.get("mean") is not None and b_stats.get("mean") is not None:
             incr = float(b_stats["mean"]) - float(a_stats["mean"])
         n = min(a_stats.get("sample_count") or 0, b_stats.get("sample_count") or 0)
+        st = "INSUFFICIENT_SAMPLE" if n < minimum_sample else (
+            "NEGATIVE_INCREMENTAL_ALPHA" if incr is not None and incr < 0 else "OK"
+        )
         by_horizon[h_key] = {
             "no_council": a_stats,
             "with_council": b_stats,
             "ai_incremental_alpha": incr,
             "insufficient_sample": n < minimum_sample,
             "sample_count": n,
+            "status": st,
         }
 
     cost = float(llm_cost_usd or 0)

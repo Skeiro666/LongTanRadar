@@ -118,6 +118,14 @@ attribution:
   primary_source_priority: [profit, event, quant, news, ml]
   horizons_days: [1, 5, 10, 20]
   minimum_sample: 5
+  minimum_sample_size: 30
+
+ai_routing:
+  enabled: true
+  low_conflict_max: 0.25
+  high_conflict_min: 0.55
+  low_score_skip_above: 0.72
+  low_score_skip_below: 0.18
 
 candidate_score:
   semantic: cross_sectional_ranking_score

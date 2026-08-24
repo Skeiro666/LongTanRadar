@@ -97,7 +97,7 @@ export const api = {
   researchAlphaDashboard: (horizon = "5") => req<any>(`/api/research/alpha-dashboard?horizon=${horizon}`),
   notifications: (limit = 100) => req<any>(`/api/notifications?limit=${limit}`),
   notificationStats: () => req<any>("/api/notifications/stats"),
-  alphaLab: () => req<any>("/api/alpha-lab"),
+  alphaLab: (window = "all") => req<any>(`/api/alpha-lab?window=${encodeURIComponent(window)}`),
   notificationStatus: (symbol: string, researchId = "") =>
     req<any>(
       `/api/notifications/status?symbol=${encodeURIComponent(symbol)}${researchId ? `&research_id=${encodeURIComponent(researchId)}` : ""}`

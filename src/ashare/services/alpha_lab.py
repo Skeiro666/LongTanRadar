@@ -1,165 +1,166 @@
-"""V5.4 Alpha Lab — aggregate validation metrics for dashboard."""
+"""V5.4 Alpha Lab — evidence dashboard (Measurement > Features)."""
 
 from __future__ import annotations
 
-import json
-from pathlib import Path
 from typing import Any
 
-
-def _status_from_ablation(ab: dict[str, Any] | None) -> str:
-    if not ab or not ab.get("available"):
-        return "UNPROVEN"
-    return str(ab.get("status") or "UNPROVEN")
+from ashare.research.lab_summary import build_lab_summary
+from ashare.research.signal_attribution import minimum_sample_size, source_status_label
 
 
-def _row(
-    module: str,
+def _window_days(window: str) -> int | None:
+    w = (window or "all").lower().strip()
+    if w in {"7d", "7"}:
+        return 7
+    if w in {"30d", "30"}:
+        return 30
+    if w in {"90d", "90"}:
+        return 90
+    return None
+
+
+def _source_row(
+    source: str,
+    horizons: dict[str, Any],
     *,
-    samples: int,
-    t5: float | None,
-    t10: float | None,
-    t20: float | None,
-    incremental: float | None,
-    cost: float | None,
-    efficiency: float | None,
-    status: str,
+    min_n: int,
+    cost: float = 0.0,
+    incremental: float | None = None,
 ) -> dict[str, Any]:
+    h1 = horizons.get("1") or {}
+    h5 = horizons.get("5") or {}
+    h10 = horizons.get("10") or {}
+    h20 = horizons.get("20") or {}
+    n = int(h5.get("sample_count") or 0)
+    sel5 = (h5.get("selection_alpha") or {}).get("mean") if not h5.get("insufficient_sample") else None
+    sel10 = (h10.get("selection_alpha") or {}).get("mean") if not h10.get("insufficient_sample") else None
+    sel20 = (h20.get("selection_alpha") or {}).get("mean") if not h20.get("insufficient_sample") else None
+    sel1 = (h1.get("selection_alpha") or {}).get("mean") if not h1.get("insufficient_sample") else None
+    med = (h5.get("selection_alpha") or {}).get("median") if not h5.get("insufficient_sample") else None
+    wr = (h5.get("selection_alpha") or {}).get("win_rate") if not h5.get("insufficient_sample") else None
+    status = h5.get("status") or source_status_label(sel5, sample_count=n, minimum_sample=min_n, incremental=incremental)
     return {
-        "module": module,
-        "samples": samples,
-        "t5_alpha": t5,
-        "t10_alpha": t10,
-        "t20_alpha": t20,
-        "incremental_alpha": incremental,
+        "source": source,
+        "sample_count": n,
+        "t1_alpha": sel1,
+        "t5_alpha": sel5,
+        "t10_alpha": sel10,
+        "t20_alpha": sel20,
+        "win_rate": wr,
+        "median_return": med,
         "cost_usd": cost,
-        "efficiency": efficiency,
+        "incremental_alpha": incremental,
         "status": status,
     }
 
 
-def build_alpha_lab(cfg: dict[str, Any] | None = None) -> dict[str, Any]:
+def build_alpha_lab(cfg: dict[str, Any] | None = None, *, window: str = "all") -> dict[str, Any]:
+    from ashare.research.tracking import ReviewEngine
     from ashare.services.research import latest_research
 
     cfg = cfg or {}
-    data = latest_research(cfg) or {}
-    pack = data.get("research_outcomes") or {}
-    rows: list[dict[str, Any]] = []
+    days = _window_days(window)
+    engine = ReviewEngine(cfg)
+    if days:
+        outcomes = engine.load_outcomes_window(days=days)
+        data = latest_research(cfg) or {}
+        pack = dict(data.get("research_outcomes") or {})
+        if outcomes:
+            from ashare.research.signal_attribution import enrich_outcome_sources, summarize_signal_attribution
 
-    # Signal attribution by primary source
+            for o in outcomes:
+                enrich_outcome_sources(o, cfg)
+            pack["signal_attribution"] = summarize_signal_attribution(outcomes, cfg)
+            pack["outcomes"] = outcomes
+    else:
+        data = latest_research(cfg) or {}
+        pack = dict(data.get("research_outcomes") or {})
+        outcomes = list(pack.get("outcomes") or [])
+
+    min_n = minimum_sample_size(cfg)
     sig = pack.get("signal_attribution") or {}
-    for src, horizons in (sig.get("by_primary_source") or {}).items():
-        if src == "unknown":
-            continue
-        h5 = (horizons.get("5") or {})
-        h10 = (horizons.get("10") or {})
-        h20 = (horizons.get("20") or {})
-        n = (h5.get("sample_count") or 0) if not h5.get("insufficient_sample") else 0
-        sel5 = ((h5.get("selection_alpha") or {}).get("mean") if not h5.get("insufficient_sample") else None)
-        sel10 = ((h10.get("selection_alpha") or {}).get("mean") if not h10.get("insufficient_sample") else None)
-        sel20 = ((h20.get("selection_alpha") or {}).get("mean") if not h20.get("insufficient_sample") else None)
-        st = "STRONG" if sel5 and sel5 > 0.02 else ("WEAK" if sel5 and sel5 > 0 else "UNPROVEN")
-        rows.append(_row(src.capitalize(), samples=n, t5=sel5, t10=sel10, t20=sel20, incremental=None, cost=0, efficiency=None, status=st))
+    source_rows: list[dict[str, Any]] = []
 
-    # AI Council ablation
-    ab = pack.get("ai_council_ablation") or {}
-    if ab.get("available"):
-        hz = ab.get("horizons") or {}
-        h5 = hz.get("5") or {}
-        h10 = hz.get("10") or {}
-        h20 = hz.get("20") or {}
-        rows.append(
-            _row(
-                "AI",
-                samples=h5.get("sample_count") or 0,
-                t5=(h5.get("with_council") or {}).get("mean"),
-                t10=(h10.get("with_council") or {}).get("mean"),
-                t20=(h20.get("with_council") or {}).get("mean"),
-                incremental=h5.get("ai_incremental_alpha"),
-                cost=ab.get("llm_cost_usd"),
-                efficiency=ab.get("ai_efficiency"),
-                status=_status_from_ablation(ab),
-            )
+    if sig.get("profit_data_unavailable"):
+        source_rows.append(
+            {
+                "source": "profit",
+                "sample_count": 0,
+                "status": "DATA_UNAVAILABLE",
+                "t1_alpha": None,
+                "t5_alpha": None,
+                "t10_alpha": None,
+                "t20_alpha": None,
+                "win_rate": None,
+                "median_return": None,
+                "cost_usd": 0,
+                "incremental_alpha": None,
+            }
         )
 
-    # ML weight experiment summary
-    try:
-        from ashare.ml.weight_experiment import list_weight_experiments
+    for src in ("event", "profit", "quant", "news"):
+        if src == "profit" and sig.get("profit_data_unavailable"):
+            continue
+        hz = (sig.get("by_primary_source") or {}).get(src) or {}
+        if not hz:
+            continue
+        source_rows.append(_source_row(src.capitalize(), hz, min_n=min_n))
 
-        exps = list_weight_experiments(cfg, limit=1)
-        if exps:
-            e = exps[-1]
-            rows.append(
-                _row(
-                    "ML",
-                    samples=int(e.get("n_folds") or 0),
-                    t5=e.get("best_mean_ic"),
-                    t10=None,
-                    t20=None,
-                    incremental=e.get("best_delta"),
-                    cost=0,
-                    efficiency=None,
-                    status="WEAK" if (e.get("best_delta") or 0) < 0.002 else "STRONG",
-                )
-            )
-    except Exception:  # noqa: BLE001
-        pass
+    ml_ab = pack.get("ml_ablation") or {}
+    if ml_ab.get("available"):
+        h5 = (ml_ab.get("horizons") or {}).get("5") or {}
+        source_rows.append(
+            {
+                "source": "ML",
+                "sample_count": h5.get("sample_count") or 0,
+                "t5_alpha": (h5.get("with_ml") or {}).get("mean"),
+                "t10_alpha": ((ml_ab.get("horizons") or {}).get("10") or {}).get("with_ml", {}).get("mean"),
+                "t20_alpha": ((ml_ab.get("horizons") or {}).get("20") or {}).get("with_ml", {}).get("mean"),
+                "incremental_alpha": h5.get("ml_incremental_alpha"),
+                "cost_usd": 0,
+                "status": h5.get("status") or "UNPROVEN",
+                "win_rate": (h5.get("with_ml") or {}).get("win_rate"),
+                "median_return": (h5.get("with_ml") or {}).get("median"),
+            }
+        )
 
-    # Notification attribution
-    try:
-        from ashare.notification.outcome import refresh_notification_outcomes
+    ab = pack.get("ai_council_ablation") or {}
+    if ab.get("available"):
+        h5 = (ab.get("horizons") or {}).get("5") or {}
+        incr = h5.get("ai_incremental_alpha")
+        source_rows.append(
+            {
+                "source": "AI",
+                "sample_count": h5.get("sample_count") or 0,
+                "t5_alpha": (h5.get("with_council") or {}).get("mean"),
+                "t10_alpha": ((ab.get("horizons") or {}).get("10") or {}).get("with_council", {}).get("mean"),
+                "t20_alpha": ((ab.get("horizons") or {}).get("20") or {}).get("with_council", {}).get("mean"),
+                "incremental_alpha": incr,
+                "cost_usd": ab.get("llm_cost_usd"),
+                "efficiency": ab.get("ai_efficiency"),
+                "status": ab.get("status") or "UNPROVEN",
+                "win_rate": (h5.get("with_council") or {}).get("win_rate"),
+                "median_return": (h5.get("with_council") or {}).get("median"),
+            }
+        )
 
-        nop = refresh_notification_outcomes(cfg)
-        nattr = nop.get("notification_attribution") or {}
-        for level in ("BUY", "STRONG_BUY"):
-            h5 = (nattr.get(level) or {}).get("5") or {}
-            if h5.get("insufficient_sample"):
-                continue
-            rows.append(
-                _row(
-                    f"Notify_{level}",
-                    samples=h5.get("sample_count") or 0,
-                    t5=h5.get("mean_market_alpha"),
-                    t10=((nattr.get(level) or {}).get("10") or {}).get("mean_market_alpha"),
-                    t20=((nattr.get(level) or {}).get("20") or {}).get("mean_market_alpha"),
-                    incremental=None,
-                    cost=0,
-                    efficiency=None,
-                    status="STRONG",
-                )
-            )
-    except Exception:  # noqa: BLE001
-        pass
-
-    # Factor report
-    root = Path(cfg.get("_root") or Path(__file__).resolve().parents[2])
-    factor_path = root / "data" / "alpha" / "factor_report.json"
-    if factor_path.exists():
-        try:
-            fr = json.loads(factor_path.read_text(encoding="utf-8"))
-            for rc in fr.get("retire_candidates") or []:
-                rows.append(
-                    _row(
-                        f"Factor_{rc.get('factor')}",
-                        samples=rc.get("sample_note") or 0,
-                        t5=None,
-                        t10=rc.get("t10_top_bottom_spread"),
-                        t20=None,
-                        incremental=None,
-                        cost=0,
-                        efficiency=None,
-                        status="RETIRE_CANDIDATE",
-                    )
-                )
-        except Exception:  # noqa: BLE001
-            pass
+    routing = pack.get("token_efficiency") or data.get("gate_summary", {}).get("ai_routing") or {}
 
     return {
-        "available": bool(rows),
+        "available": bool(source_rows or pack.get("available")),
+        "window": window,
+        "minimum_sample_size": min_n,
         "as_of": data.get("as_of"),
-        "modules": rows,
-        "calibration": pack.get("calibration"),
-        "ai_council_ablation": ab,
+        "source_alpha": source_rows,
+        "modules": source_rows,
         "signal_attribution": sig,
+        "ai_council_ablation": ab,
+        "ml_ablation": ml_ab,
+        "calibration": pack.get("calibration"),
+        "token_efficiency": pack.get("token_efficiency"),
+        "ai_routing": routing,
+        "news_discovery": ((sig.get("cohorts") or {}).get("news_discovery")),
+        "news_evidence": ((sig.get("cohorts") or {}).get("news_evidence")),
+        "lab_summary": pack.get("lab_summary") or build_lab_summary(pack),
         "notification_llm_cost": 0,
     }

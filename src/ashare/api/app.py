@@ -650,6 +650,7 @@ def create_app(config_path: str | None = None) -> FastAPI:
             "BUY_count": sum(1 for r in sent if r.get("level") == "BUY"),
             "STRONG_BUY_count": sum(1 for r in sent if r.get("level") == "STRONG_BUY"),
             "RISK_EXIT_count": sum(1 for r in sent if r.get("level") == "RISK_EXIT"),
+            "RATING_EXIT_count": sum(1 for r in sent if r.get("level") == "RATING_EXIT"),
             "cooldown_count": cooldown,
             "duplicate_count": duplicate,
             "notification_attribution": outcome_pack.get("notification_attribution"),
@@ -667,10 +668,10 @@ def create_app(config_path: str | None = None) -> FastAPI:
         return notification_status_for_symbol(get_cfg(), symbol, research_id or None)
 
     @app.get("/api/alpha-lab")
-    def api_alpha_lab() -> dict[str, Any]:
+    def api_alpha_lab(window: str = "all") -> dict[str, Any]:
         from ashare.services.alpha_lab import build_alpha_lab
 
-        return build_alpha_lab(get_cfg())
+        return build_alpha_lab(get_cfg(), window=window)
 
     @app.post("/api/ml/rank/train")
     def api_ml_rank_train() -> dict[str, Any]:

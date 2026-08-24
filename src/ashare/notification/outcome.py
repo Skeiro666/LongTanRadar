@@ -43,6 +43,7 @@ def seed_notification_outcome(cfg: dict[str, Any], notification_row: dict[str, A
         "entry_type": "notify_price",
         "candidate_sources": srcs,
         "primary_source": resolved["primary_source"],
+        "discovery_primary_source": resolved["primary_source"],
         "secondary_sources": resolved["secondary_sources"],
         "horizons": {},
         "status": "tracking",
@@ -148,7 +149,7 @@ def compute_notification_attribution(
     minimum_sample: int = 5,
 ) -> dict[str, Any]:
     horizons = horizons or [1, 5, 10, 20]
-    levels = ["BUY", "STRONG_BUY", "RISK_EXIT"]
+    levels = ["BUY", "STRONG_BUY", "RATING_EXIT", "RISK_EXIT"]
     out: dict[str, Any] = {}
     for level in levels:
         rows = [o for o in outcomes if str(o.get("level") or "").upper() == level]

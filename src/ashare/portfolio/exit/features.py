@@ -294,11 +294,16 @@ def compute_exit_features(
         hold_days = None
 
     # Profit / loss (input only — profit ≠ sell)
+    max_adverse_return = None
+    drawdown_from_peak = None
     if entry_px and current_price and entry_px > 0:
         uret = (current_price - entry_px) / entry_px
         peak_px = float(pos.get("max_favorable_price") or current_price)
+        trough_px = float(pos.get("max_adverse_price") or current_price)
         max_fav = (peak_px - entry_px) / entry_px if peak_px > 0 else uret
+        max_adverse_return = (trough_px - entry_px) / entry_px if trough_px > 0 else uret
         giveback = max(0.0, max_fav - uret)
+        drawdown_from_peak = (peak_px - current_price) / peak_px if peak_px > 0 else None
         # higher giveback / deep loss → mild exit pressure
         pl_raw = 0.0
         if uret < -0.08:
@@ -351,6 +356,8 @@ def compute_exit_features(
         "hold_days": hold_days,
         "unrealized_return": unrealized_return,
         "max_favorable_return": max_favorable_return,
+        "max_adverse_return": max_adverse_return,
+        "drawdown": drawdown_from_peak,
         "giveback": giveback_v,
         "event_state": estate if event else "UNKNOWN",
         "version": exit_cfg.get("version") or "exit_v1",

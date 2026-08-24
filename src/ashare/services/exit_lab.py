@@ -14,8 +14,10 @@ from ashare.portfolio.exit.engine import ExitEngine, evaluate_book
 from ashare.portfolio.exit.notify import maybe_build_alpha_exit_notification, persist_exit_signal
 from ashare.portfolio.exit.config import load_exit_config
 from ashare.portfolio.exit.alpha import build_exit_alpha
-from ashare.portfolio.exit.calibration import calibrate_exit_scores
-from ashare.portfolio.exit.ml_exit import train_exit_ml
+from ashare.portfolio.exit.calibration import calibrate_exit_scores, feature_ic_table, feature_redundancy
+from ashare.portfolio.exit.ml_exit import train_exit_ml, compare_ml_vs_heuristic
+from ashare.portfolio.exit.report import build_exit_validation_report
+from ashare.portfolio.exit.research_bootstrap import bootstrap_research_entries
 from ashare.symbols import to_symbol
 
 logger = logging.getLogger("ashare.services.exit")
@@ -29,18 +31,20 @@ def _load_bars_for_symbol(cfg: dict[str, Any], symbol: str, lookback: int = 120)
     try:
         from ashare.data.provider import ensure_panel
 
-        panel = ensure_panel(cfg)
-        if panel is None or panel.empty:
+        panel = ensure_panel(cfg, [symbol])
+        if not isinstance(panel, dict) or not panel:
             return pd.DataFrame()
         sym = to_symbol(symbol)
-        df = panel[panel["symbol"].astype(str).map(to_symbol) == sym].copy()
-        if df.empty:
-            # try raw symbol
-            df = panel[panel["symbol"] == symbol].copy()
-        if df.empty:
+        df = panel.get(sym) or panel.get(symbol)
+        if df is None or getattr(df, "empty", True):
+            # try any key match
+            for k, v in panel.items():
+                if to_symbol(str(k)) == sym:
+                    df = v
+                    break
+        if df is None or getattr(df, "empty", True):
             return pd.DataFrame()
-        df = df.sort_values("date").tail(lookback)
-        return df
+        return df.sort_values("date").tail(lookback).copy()
     except Exception as exc:  # noqa: BLE001
         logger.debug("bars load failed %s: %s", symbol, exc)
         return pd.DataFrame()
@@ -66,12 +70,14 @@ def _paper_position_rows(cfg: dict[str, Any]) -> list[dict[str, Any]]:
                 continue
             sym = to_symbol(p.symbol)
             mark = float(marks.get(sym) or marks.get(p.symbol) or p.cost_price or 0)
-            # enrich from ledger meta if present
             meta = _position_meta(cfg, sym)
             entry_date = meta.get("entry_date")
             peak = float(meta.get("max_favorable_price") or mark)
+            trough = float(meta.get("max_adverse_price") or mark)
             if mark > peak:
                 peak = mark
+            if mark < trough:
+                trough = mark
             rows.append(
                 {
                     "symbol": sym,
@@ -83,6 +89,7 @@ def _paper_position_rows(cfg: dict[str, Any]) -> list[dict[str, Any]]:
                     "entry_date": entry_date,
                     "current_price": mark,
                     "max_favorable_price": peak,
+                    "max_adverse_price": trough,
                     "market_value": mark * shares,
                     "unrealized_return": (mark / float(p.cost_price) - 1.0) if p.cost_price else None,
                 }
@@ -121,7 +128,6 @@ def update_position_meta_from_fills(cfg: dict[str, Any]) -> None:
         except Exception:  # noqa: BLE001
             meta = {"positions": {}}
     positions = {to_symbol(p["symbol"]): p for p in (state.get("positions") or [])}
-    # scan trades for first BUY
     for t in state.get("trades") or []:
         if str(t.get("side") or "").upper() != "BUY":
             continue
@@ -149,7 +155,6 @@ def evaluate_exit_book(cfg: dict[str, Any] | None = None) -> dict[str, Any]:
     for p in positions:
         bars_by[p["symbol"]] = _load_bars_for_symbol(cfg, p["symbol"])
 
-    # portfolio weights
     equity = sum(float(p.get("market_value") or 0) for p in positions) or 1.0
     ctx = {}
     for p in positions:
@@ -165,7 +170,6 @@ def evaluate_exit_book(cfg: dict[str, Any] | None = None) -> dict[str, Any]:
     as_of = date.today().isoformat()
     pack = evaluate_book(positions, bars_by_symbol=bars_by, cfg=cfg, as_of=as_of, context_by_symbol=ctx)
 
-    # merge position + signal for UI
     by_sym = {r["symbol"]: r for r in pack.get("signals") or []}
     enriched = []
     notifications = []
@@ -180,7 +184,6 @@ def evaluate_exit_book(cfg: dict[str, Any] | None = None) -> dict[str, Any]:
                 notifications.append(note)
                 _append_alpha_exit_store(cfg, note)
 
-    # price series for charts (last 60)
     charts = {}
     for sym, df in bars_by.items():
         if df is None or df.empty:
@@ -196,6 +199,7 @@ def evaluate_exit_book(cfg: dict[str, Any] | None = None) -> dict[str, Any]:
             "entry": (by_sym.get(sym) or {}).get("entry_price") or None,
             "exit_action": (by_sym.get(sym) or {}).get("action"),
             "exit_score": (by_sym.get(sym) or {}).get("exit_score"),
+            "hold_score": (by_sym.get(sym) or {}).get("hold_score"),
         }
 
     return {
@@ -205,6 +209,7 @@ def evaluate_exit_book(cfg: dict[str, Any] | None = None) -> dict[str, Any]:
         "counts": pack.get("counts"),
         "charts": charts,
         "alpha_exit_notifications": notifications,
+        "hold_score_formula": "1 - exit_score",
         "note": "Exit signals only — does not auto-sell. Paper/live execution unchanged.",
     }
 
@@ -217,44 +222,163 @@ def _append_alpha_exit_store(cfg: dict[str, Any], note: dict[str, Any]) -> None:
 
 
 def build_exit_lab(cfg: dict[str, Any] | None = None) -> dict[str, Any]:
-    """Exit performance dashboard payload for Alpha Lab."""
+    """Exit Validation payload for Alpha Lab — research only."""
     cfg = cfg or {}
     exit_cfg = load_exit_config(cfg)
     min_n = int(exit_cfg.get("minimum_sample") or 30)
 
-    # Build synthetic entries from exit_signals + paper trades if any
     entries, bars_by, cal_rows = _historical_entries(cfg)
-    alpha = build_exit_alpha(bars_by, entries, cfg=cfg) if entries else {
-        "available": False,
-        "minimum_sample": min_n,
-        "strategies": [],
-        "note": "INSUFFICIENT_SAMPLE — no historical entries",
-    }
-    calibration = calibrate_exit_scores(cal_rows, bars_by, cfg=cfg) if cal_rows else {
-        "buckets": [],
+    # Research bootstrap when paper history thin
+    boot_cfg = dict((exit_cfg.get("backtest") or {}).get("research_bootstrap") or {})
+    if boot_cfg.get("enabled", True) and len(entries) < min_n:
+        try:
+            from ashare.data.provider import ensure_panel
+
+            panel = ensure_panel(cfg)
+            boot_entries, boot_bars = bootstrap_research_entries(
+                panel,
+                max_symbols=int(boot_cfg.get("max_symbols", 40)),
+                entries_per_symbol=int(boot_cfg.get("entries_per_symbol", 3)),
+                min_bars_before_entry=int(boot_cfg.get("min_bars_before_entry", 40)),
+                step_days=int(boot_cfg.get("step_days", 15)),
+            )
+            # merge without overwriting paper entries
+            seen = {(e.get("symbol"), e.get("entry_date")) for e in entries}
+            for e in boot_entries:
+                key = (e.get("symbol"), e.get("entry_date"))
+                if key in seen:
+                    continue
+                entries.append(e)
+                seen.add(key)
+            for sym, df in boot_bars.items():
+                if sym not in bars_by:
+                    bars_by[sym] = df
+            # calibration rows from bootstrap mid-hold scores
+            cal_rows = cal_rows + _calibration_rows_from_entries(cfg, entries, bars_by)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("research bootstrap failed: %s", exc)
+
+    alpha = (
+        build_exit_alpha(bars_by, entries, cfg=cfg)
+        if entries
+        else {
+            "available": False,
+            "minimum_sample": min_n,
+            "strategies": [],
+            "note": "INSUFFICIENT_SAMPLE — no historical entries",
+        }
+    )
+    calibration = (
+        calibrate_exit_scores(cal_rows, bars_by, cfg=cfg)
+        if cal_rows
+        else {
+            "buckets": [],
+            "status": "INSUFFICIENT_SAMPLE",
+            "available": False,
+            "sample_count": 0,
+            "scatter_t10": [],
+            "ic": {},
+            "monotonicity": "INSUFFICIENT_SAMPLE",
+        }
+    )
+    feat_ic = feature_ic_table(cal_rows, bars_by, cfg=cfg) if cal_rows else {
+        "features": [],
         "status": "INSUFFICIENT_SAMPLE",
+        "available": False,
+    }
+    redundancy = feature_redundancy(cal_rows, cfg=cfg) if cal_rows else {
+        "pairs": [],
+        "status": "INSUFFICIENT_SAMPLE",
+        "available": False,
+        "feature_groups": exit_cfg.get("feature_groups") or {},
     }
 
-    # ML train attempt (no-op if insufficient)
-    ml_result = {"available": False, "status": "INSUFFICIENT_SAMPLE", "sample_count": 0}
     samples = _ml_samples_from_entries(cfg, entries, bars_by)
-    if samples:
-        ml_result = train_exit_ml(samples, cfg=cfg)
+    ml_cmp = compare_ml_vs_heuristic(samples, cfg=cfg) if samples else {
+        "available": False,
+        "status": "INSUFFICIENT_SAMPLE",
+        "keep": "HEURISTIC",
+    }
+    ml_result = train_exit_ml(samples, cfg=cfg) if samples else {
+        "available": False,
+        "status": "INSUFFICIENT_SAMPLE",
+        "sample_count": 0,
+        "trained": False,
+        "keep": "HEURISTIC",
+    }
 
-    return {
+    pack = {
         "exit_alpha": alpha,
         "calibration": calibration,
+        "feature_ic": feat_ic,
+        "redundancy": redundancy,
         "ml": ml_result,
+        "ml_vs_heuristic": ml_cmp,
         "minimum_sample": min_n,
         "n_entries": len(entries),
+        "n_calibration_rows": len(cal_rows),
+        "execution_model": "t1_open",
+        "hold_score_formula": exit_cfg.get("hold_score_formula") or "1 - exit_score",
+        "versions": {
+            "exit_version": exit_cfg.get("version"),
+            "as_of": date.today().isoformat(),
+        },
     }
+    # leakage suite is unit-tested separately; surface status if previously run artifact exists
+    leak_path = _root(cfg) / "data" / "exit_leakage_last.json"
+    if leak_path.exists():
+        try:
+            pack["leakage_tests"] = json.loads(leak_path.read_text(encoding="utf-8"))
+        except Exception:  # noqa: BLE001
+            pack["leakage_tests"] = {"passed": None}
+    else:
+        pack["leakage_tests"] = {"passed": None, "note": "run pytest test_exit_leakage"}
+
+    pack["validation_report"] = build_exit_validation_report(pack)
+    pack["exit_validation"] = {
+        "calibration": calibration,
+        "feature_ic": feat_ic,
+        "redundancy": redundancy,
+        "ablation": alpha.get("strategies"),
+        "timing": (alpha.get("backtest") or {}).get("strategies", {}).get("exit_engine", {}).get("exit_quality"),
+        "giveback": {
+            "no_exit": _gb(alpha, "no_exit"),
+            "fixed_stop": _gb(alpha, "fixed_stop"),
+            "exit_engine": _gb(alpha, "exit_engine"),
+        },
+        "charts": {
+            "scatter_t10": calibration.get("scatter_t10") or [],
+            "bucket_t10": [
+                {"range": b.get("range"), "t10_mean": b.get("t10_mean"), "status": b.get("status")}
+                for b in (calibration.get("buckets") or [])
+            ],
+            "bucket_loss_rate": [
+                {"range": b.get("range"), "loss_rate": b.get("t10_loss_rate"), "status": b.get("status")}
+                for b in (calibration.get("buckets") or [])
+            ],
+            "available": bool(calibration.get("available")),
+        },
+        "report": pack["validation_report"],
+    }
+    return pack
+
+
+def _gb(alpha: dict[str, Any], key: str) -> dict[str, Any]:
+    for s in alpha.get("strategies") or []:
+        if s.get("id") == key:
+            return {
+                "mean": s.get("mean_giveback"),
+                "median": s.get("median_giveback"),
+                "p90": s.get("p90_giveback"),
+                "status": s.get("status"),
+            }
+    return {"status": "INSUFFICIENT_SAMPLE"}
 
 
 def _historical_entries(cfg: dict[str, Any]) -> tuple[list[dict], dict[str, pd.DataFrame], list[dict]]:
     root = _root(cfg)
     entries: list[dict] = []
     cal_rows: list[dict] = []
-    # from paper trades
     paper = root / "data" / "paper_state.json"
     if paper.exists():
         try:
@@ -267,11 +391,11 @@ def _historical_entries(cfg: dict[str, Any]) -> tuple[list[dict], dict[str, pd.D
                         "symbol": to_symbol(t.get("symbol")),
                         "entry_date": str(t.get("timestamp") or "")[:10],
                         "entry_price": float(t.get("price") or 0) or None,
+                        "source": "paper",
                     }
                 )
         except Exception:  # noqa: BLE001
             pass
-    # from exit signals for calibration
     sig_path = root / "data" / "exit_signals.jsonl"
     if sig_path.exists():
         for line in sig_path.read_text(encoding="utf-8").splitlines()[-500:]:
@@ -287,10 +411,10 @@ def _historical_entries(cfg: dict[str, Any]) -> tuple[list[dict], dict[str, pd.D
                     "signal_date": (row.get("as_of") or row.get("signal_time") or "")[:10],
                     "exit_score": row.get("exit_score"),
                     "exit_price": row.get("current_price"),
+                    "features": row.get("features"),
                 }
             )
 
-    # dedupe entries
     seen = set()
     uniq = []
     for e in entries:
@@ -310,6 +434,64 @@ def _historical_entries(cfg: dict[str, Any]) -> tuple[list[dict], dict[str, pd.D
         if sym and sym not in bars_by:
             bars_by[sym] = _load_bars_for_symbol(cfg, sym, lookback=250)
     return uniq, bars_by, cal_rows
+
+
+def _calibration_rows_from_entries(
+    cfg: dict[str, Any],
+    entries: list[dict],
+    bars_by: dict[str, pd.DataFrame],
+) -> list[dict]:
+    """Evaluate exit_score at mid-hold for calibration (as_of safe)."""
+    from ashare.portfolio.exit.engine import ExitEngine
+
+    engine = ExitEngine(cfg)
+    rows = []
+    for e in entries[:120]:
+        sym = e["symbol"]
+        bars = bars_by.get(sym)
+        if bars is None or bars.empty:
+            continue
+        df = bars.copy()
+        df["date"] = pd.to_datetime(df["date"]).dt.date
+        df = df.sort_values("date").reset_index(drop=True)
+        try:
+            ed = pd.Timestamp(e["entry_date"]).date()
+        except Exception:  # noqa: BLE001
+            continue
+        idxs = df.index[df["date"] >= ed]
+        if len(idxs) <= 5:
+            continue
+        i = int(idxs[0]) + 5
+        if i >= len(df) - 25:
+            continue
+        as_of = df.loc[i, "date"]
+        hist = df.iloc[: i + 1]
+        peak = float(hist["high"].max()) if "high" in hist.columns else float(hist["close"].max())
+        sig = engine.evaluate(
+            symbol=sym,
+            bars=hist,
+            as_of=as_of,
+            position={
+                "symbol": sym,
+                "entry_price": e.get("entry_price") or float(df.loc[int(idxs[0]), "close"]),
+                "entry_date": e["entry_date"],
+                "max_favorable_price": peak,
+                "current_price": float(df.loc[i, "close"]),
+            },
+        )
+        if not sig.get("available"):
+            continue
+        rows.append(
+            {
+                "symbol": sym,
+                "signal_date": str(as_of),
+                "exit_score": sig.get("exit_score"),
+                "exit_price": sig.get("current_price"),
+                "features": sig.get("features"),
+                "source": "research_bootstrap",
+            }
+        )
+    return rows
 
 
 def _ml_samples_from_entries(cfg, entries, bars_by) -> list[dict]:

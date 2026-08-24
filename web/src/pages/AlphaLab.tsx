@@ -193,69 +193,222 @@ export default function AlphaLab() {
           <CalibrationBarChart title="新颖度" series={charts?.novelty as never} />
         </div>
 
-        {Boolean(data?.exit_lab) && (
-          <div className="persona-panel compact" style={{ marginTop: "0.75rem" }}>
-            <h3>Exit 表现（卖出引擎）</h3>
-            <p className="muted" style={{ marginTop: 0 }}>
-              样本入口 {(data?.exit_lab as { n_entries?: number })?.n_entries ?? 0} · 最小样本{" "}
-              {(data?.exit_lab as { minimum_sample?: number })?.minimum_sample ?? minN}
-            </p>
-            <table className="data-table" style={{ width: "100%", fontSize: "0.85rem" }}>
-              <thead>
-                <tr>
-                  <th>策略</th>
-                  <th>样本</th>
-                  <th>总收益</th>
-                  <th>Sharpe</th>
-                  <th>最大回撤</th>
-                  <th>平均回吐</th>
-                  <th>相对无退出</th>
-                  <th>状态</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(((data?.exit_lab as { exit_alpha?: { strategies?: Array<Record<string, unknown>> } })?.exit_alpha
-                  ?.strategies) || []).map((r) => (
-                  <tr key={String(r.id)} className={r.status === "INSUFFICIENT_SAMPLE" ? "insufficient-row" : ""}>
-                    <td>{String(r.label)}</td>
-                    <td>{String(r.sample_count ?? 0)}</td>
-                    <td>{fmtPct(r.total_return as number | null, String(r.status), Number(r.sample_count), minN)}</td>
-                    <td>
-                      {r.status === "INSUFFICIENT_SAMPLE" || r.sharpe == null
-                        ? "—"
-                        : Number(r.sharpe).toFixed(2)}
-                    </td>
-                    <td>{fmtPct(r.max_drawdown as number | null, String(r.status), Number(r.sample_count), minN)}</td>
-                    <td>{fmtPct(r.mean_giveback as number | null, String(r.status), Number(r.sample_count), minN)}</td>
-                    <td>
-                      {fmtPct(
-                        r.delta_return_vs_no_exit as number | null,
-                        String(r.status),
-                        Number(r.sample_count),
-                        minN
-                      )}
-                    </td>
-                    <td>{labelStatus(String(r.status))}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {(() => {
-              const ml = (data?.exit_lab as { ml?: Record<string, unknown> })?.ml;
-              if (!ml) return null;
-              return (
-                <p className="muted" style={{ fontSize: "0.85rem" }}>
-                  Exit ML：{String(ml.status || (ml.available ? "OK" : "未训练"))}
-                  {ml.sample_count != null ? ` · 样本 ${String(ml.sample_count)}` : ""}
-                  {ml.mse != null ? ` · MSE ${Number(ml.mse).toFixed(4)}` : ""}
+        {Boolean(data?.exit_lab) && (() => {
+          const lab = data?.exit_lab as Record<string, unknown>;
+          const ev = (lab?.exit_validation || {}) as Record<string, unknown>;
+          const cal = (ev.calibration || lab.calibration || {}) as Record<string, unknown>;
+          const chartsEv = (ev.charts || {}) as Record<string, unknown>;
+          const report = (ev.report || lab.validation_report || {}) as Record<string, unknown>;
+          const answers = (report.answers || {}) as Record<string, unknown>;
+          const featIc = ((ev.feature_ic || lab.feature_ic || {}) as { features?: Array<Record<string, unknown>> }).features || [];
+          const redPairs = ((ev.redundancy || lab.redundancy || {}) as { pairs?: Array<Record<string, unknown>>; high_redundancy_count?: number }).pairs || [];
+          const timing = (ev.timing || {}) as Record<string, unknown>;
+          const giveback = (ev.giveback || {}) as Record<string, Record<string, unknown>>;
+          const chartOk = Boolean(chartsEv.available);
+          const strategies =
+            ((lab.exit_alpha as { strategies?: Array<Record<string, unknown>> })?.strategies) ||
+            (ev.ablation as Array<Record<string, unknown>>) ||
+            [];
+
+          return (
+            <div className="persona-panel compact" style={{ marginTop: "0.75rem" }}>
+              <h3>Exit Validation（卖出系统有没有 Alpha？）</h3>
+              <p className="muted" style={{ marginTop: 0 }}>
+                样本入口 {String(lab?.n_entries ?? 0)} · 校准行 {String(lab?.n_calibration_rows ?? 0)} · 最小样本{" "}
+                {String(lab?.minimum_sample ?? minN)} · 执行 {String(lab?.execution_model || "t1_open")}
+              </p>
+              {Boolean(report.verdict) && (
+                <p style={{ fontSize: "0.92rem" }}>
+                  <strong>结论：</strong>
+                  {String(report.verdict)}
                 </p>
-              );
-            })()}
-            <Link className="btn btn-ghost" to="/positions">
-              打开持仓/退出 →
-            </Link>
-          </div>
-        )}
+              )}
+
+              <table className="data-table" style={{ width: "100%", fontSize: "0.85rem" }}>
+                <thead>
+                  <tr>
+                    <th>策略</th>
+                    <th>样本</th>
+                    <th>净收益</th>
+                    <th>毛收益</th>
+                    <th>Sharpe</th>
+                    <th>最大回撤</th>
+                    <th>平均回吐</th>
+                    <th>相对无退出</th>
+                    <th>状态</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {strategies.map((r) => (
+                    <tr key={String(r.id)} className={r.status === "INSUFFICIENT_SAMPLE" ? "insufficient-row" : ""}>
+                      <td>{String(r.label)}</td>
+                      <td>{String(r.sample_count ?? 0)}</td>
+                      <td>{fmtPct(r.total_return as number | null, String(r.status), Number(r.sample_count), minN)}</td>
+                      <td>
+                        {fmtPct(r.total_return_gross as number | null, String(r.status), Number(r.sample_count), minN)}
+                      </td>
+                      <td>
+                        {r.status === "INSUFFICIENT_SAMPLE" || r.sharpe == null ? "—" : Number(r.sharpe).toFixed(2)}
+                      </td>
+                      <td>{fmtPct(r.max_drawdown as number | null, String(r.status), Number(r.sample_count), minN)}</td>
+                      <td>{fmtPct(r.mean_giveback as number | null, String(r.status), Number(r.sample_count), minN)}</td>
+                      <td>
+                        {fmtPct(
+                          r.delta_return_vs_no_exit as number | null,
+                          String(r.status),
+                          Number(r.sample_count),
+                          minN
+                        )}
+                      </td>
+                      <td>{labelStatus(String(r.status))}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              <div className="dash-grid-2" style={{ marginTop: "0.75rem" }}>
+                <div>
+                  <h4 style={{ marginBottom: "0.35rem" }}>Exit Score → T+10 收益</h4>
+                  {!chartOk ? (
+                    <p className="muted">样本不足，不画误导散点图</p>
+                  ) : (
+                    <CalibrationBarChart
+                      title="分桶平均 T+10"
+                      series={((chartsEv.bucket_t10 as Array<Record<string, unknown>>) || []).map((b) => ({
+                        bucket: String(b.range),
+                        mean: b.t10_mean as number | null,
+                        status: String(b.status || ""),
+                      }))}
+                    />
+                  )}
+                </div>
+                <div>
+                  <h4 style={{ marginBottom: "0.35rem" }}>分桶亏损率</h4>
+                  {!chartOk ? (
+                    <p className="muted">样本不足，不画误导图</p>
+                  ) : (
+                    <CalibrationBarChart
+                      title="Loss Rate"
+                      series={((chartsEv.bucket_loss_rate as Array<Record<string, unknown>>) || []).map((b) => ({
+                        bucket: String(b.range),
+                        mean: b.loss_rate as number | null,
+                        status: String(b.status || ""),
+                      }))}
+                    />
+                  )}
+                </div>
+              </div>
+
+              <p className="muted" style={{ fontSize: "0.85rem", marginTop: "0.5rem" }}>
+                单调性：{String(cal.monotonicity ?? answers["1_monotonicity"] ?? "—")} · IC T+10：
+                {(() => {
+                  const ic = answers["2_exit_score_ic"] as Record<string, unknown> | undefined;
+                  const t10 = ic?.["T+10"];
+                  if (t10 === "INSUFFICIENT_SAMPLE" || t10 == null) return "INSUFFICIENT_SAMPLE";
+                  if (typeof t10 === "object" && t10 && "spearman" in t10) {
+                    return `Spearman ${Number((t10 as { spearman?: number }).spearman).toFixed(3)}`;
+                  }
+                  return String(t10);
+                })()}
+              </p>
+
+              <div style={{ marginTop: "0.5rem", fontSize: "0.85rem" }}>
+                <strong>Profit Giveback</strong>
+                <ul style={{ margin: "0.25rem 0 0", paddingLeft: "1.1rem" }}>
+                  {(["no_exit", "fixed_stop", "exit_engine"] as const).map((k) => {
+                    const g = giveback[k] || {};
+                    return (
+                      <li key={k}>
+                        {k}: mean {fmtPct(g.mean as number | null, String(g.status))} · median{" "}
+                        {fmtPct(g.median as number | null, String(g.status))} · P90{" "}
+                        {fmtPct(g.p90 as number | null, String(g.status))}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+
+              <p className="muted" style={{ fontSize: "0.85rem" }}>
+                Exit Timing：Early{" "}
+                {timing.available ? `${(Number(timing.early_pct) * 100).toFixed(1)}%` : "INSUFFICIENT_SAMPLE"} · Good{" "}
+                {timing.available ? `${(Number(timing.good_pct) * 100).toFixed(1)}%` : "—"} · Late{" "}
+                {timing.available ? `${(Number(timing.late_pct) * 100).toFixed(1)}%` : "—"}
+              </p>
+
+              {featIc.length > 0 && (
+                <details style={{ marginTop: "0.5rem" }}>
+                  <summary>Feature IC</summary>
+                  <table className="data-table" style={{ width: "100%", fontSize: "0.8rem" }}>
+                    <thead>
+                      <tr>
+                        <th>feature</th>
+                        <th>IC_5d</th>
+                        <th>IC_10d</th>
+                        <th>IC_20d</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {featIc.slice(0, 20).map((f) => (
+                        <tr key={String(f.feature)}>
+                          <td>{String(f.feature)}</td>
+                          <td>{f.IC_5d == null ? "—" : Number(f.IC_5d).toFixed(3)}</td>
+                          <td>{f.IC_10d == null ? "—" : Number(f.IC_10d).toFixed(3)}</td>
+                          <td>{f.IC_20d == null ? "—" : Number(f.IC_20d).toFixed(3)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </details>
+              )}
+
+              {redPairs.length > 0 && (
+                <details style={{ marginTop: "0.35rem" }}>
+                  <summary>
+                    Feature Redundancy（|corr|&gt;0.8 → HIGH_REDUNDANCY，不自动删除）
+                  </summary>
+                  <ul style={{ fontSize: "0.8rem", margin: "0.25rem 0 0", paddingLeft: "1.1rem" }}>
+                    {redPairs
+                      .filter((p) => p.high_redundancy)
+                      .slice(0, 12)
+                      .map((p) => (
+                        <li key={`${p.a}-${p.b}`}>
+                          {String(p.a)} ↔ {String(p.b)} · Spearman {Number(p.spearman).toFixed(2)} · HIGH_REDUNDANCY
+                        </li>
+                      ))}
+                    {redPairs.filter((p) => p.high_redundancy).length === 0 && (
+                      <li className="muted">当前无 |corr|&gt;0.8 对</li>
+                    )}
+                  </ul>
+                </details>
+              )}
+
+              {(() => {
+                const ml = lab?.ml as Record<string, unknown> | undefined;
+                const cmp = lab?.ml_vs_heuristic as Record<string, unknown> | undefined;
+                if (!ml && !cmp) return null;
+                return (
+                  <p className="muted" style={{ fontSize: "0.85rem" }}>
+                    Exit ML：{String(ml?.keep || cmp?.keep || "HEURISTIC")} ·{" "}
+                    {String(ml?.status || cmp?.status || (ml?.available ? "OK" : "未训练"))}
+                    {ml?.sample_count != null ? ` · 样本 ${String(ml.sample_count)}` : ""}
+                    {cmp?.ml_improves === false ? " · 未显著优于 Heuristic" : ""}
+                  </p>
+                );
+              })()}
+
+              <details style={{ marginTop: "0.35rem" }}>
+                <summary>十三问摘要</summary>
+                <pre className="council-expand" style={{ maxHeight: 280, fontSize: "0.75rem" }}>
+                  {JSON.stringify(answers, null, 2)}
+                </pre>
+              </details>
+
+              <Link className="btn btn-ghost" to="/positions">
+                打开持仓/退出 →
+              </Link>
+            </div>
+          );
+        })()}
 
         {Array.isArray(data?.lab_summary) && (data?.lab_summary as string[]).length > 0 && (
           <div className="persona-panel compact" style={{ marginTop: "0.75rem" }}>

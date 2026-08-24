@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-"""Exit timing quality: EARLY / GOOD / LATE. Uses post-exit labels only."""
+"""Exit timing quality: EARLY / GOOD / LATE — config thresholds + MFE/MAE."""
 
 from typing import Any
 
@@ -9,28 +9,55 @@ def classify_exit_timing(
     *,
     exit_price: float | None,
     peak_before_exit: float | None = None,
+    post_return_1d: float | None = None,
     post_return_5d: float | None = None,
     post_return_10d: float | None = None,
     drawdown_at_exit: float | None = None,
+    mae: float | None = None,
     early_threshold: float = 0.03,
     good_threshold: float = -0.02,
     late_drawdown: float = 0.12,
+    late_mae: float = 0.10,
 ) -> dict[str, Any]:
-    if exit_price is None or (post_return_5d is None and post_return_10d is None):
+    """
+    GOOD: post-exit returns clearly negative (caught a top-ish exit).
+    EARLY: post-exit returns clearly positive (left money on table).
+    LATE: large drawdown from peak / adverse excursion before exit.
+    Thresholds come from config/exit.yaml timing_quality.
+    """
+    if exit_price is None and post_return_5d is None and post_return_10d is None and post_return_1d is None:
         return {"available": False, "class": "UNKNOWN", "note": "missing_post_exit_returns"}
 
     post = post_return_5d if post_return_5d is not None else post_return_10d
-    assert post is not None
+    if post is None:
+        post = post_return_1d
+    if post is None:
+        return {"available": False, "class": "UNKNOWN", "note": "missing_post_exit_returns"}
 
-    # Late: already large drawdown from peak when exiting
+    # Late: already large drawdown from peak OR deep MAE when exiting
     if drawdown_at_exit is not None and drawdown_at_exit >= late_drawdown:
         return {
             "available": True,
             "class": "LATE",
+            "post_return_1d": post_return_1d,
             "post_return_5d": post_return_5d,
             "post_return_10d": post_return_10d,
             "drawdown_at_exit": drawdown_at_exit,
+            "mae": mae,
+            "peak_before_exit": peak_before_exit,
             "note": "large_drawdown_before_exit",
+        }
+    if mae is not None and mae <= -abs(late_mae):
+        return {
+            "available": True,
+            "class": "LATE",
+            "post_return_1d": post_return_1d,
+            "post_return_5d": post_return_5d,
+            "post_return_10d": post_return_10d,
+            "drawdown_at_exit": drawdown_at_exit,
+            "mae": mae,
+            "peak_before_exit": peak_before_exit,
+            "note": "deep_mae_before_exit",
         }
 
     if post >= early_threshold:
@@ -46,11 +73,19 @@ def classify_exit_timing(
     return {
         "available": True,
         "class": cls,
+        "post_return_1d": post_return_1d,
         "post_return_5d": post_return_5d,
         "post_return_10d": post_return_10d,
         "drawdown_at_exit": drawdown_at_exit,
+        "mae": mae,
         "peak_before_exit": peak_before_exit,
         "note": note,
+        "thresholds": {
+            "early_post_return": early_threshold,
+            "good_post_return": good_threshold,
+            "late_drawdown": late_drawdown,
+            "late_mae": late_mae,
+        },
     }
 
 

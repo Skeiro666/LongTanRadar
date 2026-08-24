@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 
 type ExitSignal = {
   exit_score?: number;
+  hold_score?: number;
   action?: string;
   confidence?: number;
   expected_return_5d?: number;
@@ -12,7 +13,12 @@ type ExitSignal = {
   hold_days?: number;
   unrealized_return?: number;
   max_favorable_return?: number;
+  max_adverse_return?: number;
+  mfe?: number;
+  mae?: number;
   giveback?: number;
+  drawdown?: number;
+  future_loss_probability_10d?: number;
   thesis_decay?: { level?: string; thesis_decay?: number; available?: boolean };
 };
 
@@ -40,8 +46,11 @@ function actionLabel(a?: string) {
 
 export default function ExitScoreCard({ symbol, name, price, cost, shares, exit, compact }: Props) {
   const score = exit?.exit_score;
+  const hold = exit?.hold_score ?? (score != null ? 1 - score : undefined);
   const action = exit?.action || "HOLD";
   const reasons = exit?.reason_texts || exit?.reasons || [];
+  const mfe = exit?.mfe ?? exit?.max_favorable_return;
+  const mae = exit?.mae ?? exit?.max_adverse_return;
 
   return (
     <div className="exit-score-card">
@@ -58,7 +67,7 @@ export default function ExitScoreCard({ symbol, name, price, cost, shares, exit,
 
       <div className="exit-score-meter">
         <div className="exit-score-value">{score != null ? Math.round(score * 100) : "—"}</div>
-        <div className="muted">退出分 / 100</div>
+        <div className="muted">退出分 / 100 · 持有分 {hold != null ? Math.round(hold * 100) : "—"}</div>
         <div className="exit-bar">
           <div className="exit-bar-fill" style={{ width: `${Math.min(100, (score || 0) * 100)}%` }} />
         </div>
@@ -67,20 +76,23 @@ export default function ExitScoreCard({ symbol, name, price, cost, shares, exit,
       {!compact && (
         <dl className="metrics">
           <div className="metric"><dt>现价</dt><dd>{price != null ? price.toFixed(2) : "—"}</dd></div>
-          <div className="metric"><dt>成本</dt><dd>{cost != null ? cost.toFixed(2) : "—"}</dd></div>
+          <div className="metric"><dt>成本 / Entry</dt><dd>{cost != null ? cost.toFixed(2) : "—"}</dd></div>
           <div className="metric"><dt>浮盈</dt><dd>{pct(exit?.unrealized_return)}</dd></div>
-          <div className="metric"><dt>最高浮盈</dt><dd>{pct(exit?.max_favorable_return)}</dd></div>
+          <div className="metric"><dt>MFE</dt><dd>{pct(mfe)}</dd></div>
+          <div className="metric"><dt>MAE</dt><dd>{pct(mae)}</dd></div>
+          <div className="metric"><dt>回撤</dt><dd>{pct(exit?.drawdown)}</dd></div>
           <div className="metric"><dt>回吐</dt><dd>{pct(exit?.giveback)}</dd></div>
           <div className="metric"><dt>持有天数</dt><dd>{exit?.hold_days ?? "—"}</dd></div>
           <div className="metric"><dt>预期 T+5</dt><dd>{pct(exit?.expected_return_5d)}</dd></div>
           <div className="metric"><dt>预期 T+10</dt><dd>{pct(exit?.expected_return_10d)}</dd></div>
+          <div className="metric"><dt>未来亏损概率</dt><dd>{pct(exit?.future_loss_probability_10d)}</dd></div>
         </dl>
       )}
 
       <div className="exit-reasons">
-        <strong>Top 退出原因</strong>
+        <strong>为何继续持有 / 为何卖</strong>
         <ol>
-          {(reasons.length ? reasons : ["暂无"]).slice(0, 3).map((r) => (
+          {(reasons.length ? reasons : ["暂无结构化原因"]).slice(0, 3).map((r) => (
             <li key={String(r)}>{String(r)}</li>
           ))}
         </ol>

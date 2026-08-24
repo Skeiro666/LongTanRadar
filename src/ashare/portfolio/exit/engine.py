@@ -85,12 +85,18 @@ class ExitEngine:
             else:
                 score_pack["ml"] = ml_pack or {"available": False, "note": "INSUFFICIENT_SAMPLE"}
 
-        # Expected returns: heuristic mapping from exit_score (not fabricated ML)
-        er = _heuristic_expected_returns(float(score_pack.get("exit_score") or 0), ml_expected)
-
-        thesis = evaluate_thesis_decay(buy_thesis=buy_thesis, current=current_thesis or _thesis_from_context(news, event, feat))
-        if thesis.get("available") and thesis.get("level") == "HIGH" and float(score_pack.get("exit_score") or 0) < 0.6:
-            # thesis decay informs reasons — does NOT silently raise score beyond soft bump
+        thesis = evaluate_thesis_decay(
+            buy_thesis=buy_thesis,
+            current=current_thesis or _thesis_from_context(news, event, feat),
+        )
+        disable_thesis = bool(self.exit_cfg.get("disable_thesis_bump"))
+        if (
+            not disable_thesis
+            and thesis.get("available")
+            and thesis.get("level") == "HIGH"
+            and float(score_pack.get("exit_score") or 0) < 0.6
+        ):
+            # structured thesis decay soft bump only — LLM never sets decay_score
             score_pack = dict(score_pack)
             score_pack["exit_score"] = round(min(1.0, float(score_pack["exit_score"]) + 0.08), 4)
             from ashare.portfolio.exit.config import soft_action
@@ -101,12 +107,25 @@ class ExitEngine:
                 reasons = ["thesis_decay", *reasons][:5]
             score_pack["reasons"] = reasons
 
+        exit_score = float(score_pack.get("exit_score") or 0)
+        # Recompute expected returns after any thesis bump
+        er = _heuristic_expected_returns(exit_score, ml_expected)
+        # Explicit formula (config hold_score_formula)
+        hold_score = round(1.0 - exit_score, 4)
+
+        # Empirical future loss rate for this score bucket when calibration context provided
+        future_risk = _future_loss_probability(exit_score, ml_expected)
+
         reasons = list(score_pack.get("reasons") or [])
         return {
             "symbol": symbol,
             "as_of": feat.get("as_of"),
+            "feature_time": feat.get("as_of"),
+            "label_time": None,
             "signal_time": datetime.now(timezone.utc).isoformat(),
             "exit_score": score_pack.get("exit_score"),
+            "hold_score": hold_score,
+            "hold_score_formula": self.exit_cfg.get("hold_score_formula") or "1 - exit_score",
             "action": score_pack.get("action"),
             "confidence": score_pack.get("confidence"),
             "expected_return_1d": er.get("1"),
@@ -114,6 +133,8 @@ class ExitEngine:
             "expected_return_10d": er.get("10"),
             "expected_return_20d": er.get("20"),
             "expected_return_source": er.get("source"),
+            "future_loss_probability_10d": future_risk.get("loss_prob_10d"),
+            "future_risk_source": future_risk.get("source"),
             "reasons": reasons,
             "reason_texts": top_reason_texts(reasons),
             "reason_details": score_pack.get("reason_details"),
@@ -126,7 +147,11 @@ class ExitEngine:
             "hold_days": feat.get("hold_days"),
             "unrealized_return": feat.get("unrealized_return"),
             "max_favorable_return": feat.get("max_favorable_return"),
+            "max_adverse_return": feat.get("max_adverse_return"),
+            "mfe": feat.get("max_favorable_return"),
+            "mae": feat.get("max_adverse_return"),
             "giveback": feat.get("giveback"),
+            "drawdown": feat.get("drawdown"),
             "event_state": feat.get("event_state"),
             "thesis_decay": thesis,
             "atr": feat.get("atr"),
@@ -134,6 +159,7 @@ class ExitEngine:
             "versions": {
                 "exit_version": self.exit_cfg.get("version") or "exit_v1",
                 "factor_version": "factor_v1",
+                "news_version": "news_v1",
                 "model_version": (score_pack.get("ml") or {}).get("model_version"),
             },
             "available": bool(score_pack.get("available")),
@@ -143,7 +169,7 @@ class ExitEngine:
 
 def _heuristic_expected_returns(exit_score: float, ml_expected: dict[str, Any] | None) -> dict[str, Any]:
     ml = ml_expected or {}
-    if ml.get("available"):
+    if ml.get("available") and ml.get("source") == "MODEL":
         return {
             "1": ml.get("expected_return_1d"),
             "5": ml.get("expected_return_5d"),
@@ -151,7 +177,7 @@ def _heuristic_expected_returns(exit_score: float, ml_expected: dict[str, Any] |
             "20": ml.get("expected_return_20d"),
             "source": "MODEL",
         }
-    # Heuristic: map exit_score to mild negative expected returns (documented as HEURISTIC)
+    # Forward-return baseline remains HEURISTIC until walk-forward sample is enough
     s = max(0.0, min(1.0, exit_score))
     return {
         "1": round(-0.002 * s, 6),
@@ -160,6 +186,16 @@ def _heuristic_expected_returns(exit_score: float, ml_expected: dict[str, Any] |
         "20": round(-0.035 * s, 6),
         "source": "HEURISTIC",
     }
+
+
+def _future_loss_probability(exit_score: float, ml_expected: dict[str, Any] | None) -> dict[str, Any]:
+    """Only use empirical bucket loss rates when provided — never fabricate."""
+    ml = ml_expected or {}
+    if ml.get("loss_prob_10d") is not None and ml.get("loss_prob_source") == "EMPIRICAL":
+        return {"loss_prob_10d": float(ml["loss_prob_10d"]), "source": "EMPIRICAL"}
+    # Map score → soft heuristic probability (documented), not claimed as model
+    s = max(0.0, min(1.0, exit_score))
+    return {"loss_prob_10d": round(0.35 + 0.45 * s, 4), "source": "HEURISTIC"}
 
 
 def _trailing_stop(feat: dict[str, Any], exit_cfg: dict[str, Any]) -> dict[str, Any]:

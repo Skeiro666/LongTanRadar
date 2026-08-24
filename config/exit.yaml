@@ -10,8 +10,11 @@ thresholds:
   reduce_max: 0.80
   # > reduce_max → EXIT
 
+# hold_score = 1 - exit_score (explicit formula)
+hold_score_formula: "1 - exit_score"
+
 confidence:
-  min_features: 4          # available features needed for full confidence
+  min_features: 4
   default: 0.55
 
 lookback:
@@ -22,14 +25,12 @@ lookback:
   ma_xlong: 60
 
 holding_period:
-  # calibration hint only — not a hard sell rule
   soft_days: 10
   hard_days: 40
 
 trailing_atr:
   enabled: true
   multiplier: 2.5
-  # RISK_EXIT only — does not replace Exit Engine
 
 ml:
   enabled: true
@@ -66,13 +67,49 @@ weights:
   time_in_position: 0.05
   profit_loss: 0.04
   portfolio_concentration: 0.04
-  ml_forward_return: 0.15   # only when ML available
+  ml_forward_return: 0.15
 
 backtest:
   fixed_hold_days: 10
   fixed_stop_pct: 0.08
   fixed_take_pct: 0.15
   horizons: [1, 5, 10, 20]
+  # T close signal → T+1 open fill (required)
+  execution: t1_open
+  scan_step: 2
+  costs:
+    commission_rate: 0.00025
+    min_commission: 5.0
+    stamp_tax_rate: 0.0005
+    transfer_fee_rate: 0.00001
+    slippage_bps: 5.0
+  # research bootstrap from panel when paper entries insufficient
+  research_bootstrap:
+    enabled: true
+    max_symbols: 25
+    entries_per_symbol: 2
+    min_bars_before_entry: 40
+    step_days: 20
+
+timing_quality:
+  early_post_return: 0.03
+  good_post_return: -0.02
+  late_drawdown: 0.12
+  late_mae: 0.10
+
+validation:
+  redundancy_threshold: 0.8
+  minimum_sample: 30
+  bucket_minimum_sample: 10
+  ic_horizons: [5, 10, 20]
+  calibration_horizons: [1, 5, 10, 20]
+
+feature_groups:
+  TREND: [trend_decay, moving_average_break, relative_strength_decay]
+  MOMENTUM: [momentum_decay, volume_distribution]
+  NEWS: [news_reversal]
+  EVENT: [event_completion]
+  RISK: [drawdown, volatility, price_extension, breakout_failure, profit_loss]
 
 notification:
   alpha_exit_enabled: true
@@ -81,10 +118,9 @@ notification:
     - ALPHA_EXIT
 
 explain:
-  # Local/Cloud LLM only when score high or conflict — never changes exit_score
   local_score_threshold: 0.70
   cloud_score_threshold: 0.85
   allow_cloud: false
 
 minimum_sample: 30
-version: exit_v1
+version: exit_v1_1

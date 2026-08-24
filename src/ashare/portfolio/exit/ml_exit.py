@@ -1,11 +1,14 @@
 from __future__ import annotations
 
-"""Optional Exit LightGBM — only trains when sample >= minimum. Else available=false."""
+"""Optional Exit LightGBM — walk-forward only; compare vs Heuristic. No random split."""
 
 from pathlib import Path
 from typing import Any
 
+import numpy as np
+
 from ashare.portfolio.exit.config import load_exit_config, soft_action
+from ashare.portfolio.exit.heuristic import compute_exit_score
 
 
 FEATURE_KEYS = [
@@ -59,7 +62,6 @@ def predict_exit_ml(feature_pack: dict[str, Any], cfg: dict[str, Any] | None = N
     booster = lgb.Booster(model_file=str(path))
     x = [_vectorize(feature_pack)]
     pred = float(booster.predict(x)[0])
-    # model predicts exit_score in 0..1 or negative forward return — clamp
     score = max(0.0, min(1.0, pred if pred <= 1.5 else 1.0 / (1.0 + abs(pred))))
     return {
         "available": True,
@@ -71,15 +73,41 @@ def predict_exit_ml(feature_pack: dict[str, Any], cfg: dict[str, Any] | None = N
     }
 
 
-def train_exit_ml(
+def _metrics_vs_labels(pred: np.ndarray, y: np.ndarray, fwd: np.ndarray | None) -> dict[str, Any]:
+    if len(pred) < 3:
+        return {"available": False}
+    mae = float(np.mean(np.abs(pred - y)))
+    rmse = float(np.sqrt(np.mean((pred - y) ** 2)))
+    # Rank IC vs label
+    try:
+        import pandas as pd
+
+        rank_ic = float(pd.Series(pred).corr(pd.Series(y), method="spearman"))
+    except Exception:  # noqa: BLE001
+        rank_ic = None
+    # Hit rate: same side of median
+    med = float(np.median(y))
+    hit = float(np.mean(((pred >= med) == (y >= med))))
+    dir_acc = None
+    if fwd is not None and len(fwd) == len(pred):
+        # higher exit score should predict negative fwd return
+        dir_acc = float(np.mean(((pred > 0.5) & (fwd < 0)) | ((pred <= 0.5) & (fwd >= 0))))
+    return {
+        "available": True,
+        "mae": mae,
+        "rmse": rmse,
+        "rank_ic": rank_ic,
+        "hit_rate": hit,
+        "t10_directional_accuracy": dir_acc,
+    }
+
+
+def compare_ml_vs_heuristic(
     samples: list[dict[str, Any]],
     *,
     cfg: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """
-    samples: [{features: feature_pack, label_exit_score or label_forward_return_10d}]
-    Label: prefer binary/regression on -forward_return clipped to [0,1] as exit usefulness.
-    """
+    """Walk-forward holdout comparison. Does not train if sample < minimum."""
     exit_cfg = load_exit_config(cfg)
     ml_cfg = dict(exit_cfg.get("ml") or {})
     min_n = int(ml_cfg.get("minimum_sample") or exit_cfg.get("minimum_sample") or 80)
@@ -89,13 +117,124 @@ def train_exit_ml(
             "status": "INSUFFICIENT_SAMPLE",
             "sample_count": len(samples),
             "minimum_sample": min_n,
-            "trained": False,
+            "ml_improves": None,
+            "keep": "HEURISTIC",
         }
+
+    X, y, fwd, heur = [], [], [], []
+    for s in samples:
+        fp = s.get("features") or s.get("feature_pack") or {}
+        if s.get("label_exit_score") is not None:
+            label = float(s["label_exit_score"])
+        elif s.get("label_forward_return_10d") is not None:
+            fr = float(s["label_forward_return_10d"])
+            label = max(0.0, min(1.0, -fr * 5.0 + 0.3))
+            fwd.append(fr)
+        else:
+            continue
+        X.append(_vectorize(fp))
+        y.append(label)
+        hs = compute_exit_score(fp, cfg)
+        heur.append(float(hs.get("exit_score") or 0))
+        if "label_forward_return_10d" not in s:
+            fwd.append(np.nan)
+
+    n = len(X)
+    if n < min_n:
+        return {
+            "available": False,
+            "status": "INSUFFICIENT_SAMPLE",
+            "sample_count": n,
+            "minimum_sample": min_n,
+            "ml_improves": None,
+            "keep": "HEURISTIC",
+        }
+
+    # Time-ordered split: Train → Validation → Forward test (60/20/20)
+    cut_tr = int(n * 0.6)
+    cut_va = int(n * 0.8)
+    if cut_tr < 20 or (n - cut_va) < 10:
+        return {
+            "available": False,
+            "status": "INSUFFICIENT_SAMPLE",
+            "sample_count": n,
+            "note": "walk_forward_slices_too_small",
+            "ml_improves": None,
+            "keep": "HEURISTIC",
+        }
+
     try:
         import lightgbm as lgb
-        import numpy as np
     except ImportError:
-        return {"available": False, "note": "lightgbm_not_installed", "trained": False}
+        return {"available": False, "note": "lightgbm_not_installed", "keep": "HEURISTIC"}
+
+    Xtr, ytr = np.array(X[:cut_tr]), np.array(y[:cut_tr])
+    Xte, yte = np.array(X[cut_va:]), np.array(y[cut_va:])
+    hte = np.array(heur[cut_va:])
+    fte = np.array(fwd[cut_va:]) if len(fwd) == n else None
+
+    train_set = lgb.Dataset(Xtr, label=ytr)
+    params = {"objective": "regression", "metric": "l2", "verbosity": -1, "num_leaves": 15, "learning_rate": 0.05}
+    booster = lgb.train(params, train_set, num_boost_round=80)
+    pred = np.array(booster.predict(Xte))
+
+    ml_m = _metrics_vs_labels(pred, yte, fte)
+    he_m = _metrics_vs_labels(hte, yte, fte)
+
+    # ML improves if lower MAE and better (more negative / higher abs) rank IC vs heuristic
+    improves = False
+    if ml_m.get("available") and he_m.get("available"):
+        mae_better = ml_m["mae"] < he_m["mae"] * 0.95
+        ic_ml = ml_m.get("rank_ic")
+        ic_he = he_m.get("rank_ic")
+        ic_better = ic_ml is not None and ic_he is not None and abs(ic_ml) > abs(ic_he) + 0.02
+        dir_better = (
+            ml_m.get("t10_directional_accuracy") is not None
+            and he_m.get("t10_directional_accuracy") is not None
+            and ml_m["t10_directional_accuracy"] > he_m["t10_directional_accuracy"] + 0.02
+        )
+        improves = bool(mae_better and (ic_better or dir_better))
+
+    return {
+        "available": True,
+        "status": "OK",
+        "sample_count": n,
+        "train_n": cut_tr,
+        "valid_n": cut_va - cut_tr,
+        "test_n": n - cut_va,
+        "split": "time_ordered_60_20_20",
+        "ml": ml_m,
+        "heuristic": he_m,
+        "ml_improves": improves,
+        "keep": "MODEL" if improves else "HEURISTIC",
+        "note": "No random shuffle. Future rows never enter past training.",
+    }
+
+
+def train_exit_ml(
+    samples: list[dict[str, Any]],
+    *,
+    cfg: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """
+    Train only when walk-forward sample enough AND comparison says ML improves.
+    Otherwise keep HEURISTIC and do not overwrite a weak model claim.
+    """
+    cmp = compare_ml_vs_heuristic(samples, cfg=cfg)
+    if not cmp.get("available"):
+        return {**cmp, "trained": False}
+
+    if not cmp.get("ml_improves"):
+        return {
+            **cmp,
+            "trained": False,
+            "status": "OK",
+            "note": "ML did not clearly beat Heuristic — keeping HEURISTIC. Model not activated.",
+        }
+
+    exit_cfg = load_exit_config(cfg)
+    ml_cfg = dict(exit_cfg.get("ml") or {})
+    min_n = int(ml_cfg.get("minimum_sample") or 80)
 
     X, y = [], []
     for s in samples:
@@ -103,7 +242,6 @@ def train_exit_ml(
         if s.get("label_exit_score") is not None:
             label = float(s["label_exit_score"])
         elif s.get("label_forward_return_10d") is not None:
-            # negative forward return → higher exit score label
             fr = float(s["label_forward_return_10d"])
             label = max(0.0, min(1.0, -fr * 5.0 + 0.3))
         else:
@@ -111,35 +249,25 @@ def train_exit_ml(
         X.append(_vectorize(fp))
         y.append(label)
     if len(X) < min_n:
-        return {
-            "available": False,
-            "status": "INSUFFICIENT_SAMPLE",
-            "sample_count": len(X),
-            "minimum_sample": min_n,
-            "trained": False,
-        }
+        return {**cmp, "trained": False, "status": "INSUFFICIENT_SAMPLE"}
 
-    # simple holdout walk-forward style split by order
-    n = len(X)
-    cut = int(n * 0.7)
-    Xtr, Xte = np.array(X[:cut]), np.array(X[cut:])
-    ytr, yte = np.array(y[:cut]), np.array(y[cut:])
-    train_set = lgb.Dataset(Xtr, label=ytr)
+    try:
+        import lightgbm as lgb
+    except ImportError:
+        return {**cmp, "trained": False, "note": "lightgbm_not_installed"}
+
+    # Retrain on train+valid (first 80%), leave last 20% unused for honesty
+    cut = int(len(X) * 0.8)
+    train_set = lgb.Dataset(np.array(X[:cut]), label=np.array(y[:cut]))
     params = {"objective": "regression", "metric": "l2", "verbosity": -1, "num_leaves": 15, "learning_rate": 0.05}
     booster = lgb.train(params, train_set, num_boost_round=80)
     path = _model_path(cfg)
     path.parent.mkdir(parents=True, exist_ok=True)
     booster.save_model(str(path))
-    pred = booster.predict(Xte) if len(Xte) else []
-    mse = float(np.mean((np.array(pred) - yte) ** 2)) if len(pred) else None
     return {
-        "available": True,
+        **cmp,
         "trained": True,
-        "sample_count": n,
-        "train_n": cut,
-        "valid_n": n - cut,
-        "mse": mse,
         "model_path": str(path),
         "status": "OK",
-        "note": "Walk-forward style 70/30 split; compare vs heuristic in Exit Alpha.",
+        "vs_heuristic": cmp,
     }

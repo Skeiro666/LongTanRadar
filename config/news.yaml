@@ -27,10 +27,20 @@ discovery:
   max_news_candidates: 100
   min_code_confidence: 0.82
   industry_map_available: false
+  # 规则映射失败时，用本地 LLM（NEWS_AI_*）推断受益股；置信度硬顶 0.45
   llm_mapping: false
   # 简称 → 代码；不含歧义词（如单独「平安」）
   aliases:
     茅台: 600519.SH
+
+# 本地新闻智能引擎 LLM（.env 的 NEWS_AI_* 覆盖此处）
+llm:
+  provider: local
+  base_url: http://127.0.0.1:11434/v1
+  model: qwen3.5:latest
+  api_key_env: NEWS_AI_API_KEY
+  temperature: 0.1
+  timeout_sec: 120
 
 windows_hours:
   last_24h: 24

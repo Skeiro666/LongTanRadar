@@ -27,6 +27,8 @@ def detect_provider(base_url: str, hint: str | None = None) -> str:
             return "kimi"
         if h in {"siliconflow", "silicon", "sf"}:
             return "siliconflow"
+        if h in {"local"}:
+            return "ollama"
         if h in {"deepseek", "openai", "ollama", "compatible"}:
             return h
     host = (urlparse(base_url or "").hostname or "").lower()
@@ -371,6 +373,20 @@ def client_for_role(cfg: dict[str, Any], role_id: str) -> LLMClient:
     roles = list(committee.get("roles") or [])
     match = next((r for r in roles if str(r.get("id")) == str(role_id)), None)
     return client_from_cfg(cfg, match)
+
+
+def client_for_news(cfg: dict[str, Any]) -> LLMClient | None:
+    """News Intelligence Engine — separate gateway from Council (NEWS_AI_* in .env)."""
+    from ashare.config_loaders import load_yaml_config
+
+    news_cfg = load_yaml_config(cfg, "news")
+    prof = dict(news_cfg.get("llm") or {})
+    if not prof.get("base_url") or not prof.get("model"):
+        return None
+    prof.setdefault("api_key_env", "NEWS_AI_API_KEY")
+    prof.setdefault("temperature", 0.1)
+    prof.setdefault("timeout_sec", 120)
+    return client_from_cfg(cfg, prof)
 
 
 def parse_json_object(text: str) -> dict[str, Any]:

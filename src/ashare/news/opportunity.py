@@ -69,6 +69,13 @@ class NewsOpportunityEngine:
         hypo_eng = ResearchHypothesisEngine()
         registry = EvidenceRegistry(self.cfg)
 
+        use_llm = bool(disc.get("llm_mapping", False))
+        news_client = None
+        if use_llm:
+            from ashare.news.llm_mapping import news_llm_client
+
+            news_client = news_llm_client(self.cfg)
+
         events: list[ExtractedEvent] = []
         candidates: list[NewsCandidate] = []
         rejected: list[dict[str, Any]] = []
@@ -76,6 +83,10 @@ class NewsOpportunityEngine:
         for n in news:
             cat = classify_news(n)
             ents = link_entities_open(n, name_map=names, aliases=als)
+            if not ents and news_client is not None:
+                from ashare.news.llm_mapping import infer_entities_from_news
+
+                ents = infer_entities_from_news(n, news_client)
             extracted = extract_events(
                 n,
                 symbol=ents[0].symbol if ents else "",

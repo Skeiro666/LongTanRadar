@@ -7,14 +7,19 @@ from typing import Any
 
 from ashare.config_loaders import load_yaml_config
 from ashare.notification.models import (
+    EXIT_NOTIFY_LEVELS,
     GATE_NOTIFY,
     GATE_SKIP,
     NOTIFY_LEVEL_BUY,
+    NOTIFY_LEVEL_RATING_EXIT,
     NOTIFY_LEVEL_RISK_EXIT,
     NOTIFY_LEVEL_STRONG_BUY,
     GateInput,
     GateResult,
 )
+
+_BUY_RATINGS = {NOTIFY_LEVEL_BUY, NOTIFY_LEVEL_STRONG_BUY}
+_RATING_EXIT_PRIORITY = {"SELL": 1.0, "PASS": 0.85, "WATCH": 0.65}
 from ashare.symbols import to_symbol
 
 
@@ -155,28 +160,27 @@ class NotificationGate:
             and risk_status == "blocked"
             and risk_exit_cfg.get("require_risk_blocked", True)
         ):
-            level = NOTIFY_LEVEL_RISK_EXIT
-            dedup = build_dedup_key(symbol=sym, decision_id=decision_id, level=level, event_id=_event_id(inp.snapshot, inp.report))
-            ch = list((self.n_cfg.get("channels") or {}).get("risk_exit") or ["wechat", "email"])
-            return GateResult(
-                action=GATE_NOTIFY,
-                level=level,
+            return self._exit_result(
+                inp,
+                level=NOTIFY_LEVEL_RISK_EXIT,
+                sym=sym,
+                decision_id=decision_id,
+                rating=rating,
                 reason="risk_exit_blocked",
+                change_reason="risk_filter_blocked",
                 priority=1.0,
-                channels=ch,
-                dedup_key=dedup,
-                metadata={
-                    "previous_decision": inp.previous_decision,
-                    "current_decision": rating,
-                    "change_reason": "risk_filter_blocked",
-                    "expected_excess_return": eer,
-                    "confidence": confidence,
-                    "data_quality": dq,
-                    "risk_quality": rq,
-                },
+                channel_key="risk_exit",
+                eer=eer,
+                confidence=confidence,
+                dq=dq,
+                rq=rq,
             )
 
-        if rating in {"WATCH", "PASS", "GATE_SKIP", "SKIP"}:
+        rating_exit = self._eval_rating_exit(inp, rating, sym, decision_id, eer, confidence, dq, rq)
+        if rating_exit is not None:
+            return rating_exit
+
+        if rating in {"WATCH", "PASS", "GATE_SKIP", "SKIP", "SELL"}:
             return GateResult(action=GATE_SKIP, reason=f"rating_{rating.lower()}")
 
         buy_cfg = dict(self.gate_cfg.get("buy") or {})
@@ -252,8 +256,113 @@ class NotificationGate:
             },
         )
 
+    def _eval_rating_exit(
+        self,
+        inp: GateInput,
+        rating: str,
+        sym: str,
+        decision_id: str,
+        eer: dict[str, Any],
+        confidence: float | None,
+        dq: float | None,
+        rq: float | None,
+    ) -> GateResult | None:
+        cfg = dict(self.gate_cfg.get("rating_exit") or {})
+        if not cfg.get("require_paper_position", True) or not inp.has_paper_position:
+            return None
 
-def rank_and_cap(candidates: list[tuple[GateInput, GateResult]], max_n: int) -> list[tuple[GateInput, GateResult]]:
+        notify_ratings = {str(r).upper() for r in (cfg.get("notify_ratings") or ["PASS", "SELL"])}
+        include_watch = bool(cfg.get("include_watch_on_downgrade", True))
+        prev = (inp.previous_decision or "").upper()
+
+        should_exit = False
+        change_reason = "rating_exit"
+        if rating in notify_ratings:
+            should_exit = True
+            change_reason = "explicit_sell" if rating == "SELL" else "rating_downgrade"
+        elif rating == "WATCH" and include_watch and prev in _BUY_RATINGS:
+            should_exit = True
+            change_reason = "rating_downgrade"
+
+        if not should_exit:
+            return None
+
+        priority = float(_RATING_EXIT_PRIORITY.get(rating, 0.7))
+        if prev in _BUY_RATINGS:
+            priority = min(1.0, priority + 0.1)
+        if confidence is not None:
+            priority = round(priority * (0.5 + 0.5 * float(confidence)), 6)
+
+        return self._exit_result(
+            inp,
+            level=NOTIFY_LEVEL_RATING_EXIT,
+            sym=sym,
+            decision_id=decision_id,
+            rating=rating,
+            reason="rating_exit",
+            change_reason=change_reason,
+            priority=priority,
+            channel_key="rating_exit",
+            eer=eer,
+            confidence=confidence,
+            dq=dq,
+            rq=rq,
+        )
+
+    def _exit_result(
+        self,
+        inp: GateInput,
+        *,
+        level: str,
+        sym: str,
+        decision_id: str,
+        rating: str,
+        reason: str,
+        change_reason: str,
+        priority: float,
+        channel_key: str,
+        eer: dict[str, Any],
+        confidence: float | None,
+        dq: float | None,
+        rq: float | None,
+    ) -> GateResult:
+        dedup = build_dedup_key(
+            symbol=sym,
+            decision_id=decision_id,
+            level=level,
+            event_id=_event_id(inp.snapshot, inp.report),
+        )
+        ch = list((self.n_cfg.get("channels") or {}).get(channel_key) or ["wechat", "email"])
+        return GateResult(
+            action=GATE_NOTIFY,
+            level=level,
+            reason=reason,
+            priority=priority,
+            channels=ch,
+            dedup_key=dedup,
+            metadata={
+                "previous_decision": inp.previous_decision,
+                "current_decision": rating,
+                "change_reason": change_reason,
+                "expected_excess_return": eer,
+                "confidence": confidence,
+                "data_quality": dq,
+                "risk_quality": rq,
+                "has_paper_position": inp.has_paper_position,
+            },
+        )
+
+
+def rank_and_cap(
+    candidates: list[tuple[GateInput, GateResult]],
+    max_buy: int,
+    max_exit: int | None = None,
+) -> list[tuple[GateInput, GateResult]]:
+    """Reserve separate caps for exit vs entry notifications."""
+    max_exit = max_exit if max_exit is not None else max_buy
     notify = [(inp, gr) for inp, gr in candidates if gr.action == GATE_NOTIFY]
-    notify.sort(key=lambda x: x[1].priority, reverse=True)
-    return notify[:max_n]
+    exits = [(inp, gr) for inp, gr in notify if gr.level in EXIT_NOTIFY_LEVELS]
+    entries = [(inp, gr) for inp, gr in notify if gr.level not in EXIT_NOTIFY_LEVELS]
+    exits.sort(key=lambda x: x[1].priority, reverse=True)
+    entries.sort(key=lambda x: x[1].priority, reverse=True)
+    return exits[:max_exit] + entries[:max_buy]

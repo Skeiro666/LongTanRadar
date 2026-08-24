@@ -27,6 +27,7 @@ type Stats = {
   BUY_count?: number;
   STRONG_BUY_count?: number;
   RISK_EXIT_count?: number;
+  RATING_EXIT_count?: number;
   cooldown_count?: number;
   duplicate_count?: number;
   notification_llm_cost?: number;
@@ -61,7 +62,7 @@ export default function Notifications() {
   const attr = stats?.notification_attribution;
 
   return (
-    <PageShell title="通知中心" subtitle="研究结果主动提醒 · 0 LLM · 不自动交易">
+    <PageShell title="通知中心" subtitle="买入提醒 + 卖出/退出提醒 · 0 LLM · 不自动交易">
       <ScrollPane>
       {err && <p className="error">{err}</p>}
       {stats && (
@@ -97,6 +98,10 @@ export default function Notifications() {
               <dd>{stats.RISK_EXIT_count ?? 0}</dd>
             </div>
             <div className="metric">
+              <dt>RATING_EXIT</dt>
+              <dd>{stats.RATING_EXIT_count ?? 0}</dd>
+            </div>
+            <div className="metric">
               <dt>Cooldown</dt>
               <dd>{stats.cooldown_count ?? 0}</dd>
             </div>
@@ -115,7 +120,7 @@ export default function Notifications() {
       {attr && (
         <div className="persona-panel compact" style={{ marginTop: "0.75rem" }}>
           <h3>Notification Alpha</h3>
-          {(["BUY", "STRONG_BUY"] as const).map((level) => (
+          {(["BUY", "STRONG_BUY", "RATING_EXIT", "RISK_EXIT"] as const).map((level) => (
             <div key={level} style={{ marginBottom: "0.5rem" }}>
               <strong>{level}</strong>
               {["5", "10", "20"].map((h) => {
@@ -138,7 +143,7 @@ export default function Notifications() {
       <div className="persona-panel compact" style={{ marginTop: "0.75rem" }}>
         <h3>通知历史</h3>
         {rows.length === 0 ? (
-          <p className="muted">暂无通知记录。Precision &gt; Recall — 无 BUY 时不打扰。</p>
+          <p className="muted">暂无通知记录。Precision &gt; Recall — 无信号时不打扰。</p>
         ) : (
           rows.map((r) => (
             <div key={r.notification_id || `${r.symbol}-${r.created_at}`} className="verdict-row">

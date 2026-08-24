@@ -101,11 +101,64 @@ def test_strong_buy_threshold(tmp_path):
     assert "email" in gr.channels
 
 
-def test_watch_pass_no_notify(tmp_path):
+def test_watch_pass_no_notify_without_position(tmp_path):
     gate = NotificationGate(_cfg(tmp_path))
-    for rating in ("WATCH", "PASS"):
+    for rating in ("WATCH", "PASS", "SELL"):
         gr = gate.evaluate(GateInput(canonical=_canonical(rating=rating), snapshot=_snapshot()))
         assert gr.action == GATE_SKIP
+
+
+def test_rating_exit_pass_with_position(tmp_path):
+    gate = NotificationGate(_cfg(tmp_path))
+    gr = gate.evaluate(
+        GateInput(
+            canonical=_canonical(rating="PASS"),
+            snapshot=_snapshot(),
+            has_paper_position=True,
+        )
+    )
+    assert gr.action == GATE_NOTIFY
+    assert gr.level == "RATING_EXIT"
+    assert gr.metadata.get("change_reason") == "rating_downgrade"
+    assert "email" in gr.channels
+
+
+def test_rating_exit_sell_with_position(tmp_path):
+    gate = NotificationGate(_cfg(tmp_path))
+    gr = gate.evaluate(
+        GateInput(
+            canonical=_canonical(rating="SELL"),
+            snapshot=_snapshot(),
+            has_paper_position=True,
+        )
+    )
+    assert gr.action == GATE_NOTIFY
+    assert gr.level == "RATING_EXIT"
+    assert gr.metadata.get("change_reason") == "explicit_sell"
+
+
+def test_rating_exit_watch_only_on_downgrade(tmp_path):
+    gate = NotificationGate(_cfg(tmp_path))
+    gr = gate.evaluate(
+        GateInput(
+            canonical=_canonical(rating="WATCH"),
+            snapshot=_snapshot(),
+            has_paper_position=True,
+            previous_decision="BUY",
+        )
+    )
+    assert gr.action == GATE_NOTIFY
+    assert gr.level == "RATING_EXIT"
+
+    gr2 = gate.evaluate(
+        GateInput(
+            canonical=_canonical(rating="WATCH"),
+            snapshot=_snapshot(),
+            has_paper_position=True,
+            previous_decision=None,
+        )
+    )
+    assert gr2.action == GATE_SKIP
 
 
 def test_risk_exit_with_position(tmp_path):
@@ -211,10 +264,41 @@ def test_priority_max_per_cycle(tmp_path):
             snapshot=_snapshot(eer_value=eer),
         )
         cands.append((inp, gate.evaluate(inp)))
-    selected = rank_and_cap(cands, 3)
+    selected = rank_and_cap(cands, max_buy=3)
     assert len(selected) == 3
     priorities = [x[1].priority for x in selected]
     assert priorities == sorted(priorities, reverse=True)
+
+
+def test_formatter_rating_exit(tmp_path):
+    text = format_notification(
+        level="RATING_EXIT",
+        canonical=_canonical(rating="PASS"),
+        snapshot=_snapshot(),
+        cfg=_cfg(tmp_path),
+    )
+    assert "卖出" in text or "退出" in text
+    assert "建议动作" in text
+
+
+def test_exit_and_buy_both_cap(tmp_path):
+    gate = NotificationGate(_cfg(tmp_path))
+    cands = []
+    for i in range(4):
+        inp = GateInput(
+            canonical=_canonical(symbol=f"60000{i}.SH", research_id=f"R{i}"),
+            snapshot=_snapshot(eer_value=0.04 + i * 0.01),
+        )
+        cands.append((inp, gate.evaluate(inp)))
+    inp_exit = GateInput(
+        canonical=_canonical(symbol="600099.SH", rating="PASS", research_id="REXIT"),
+        snapshot=_snapshot(),
+        has_paper_position=True,
+    )
+    cands.append((inp_exit, gate.evaluate(inp_exit)))
+    selected = rank_and_cap(cands, max_buy=3, max_exit=2)
+    assert len(selected) == 4
+    assert any(x[1].level == "RATING_EXIT" for x in selected)
 
 
 def test_formatter_no_llm(tmp_path):

@@ -6,6 +6,7 @@ from typing import Any
 from ashare.config_loaders import load_yaml_config
 from ashare.notification.models import (
     NOTIFY_LEVEL_BUY,
+    NOTIFY_LEVEL_RATING_EXIT,
     NOTIFY_LEVEL_RISK_EXIT,
     NOTIFY_LEVEL_STRONG_BUY,
     STATUS_COOLDOWN,
@@ -34,6 +35,8 @@ _UPGRADE_PATHS = {
     ("BUY", NOTIFY_LEVEL_STRONG_BUY),
     (NOTIFY_LEVEL_BUY, NOTIFY_LEVEL_RISK_EXIT),
     (NOTIFY_LEVEL_STRONG_BUY, NOTIFY_LEVEL_RISK_EXIT),
+    (NOTIFY_LEVEL_BUY, NOTIFY_LEVEL_RATING_EXIT),
+    (NOTIFY_LEVEL_STRONG_BUY, NOTIFY_LEVEL_RATING_EXIT),
 }
 
 
@@ -100,7 +103,12 @@ class DedupStore:
 
 
 def _level_rank(level: str) -> int:
-    return {NOTIFY_LEVEL_BUY: 1, NOTIFY_LEVEL_STRONG_BUY: 2, NOTIFY_LEVEL_RISK_EXIT: 3}.get(level, 0)
+    return {
+        NOTIFY_LEVEL_BUY: 1,
+        NOTIFY_LEVEL_STRONG_BUY: 2,
+        NOTIFY_LEVEL_RATING_EXIT: 3,
+        NOTIFY_LEVEL_RISK_EXIT: 4,
+    }.get(level, 0)
 
 
 def apply_dedup(

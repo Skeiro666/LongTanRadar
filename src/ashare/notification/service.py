@@ -115,7 +115,8 @@ def evaluate_cycle(
         candidates.append((inp, gr))
 
     max_n = int((n_cfg.get("priority") or {}).get("max_per_cycle", 3))
-    selected = rank_and_cap(candidates, max_n)
+    max_exit = int((n_cfg.get("priority") or {}).get("max_exit_per_cycle", max_n))
+    selected = rank_and_cap(candidates, max_buy=max_n, max_exit=max_exit)
 
     jobs: list[dict[str, Any]] = []
     for inp, gr in selected:

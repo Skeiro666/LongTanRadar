@@ -135,6 +135,31 @@ def load_config(path: str | Path | None = None) -> dict[str, Any]:
         if not mp.is_absolute():
             ml["model_path"] = str(root / mp)
 
+    # News Intelligence Engine — local LLM (NEWS_AI_*), independent of Council ai.*
+    news_override = cfg.setdefault("news", {})
+    news_llm = dict(news_override.get("llm") or {})
+    if os.getenv("NEWS_AI_BASE_URL"):
+        news_llm["base_url"] = os.getenv("NEWS_AI_BASE_URL")
+    if os.getenv("NEWS_AI_MODEL"):
+        news_llm["model"] = os.getenv("NEWS_AI_MODEL")
+    if os.getenv("NEWS_AI_PROVIDER"):
+        news_llm["provider"] = os.getenv("NEWS_AI_PROVIDER")
+    news_key = os.getenv("NEWS_AI_API_KEY", "")
+    if news_key:
+        news_llm["api_key"] = news_key
+        news_llm["api_key_env"] = "NEWS_AI_API_KEY"
+    if news_llm:
+        news_override["llm"] = news_llm
+    disc = dict(news_override.get("discovery") or {})
+    if news_llm.get("base_url") and news_llm.get("model"):
+        flag = os.getenv("NEWS_AI_LLM_MAPPING", "").strip().lower()
+        if flag in {"0", "false", "no", "off"}:
+            disc["llm_mapping"] = False
+        elif flag in {"1", "true", "yes", "on"} or not flag:
+            disc["llm_mapping"] = True
+    if disc:
+        news_override["discovery"] = disc
+
     cfg["_root"] = str(root)
     cfg["_config_path"] = str(cfg_path)
     env_bag = {
@@ -151,6 +176,7 @@ def load_config(path: str | Path | None = None) -> dict[str, Any]:
         "BROKER_MODE": os.getenv("BROKER_MODE", cfg.get("broker", {}).get("mode", "paper")),
         "DATABASE_URL": os.getenv("DATABASE_URL", ""),
         "REDIS_URL": os.getenv("REDIS_URL", ""),
+        "NEWS_AI_API_KEY": os.getenv("NEWS_AI_API_KEY", "") or news_key,
     }
     for rid in ("DRAGON", "EVENT", "RISK", "CHAIR"):
         k = f"AI_API_KEY_{rid}"

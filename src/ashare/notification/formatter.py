@@ -4,6 +4,7 @@ import os
 from typing import Any
 
 from ashare.config_loaders import load_yaml_config
+from ashare.notification.models import NOTIFY_LEVEL_RATING_EXIT, NOTIFY_LEVEL_RISK_EXIT
 
 
 def _cfg(cfg: dict[str, Any] | None) -> dict[str, Any]:
@@ -75,8 +76,18 @@ def format_notification(
     title = "🚨 寻龙尺 买入机会"
     if level == "STRONG_BUY":
         title = "🔥 寻龙尺 强买入机会"
-    elif level == "RISK_EXIT":
+    elif level == NOTIFY_LEVEL_RISK_EXIT:
         title = "⚠️ 寻龙尺 风险退出提醒"
+    elif level == NOTIFY_LEVEL_RATING_EXIT:
+        if str(rating).upper() == "SELL":
+            title = "🔻 寻龙尺 明确卖出信号"
+        elif str(rating).upper() == "PASS":
+            title = "📉 寻龙尺 评级下调 · 建议退出"
+        else:
+            title = "📉 寻龙尺 卖出提醒"
+
+    is_exit = level in {NOTIFY_LEVEL_RISK_EXIT, NOTIFY_LEVEL_RATING_EXIT}
+    action_line = "建议动作：考虑减仓或退出（纸面持仓）" if is_exit else str(action)
 
     lines = [
         title,
@@ -89,7 +100,7 @@ def format_notification(
         "",
         f"评级：\n{rating}",
         "",
-        f"交易动作：\n{action}",
+        f"{'建议动作' if is_exit else '交易动作'}：\n{action_line}",
         "",
         f"预期超额收益：\n{eer_txt}",
         "",

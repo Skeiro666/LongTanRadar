@@ -14,10 +14,15 @@ gate:
   risk_exit:
     require_paper_position: true
     require_risk_blocked: true
+  rating_exit:
+    require_paper_position: true
+    notify_ratings: [PASS, SELL]
+    include_watch_on_downgrade: true  # WATCH only when prior notify was BUY/STRONG_BUY
 
 # Priority = expected_excess_return * confidence * data_quality * risk_quality
 priority:
   max_per_cycle: 3
+  max_exit_per_cycle: 3
 
 # Dedup & cooldown
 dedup:
@@ -25,12 +30,13 @@ dedup:
 cooldown:
   same_symbol_hours: 24
   same_event_hours: 72
-  allow_upgrade: true  # WATCH→BUY, BUY→STRONG_BUY, BUY→RISK_EXIT
+  allow_upgrade: true  # WATCH→BUY, BUY→STRONG_BUY, BUY→RISK_EXIT, BUY→RATING_EXIT
 
 # Channels
 channels:
   buy: [wechat]
   strong_buy: [wechat, email]
+  rating_exit: [wechat, email]
   risk_exit: [wechat, email]
 
 wechat:

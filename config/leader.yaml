@@ -1,0 +1,69 @@
+# 涨停龙头研究系统 — Stage / Chase / Timing / Focus
+leader_version: leader_v1
+enabled: true
+# 研究模式：只标注 lifecycle/timing，不自动改 canonical BUY 阈值
+research_only: true
+
+product:
+  name: 寻龙尺
+  positioning: 涨停龙头股研究与交易时机识别系统
+
+universe:
+  require_limit_up: true
+  allow_strong_without_limit_up: false
+  block_non_limit_up_in_pool: true
+  min_board_for_leader: 1
+  reject_news_only_without_limit_up: true
+
+ranking:
+  weight_board: 0.35
+  weight_consecutive: 0.25
+  weight_leader_score: 0.25
+  weight_event: 0.15
+
+focus:
+  max_focus_stocks: 8
+  state_file: data/leader/focus_watchlist.json
+  persist_across_cycles: true
+  min_leader_score: 0.35
+  promote_on_lifecycle: [LEADER_CONFIRMED, BUY_CANDIDATE, BUY_READY]
+
+lifecycle:
+  drop_on_breakdown: true
+  drop_stale_cycles: 5
+  downgrade_missing_limit_up_cycles: 3
+
+stage:
+  extreme_board_min: 3
+  extreme_ma_gap20: 0.08
+  extreme_mom5: 0.25
+
+chase:
+  low_max: 0.35
+  medium_max: 0.55
+  high_max: 0.75
+
+timing:
+  buy_ready_min: 0.72
+  buy_candidate_min: 0.55
+  wait_max: 0.54
+  extreme_stage_cap: 0.45
+  breakdown_cap: 0.15
+
+news_tiers:
+  scan: rules_only
+  leader_candidate: local_llm_light
+  focus: local_llm_full
+  buy_candidate: local_llm_full_plus_refresh
+
+council:
+  full_tiers: [FOCUS, BUY_CANDIDATE, BUY_READY]
+  skip_tiers: [NEW_LIMIT_UP, LEADER_CANDIDATE, DROPPED]
+
+notification:
+  buy_ready_alert: true
+  require_risk_pass: true
+
+counterfactual:
+  entry_boards: [1, 2, 3, 4, 5]
+  horizons: [1, 3, 5, 10, 20]

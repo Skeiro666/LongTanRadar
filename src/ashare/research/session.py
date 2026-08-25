@@ -109,7 +109,16 @@ class ResearchSessionEngine:
 
         max_n = int((self.research_cfg.get("funnel") or {}).get("max_council", 12))
         gate_batch = apply_research_gate(ranked, self.cfg)
-        council_candidates = gate_batch.passed[:max_n]
+        from ashare.config_loaders import load_yaml_config
+
+        if bool(load_yaml_config(self.cfg, "leader").get("enabled", True)):
+            full_passed = [c for c in gate_batch.passed if c.get("council_tier") == "full" or c.get("in_council")]
+            full_syms = {str(c.get("symbol")) for c in full_passed}
+            scan_only = [c for c in gate_batch.passed if str(c.get("symbol")) not in full_syms]
+            council_candidates = full_passed[:max_n]
+        else:
+            council_candidates = gate_batch.passed[:max_n]
+            scan_only = []
         gate_cfg = dict((self.research_cfg.get("research_gate") or {}))
         max_llm = int(gate_cfg.get("max_llm_calls") or 30)
         llm_used = 0
@@ -170,6 +179,8 @@ class ResearchSessionEngine:
             rating = (rep.get("decision") or {}).get("research_rating") or (rep.get("chairman") or {}).get("rating")
             prog.log("council", f"完成 {name} → {rating}", detail={"llm_used": llm_used})
             reports.append(rep)
+        for c in scan_only:
+            reports.append(self._scan_only_report(c))
         for c in gate_batch.rejected:
             reports.append(self._gate_skip_report(c))
         summary = gate_batch.summary()
@@ -214,6 +225,44 @@ class ResearchSessionEngine:
             "news_package": candidate.get("news_package") or {},
             "ai_routing": routing,
             "council_meta": {"roles_called": [], "routing_skip": True},
+        }
+
+    def _scan_only_report(self, candidate: dict[str, Any]) -> dict[str, Any]:
+        from ashare.research.ai_routing import quant_only_decision
+
+        rid = f"S{datetime.now(timezone.utc).strftime('%Y%m%d')}{uuid4().hex[:6].upper()}"
+        chair = quant_only_decision(candidate)
+        ta = str(candidate.get("trade_timing_action") or "WAIT")
+        rating = "WATCH" if ta in {"WAIT", "BUY_CANDIDATE"} else str(chair.get("rating") or "WATCH")
+        return {
+            "research_id": rid,
+            "symbol": candidate.get("symbol"),
+            "name": candidate.get("name"),
+            "research_time": datetime.now(timezone.utc).isoformat(),
+            "trigger": candidate.get("trigger"),
+            "quant": {
+                "leader_score": candidate.get("leader_score"),
+                "factor_score": candidate.get("candidate_score"),
+            },
+            "leader": {
+                "lifecycle": candidate.get("lifecycle"),
+                "stage": candidate.get("stage"),
+                "chase_score": candidate.get("chase_score"),
+                "trade_timing_score": candidate.get("trade_timing_score"),
+                "trade_timing_action": ta,
+            },
+            "gate": candidate.get("gate") or {},
+            "candidate_sources": candidate.get("candidate_sources") or [],
+            "council": {},
+            "debate": [],
+            "chairman": {**chair, "rating": rating, "trading_action": ta, "source": "leader_scan"},
+            "decision": {
+                "research_rating": rating,
+                "action": ta,
+                "position_suggestion": 0,
+            },
+            "news_package": candidate.get("news_package") or {},
+            "council_meta": {"roles_called": [], "leader_scan": True},
         }
 
     def gate_summary(self) -> dict[str, Any]:

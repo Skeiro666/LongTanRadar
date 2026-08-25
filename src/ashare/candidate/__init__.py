@@ -5,6 +5,7 @@ from typing import Any
 from ashare.config_loaders import load_yaml_config
 from ashare.events import EventEngine
 from ashare.factors.engine import FactorEngine
+from ashare.leader.lifecycle import BUY_CANDIDATE, BUY_READY, FOCUS
 from ashare.pool.builder import build_leader_pool
 from ashare.profit import ProfitInflectionEngine
 from ashare.research.hypothesis import ResearchHypothesisEngine
@@ -90,6 +91,16 @@ class CandidateEngine:
             filtered.append(r)
         rows = filtered[:max_events]
 
+        as_of_str = as_of or str((news_discovery or {}).get("as_of") or "")
+        from ashare.leader import LeaderPipeline
+
+        leader_pipe = LeaderPipeline(self.cfg)
+        leader_pack: dict[str, Any] = {"rows": rows, "rejected": [], "focus_stats": {}}
+        if leader_pipe.enabled and panel:
+            leader_pack = leader_pipe.enrich_rows(rows, panel, as_of=as_of_str or "")
+            rows = leader_pack["rows"]
+            rejected.extend(leader_pack.get("rejected") or [])
+
         factor_rows: list[dict[str, Any]] = []
         if panel:
             factor_rows = self.factors.asof_rows(panel)
@@ -99,7 +110,7 @@ class CandidateEngine:
         by_sym: dict[str, dict[str, Any]] = {}
         for r in rows:
             f = by_f.get(r["symbol"]) or {}
-            leader = float(f.get("leader_score") or 0)
+            leader = float(r.get("leader_score") or f.get("leader_score") or 0)
             pi_score = float((r.get("profit_inflection") or {}).get("score") or 0)
             ev_score = float(r.get("event_score") or 0)
             item = {
@@ -109,7 +120,7 @@ class CandidateEngine:
                 "news_score": 0.0,
                 "candidate_score": 0.45 * leader + 0.35 * pi_score + 0.20 * ev_score,
                 "trigger": self._trigger(r, leader, pi_score, ev_score),
-                "in_council": False,
+                "in_council": bool(r.get("in_council")),
             }
             by_sym[r["symbol"]] = item
             scored.append(item)
@@ -118,7 +129,6 @@ class CandidateEngine:
         quant_top_n = {r["symbol"] for r in scored[:max_events]}
 
         panel = panel or {}
-        as_of_str = as_of or str((news_discovery or {}).get("as_of") or "")
         from ashare.research.price_reaction import annotate_news_candidate_price
 
         for nc_raw in (news_discovery or {}).get("news_candidates") or []:
@@ -127,6 +137,9 @@ class CandidateEngine:
                 continue
             if str(nc_raw.get("discovery_grade") or "") == "INFERRED":
                 rejected.append({**nc_raw, "reject_reason": "INFERRED_DISCOVERY"})
+                continue
+            if leader_pipe.enabled and leader_pipe.limit_up.reject_news_only(nc_raw):
+                rejected.append({**nc_raw, "reject_reason": "NOT_LIMIT_UP_NEWS_ONLY"})
                 continue
             try:
                 sym = to_symbol(nc_raw.get("symbol"))
@@ -226,7 +239,23 @@ class CandidateEngine:
 
         research = union[:max_research]
         research_syms = {r["symbol"] for r in research}
+        # Focus / BUY_* must survive ranking cutoff (persistent monitoring).
+        focus_keep = {
+            FOCUS,
+            BUY_CANDIDATE,
+            BUY_READY,
+        }
+        for item in scored:
+            sym = item.get("symbol")
+            if not sym or sym in research_syms:
+                continue
+            lc = str(item.get("lifecycle") or "")
+            if item.get("merged_from_focus") or lc in focus_keep or item.get("in_focus_watchlist"):
+                research.append(item)
+                research_syms.add(sym)
         for item in union[max_research:]:
+            if item.get("symbol") in research_syms:
+                continue
             item["reject_reason"] = "RANKING_CUTOFF"
             rejected.append(
                 {
@@ -249,6 +278,18 @@ class CandidateEngine:
             except Exception:  # noqa: BLE001
                 as_of_dt = None
         for r in research:
+            tier = str(r.get("news_tier") or "rules_only")
+            if tier == "rules_only" and not r.get("merged_from_focus"):
+                pkg = {
+                    "news_data_incomplete": True,
+                    "net_event_score": float(r.get("news_score") or 0),
+                    "legacy_headlines": [],
+                    "news_tier": tier,
+                }
+                r["news_package"] = pkg
+                r["news_data_incomplete"] = True
+                r["compact_news"] = None
+                continue
             try:
                 pkg = news_eng.collect_stock(
                     r["symbol"],
@@ -261,7 +302,7 @@ class CandidateEngine:
             r["news_package"] = pkg
             r["news_data_incomplete"] = bool(pkg.get("news_data_incomplete"))
             r["compact_news"] = pkg.get("compact_news_package")
-            r["quant_top_n_at_signal"] = sym in quant_top_n
+            r["quant_top_n_at_signal"] = r["symbol"] in quant_top_n
             intel0 = (pkg.get("news_intelligence") or [None])[0] if pkg.get("news_intelligence") else None
             if intel0:
                 r["news_intelligence"] = intel0
@@ -284,7 +325,8 @@ class CandidateEngine:
                 nd["news_role"] = "both"
                 r["news_discovery"] = nd
             r["candidate_score"] = compute_candidate_score(r, cw, ml_weight=ml_weight)
-            r["in_council"] = True
+            tier = str(r.get("council_tier") or ("full" if r.get("in_council") else "scan"))
+            r["in_council"] = tier == "full"
         research.sort(key=lambda x: x["candidate_score"], reverse=True)
         return {
             "pool_size": len(pool.get("candidates") or []),
@@ -296,6 +338,13 @@ class CandidateEngine:
             "factor_version": self.factors.catalog.version,
             "research_symbols": sorted(research_syms),
             "quant_top_n_symbols": sorted(quant_top_n),
+            "leader_pipeline": {
+                "enabled": leader_pipe.enabled,
+                "focus_stats": leader_pack.get("focus_stats"),
+                "focus_watchlist": leader_pack.get("focus_watchlist"),
+                "leader_rejected": len(leader_pack.get("rejected") or []),
+                "dashboard": leader_pipe.dashboard_payload(research) if leader_pipe.enabled else {},
+            },
         }
 
     def _trigger(self, row: dict[str, Any], leader: float, pi: float, ev: float) -> dict[str, Any]:

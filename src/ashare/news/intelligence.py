@@ -24,6 +24,16 @@ from ashare.news.score import source_quality
 
 logger = logging.getLogger("ashare.news.intelligence")
 
+
+class IntelligenceTimeout(TimeoutError):
+    """Local Ollama intelligence timed out — caller should skip remaining intel this cycle."""
+
+
+def _is_timeout(exc: BaseException) -> bool:
+    blob = f"{type(exc).__name__} {exc}".lower()
+    return "timeout" in blob or "timed out" in blob
+
+
 _INTEL_SYSTEM = """你是 A 股新闻理解引擎（本地，不交易）。
 只理解新闻。禁止 BUY/SELL/STRONG_BUY/仓位/最终评级/交易动作。
 只输出一个 JSON 对象，字段：
@@ -145,10 +155,21 @@ class LocalNewsIntelligence:
         self.max_retries = max(0, int(intel_cfg.get("max_retries") or 1))
         self.max_per_cycle = int(intel_cfg.get("max_llm_per_cycle") or 24)
         self._llm_calls = 0
+        self._timeout_trips = 0
+        self._skip_llm = False
+        self._max_timeouts = max(1, int(intel_cfg.get("max_timeouts_before_skip") or 2))
         root = Path(self.cfg.get("_root") or Path(__file__).resolve().parents[3])
         self.cache = cache or NewsIntelCache(root)
         self.model_name = str((client.model if client else "") or (news_cfg.get("llm") or {}).get("model") or "")
         self._budget = NewsTokenBudget(int(intel_cfg.get("max_tokens_per_cycle") or 80_000))
+
+    def trip_timeout_circuit(self) -> None:
+        """Stop further Ollama intelligence calls for this cycle."""
+        self._skip_llm = True
+        logger.warning(
+            "news intelligence circuit open after %s timeouts — skip remaining LLM this cycle",
+            self._timeout_trips,
+        )
 
     @property
     def available(self) -> bool:
@@ -205,6 +226,11 @@ class LocalNewsIntelligence:
             empty.update({**meta, "cache_hit": False, "status": "skipped"})
             return empty
 
+        if self._skip_llm:
+            empty = _empty_intel(news, entity_confidence=entity_confidence, reason="timeout_circuit")
+            empty.update({**meta, "cache_hit": False, "status": "skipped"})
+            return empty
+
         if self._llm_calls >= self.max_per_cycle:
             empty = _empty_intel(news, entity_confidence=entity_confidence, reason="max_llm_per_cycle")
             empty.update({**meta, "cache_hit": False, "status": "skipped"})
@@ -238,8 +264,10 @@ class LocalNewsIntelligence:
             except Exception as exc:  # noqa: BLE001
                 last_err = str(exc)[:200]
                 logger.warning("news intelligence failed id=%s attempt=%s: %s", news.id, attempt, exc)
-                blob = f"{type(exc).__name__} {exc}".lower()
-                if "timeout" in blob or "timed out" in blob:
+                if _is_timeout(exc):
+                    self._timeout_trips += 1
+                    if self._timeout_trips >= self._max_timeouts:
+                        self.trip_timeout_circuit()
                     break
         latency = (time.perf_counter() - t0) * 1000.0
         inp = estimate_tokens(_INTEL_SYSTEM + user)
@@ -258,6 +286,8 @@ class LocalNewsIntelligence:
             empty = _empty_intel(news, entity_confidence=entity_confidence, reason="json_or_ollama_failure")
             empty.update({**meta, "cache_hit": False, "status": "error", "error": last_err, **usage})
             self.cache.put({**meta, "result": empty, "status": "error", **usage})
+            if self._skip_llm:
+                raise IntelligenceTimeout(last_err)
             return empty
 
         intel = _sanitize_intel(parsed, news=news, entity_confidence=entity_confidence)

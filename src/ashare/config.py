@@ -171,6 +171,18 @@ def load_config(path: str | Path | None = None) -> dict[str, Any]:
     if disc:
         news_override["discovery"] = disc
 
+    leader_override = cfg.setdefault("leader", {})
+    base_leader: dict[str, Any] = {}
+    leader_yaml = root / "config" / "leader.yaml"
+    if leader_yaml.exists():
+        try:
+            with leader_yaml.open(encoding="utf-8") as f:
+                base_leader = dict(yaml.safe_load(f) or {})
+        except Exception:  # noqa: BLE001
+            base_leader = {}
+    if base_leader:
+        cfg["leader"] = _deep_merge(base_leader, leader_override)
+
     cfg["_root"] = str(root)
     cfg["_config_path"] = str(cfg_path)
     env_bag = {

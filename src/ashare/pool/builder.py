@@ -150,26 +150,47 @@ def build_leader_pool(cfg: dict[str, Any] | None = None) -> dict[str, Any]:
         raw_parts.extend(rows)
 
     merged = merge_event_rows(raw_parts)
-    if pc["use_tech_leader"] and len(merged) < int(pc["max_candidates"]) // 2:
+    from ashare.config_loaders import load_yaml_config
+
+    lc = load_yaml_config(cfg, "leader")
+    block_non_limit = bool(lc.get("enabled")) and bool((lc.get("universe") or {}).get("block_non_limit_up_in_pool", True))
+    allow_tech = pc["use_tech_leader"] and not block_non_limit
+    if allow_tech and len(merged) < int(pc["max_candidates"]) // 2:
         tech = _from_spot_leaders(cfg)
         sources_ok["tech_leader"] = len(tech)
         merged = merge_event_rows(merged + tech)
-    elif pc["use_tech_leader"] and not merged:
+    elif allow_tech and not merged:
         tech = _from_spot_leaders(cfg)
         sources_ok["tech_leader"] = len(tech)
         merged = merge_event_rows(tech)
 
     filtered = _apply_hard_filters(merged, cfg)
-    # Prefer names with event substance: boards or profit gap or high event score
-    filtered.sort(
-        key=lambda x: (
-            float(x.get("profit_gap_score") or 0) * 2
-            + float(x.get("board_count") or 0)
-            + float(x.get("event_score") or 0)
-            + (float(x.get("amount") or 0) / 1e10)
-        ),
-        reverse=True,
-    )
+    # Leader mode: keep limit-up names in pool head — profit_gap alone must not crowd out boards.
+    if block_non_limit:
+        def _pool_rank(x: dict[str, Any]) -> tuple:
+            srcs = set(str(s) for s in (x.get("sources") or []))
+            if x.get("source"):
+                srcs.add(str(x["source"]))
+            is_lu = "limit_up" in srcs or int(x.get("board_count") or 0) >= 1
+            return (
+                is_lu,
+                int(x.get("board_count") or 0),
+                float(x.get("profit_gap_score") or 0),
+                float(x.get("event_score") or 0),
+                float(x.get("amount") or 0) / 1e10,
+            )
+
+        filtered.sort(key=_pool_rank, reverse=True)
+    else:
+        filtered.sort(
+            key=lambda x: (
+                float(x.get("profit_gap_score") or 0) * 2
+                + float(x.get("board_count") or 0)
+                + float(x.get("event_score") or 0)
+                + (float(x.get("amount") or 0) / 1e10)
+            ),
+            reverse=True,
+        )
     max_n = int(pc["max_candidates"])
     picked = filtered[:max_n]
     symbols = [r["symbol"] for r in picked]

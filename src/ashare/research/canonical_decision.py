@@ -78,6 +78,8 @@ def build_canonical_decision(
         risk_flags = [str(gate.get("reason") or "GATE_REJECT")]
 
     uni = universe_row or {}
+    timing_action = str(uni.get("trade_timing_action") or "").upper()
+    timing_ready = timing_action == "BUY_READY" and gate_passed and allow
     versions = _versions_from_report(rep)
     verdict = "buy" if approve else ("watch" if rating in {"BUY", "WATCH", "STRONG_BUY"} else "pass")
 
@@ -109,6 +111,18 @@ def build_canonical_decision(
         "research_id": rep.get("research_id"),
         "gate_passed": gate_passed,
         "weight": 0.0,
+        "leader_timing": {
+            "lifecycle": uni.get("lifecycle"),
+            "stage": uni.get("stage"),
+            "chase_score": uni.get("chase_score"),
+            "chase_level": uni.get("chase_level"),
+            "trade_timing_score": uni.get("trade_timing_score"),
+            "trade_timing_action": timing_action or None,
+            "leader_score": uni.get("leader_score"),
+            "board_count": uni.get("board_count"),
+            "timing_buy_ready": timing_ready,
+            "council_approve": approve,
+        },
     }
 
 

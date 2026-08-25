@@ -448,7 +448,11 @@ def client_for_news(cfg: dict[str, Any]) -> LLMClient | None:
         return None
     prof.setdefault("api_key_env", "NEWS_AI_API_KEY")
     prof.setdefault("temperature", 0.1)
-    prof.setdefault("timeout_sec", 120)
+    intel_to = (news_cfg.get("intelligence") or {}).get("timeout_sec")
+    if intel_to is not None:
+        prof["timeout_sec"] = float(intel_to)
+    else:
+        prof.setdefault("timeout_sec", 45)
     # Do not inherit Council max_tokens=4096 — local mapping/intel needs short JSON.
     prof.setdefault("max_tokens", 768)
     return client_from_cfg(cfg, prof)

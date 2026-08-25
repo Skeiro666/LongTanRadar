@@ -120,6 +120,8 @@ export const api = {
   exitBook: () => req<any>("/api/exit/book"),
   exitLab: () => req<any>("/api/exit/lab"),
   exitSymbol: (symbol: string) => req<any>(`/api/exit/${encodeURIComponent(symbol)}`),
+  leaderMonitor: () => req<any>("/api/leader/monitor"),
+  leaderDashboard: () => req<any>("/api/leader/dashboard"),
 };
 
 export function pct(n: number | undefined) {

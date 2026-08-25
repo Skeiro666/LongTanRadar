@@ -691,6 +691,26 @@ def create_app(config_path: str | None = None) -> FastAPI:
             raise HTTPException(status_code=400, detail="symbol required")
         return notification_status_for_symbol(get_cfg(), symbol, research_id or None)
 
+    @app.get("/api/leader/monitor")
+    def api_leader_monitor() -> dict[str, Any]:
+        from ashare.services.leader_monitor import build_leader_monitor
+
+        return build_leader_monitor(get_cfg())
+
+    @app.get("/api/leader/dashboard")
+    def api_leader_dashboard() -> dict[str, Any]:
+        from ashare.services.leader_monitor import build_leader_monitor
+
+        pack = build_leader_monitor(get_cfg())
+        return {
+            "as_of": pack.get("as_of"),
+            "stage_performance": pack.get("stage_performance") or {},
+            "board_performance": pack.get("board_performance") or {},
+            "focus_stats": pack.get("focus_stats") or {},
+            "buy_ready_count": pack.get("buy_ready_count"),
+            "has_buy_ready": pack.get("has_buy_ready"),
+        }
+
     @app.get("/api/alpha-lab")
     def api_alpha_lab(window: str = "all") -> dict[str, Any]:
         from ashare.services.alpha_lab import build_alpha_lab

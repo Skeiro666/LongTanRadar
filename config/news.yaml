@@ -42,7 +42,7 @@ llm:
   model: qwen3.5:latest
   api_key_env: NEWS_AI_API_KEY
   temperature: 0.1
-  timeout_sec: 90
+  timeout_sec: 45
   max_tokens: 768
   extra_body:
     think: false
@@ -53,10 +53,11 @@ intelligence:
   enabled: true
   prompt_version: news_intel_v1
   max_concurrency: 2
-  max_retries: 1
-  max_llm_per_cycle: 24
+  max_retries: 0
+  max_llm_per_cycle: 12
   max_tokens_per_cycle: 80000
-  timeout_sec: 120
+  max_timeouts_before_skip: 2
+  timeout_sec: 45
   score_weights:
     importance: 0.22
     novelty: 0.18

@@ -73,6 +73,15 @@ class NewsOpportunityEngine:
         use_llm = bool(disc.get("llm_mapping", False))
         intel_cfg = dict(self.news_cfg.get("intelligence") or {})
         use_intel = bool(intel_cfg.get("enabled", True))
+        # Leader mode: discovery stays rules-only; Focus stocks get LLM news later.
+        try:
+            lc = load_yaml_config(self.cfg, "leader")
+            if bool(lc.get("enabled")) and bool((lc.get("universe") or {}).get("require_limit_up", True)):
+                if not bool(intel_cfg.get("allow_during_discovery", False)):
+                    use_intel = False
+                    logger.info("leader mode: news discovery uses rules-only (no Ollama intelligence)")
+        except Exception:  # noqa: BLE001
+            pass
         news_client = None
         intel_engine = None
         if use_llm or use_intel:
@@ -116,7 +125,17 @@ class NewsOpportunityEngine:
                     skip_mapping = True
                     logger.warning("news llm mapping timed out — skip remaining mapping this cycle")
                 map_calls += 1
-            intel = extract_for_news(n, intel_engine, ents, classification=cat)
+            intel = None
+            try:
+                intel = extract_for_news(n, intel_engine, ents, classification=cat)
+            except Exception as intel_exc:  # noqa: BLE001
+                from ashare.news.intelligence import IntelligenceTimeout
+
+                if isinstance(intel_exc, IntelligenceTimeout):
+                    logger.warning("news intelligence timed out — skip remaining intel this cycle")
+                    intel_engine = None  # rules-only for rest of discovery
+                else:
+                    logger.warning("news intelligence error: %s", intel_exc)
             if intel:
                 if intel.get("cache_hit"):
                     intel_stats["cache_hits"] += 1

@@ -235,6 +235,7 @@ def run_research(cfg: dict[str, Any], top_n: int | None = None) -> dict[str, Any
     # --- Platform v2 path (Candidate → ML rank hint → Council sessions) ---
     platform_reports: list[dict[str, Any]] = []
     uni: dict[str, Any] = {}
+    uni_by_sym: dict[str, dict[str, Any]] = {}
     outcome_pack: dict[str, Any] = {"available": False, "note": "no_platform_reports"}
     gate_summary: dict[str, Any] = {}
     research_yaml = load_yaml_config(cfg, "research")
@@ -439,7 +440,19 @@ def run_research(cfg: dict[str, Any], top_n: int | None = None) -> dict[str, Any
                     "name": r.get("name"),
                     "candidate_sources": r.get("candidate_sources"),
                     "candidate_score": r.get("candidate_score"),
+                    "leader_score": r.get("leader_score"),
+                    "lifecycle": r.get("lifecycle"),
+                    "stage": r.get("stage"),
+                    "chase_score": r.get("chase_score"),
+                    "chase_level": r.get("chase_level"),
+                    "trade_timing_score": r.get("trade_timing_score"),
+                    "trade_timing_action": r.get("trade_timing_action"),
+                    "board_count": r.get("board_count"),
                     "in_council": r.get("in_council"),
+                    "council_tier": r.get("council_tier"),
+                    "news_tier": r.get("news_tier"),
+                    "in_focus_watchlist": r.get("in_focus_watchlist"),
+                    "status_reason": r.get("status_reason"),
                     "gate": r.get("gate"),
                     "trigger": r.get("trigger"),
                     "research_hypotheses": r.get("research_hypotheses") or [],
@@ -448,6 +461,7 @@ def run_research(cfg: dict[str, Any], top_n: int | None = None) -> dict[str, Any
             ],
             "rejected": (uni.get("rejected") or [])[:80],
             "gate": gate_summary,
+            "leader_pipeline": uni.get("leader_pipeline") or {},
         },
         "platform_reports": [
             {
@@ -462,6 +476,19 @@ def run_research(cfg: dict[str, Any], top_n: int | None = None) -> dict[str, Any
                 "news_conflict": r.get("news_conflict"),
                 "cloud_escalation": r.get("cloud_escalation"),
                 "ai_routing": r.get("ai_routing"),
+                "leader": {
+                    "lifecycle": (uni_by_sym.get(to_symbol(r.get("symbol") or "")) or {}).get("lifecycle"),
+                    "stage": (uni_by_sym.get(to_symbol(r.get("symbol") or "")) or {}).get("stage"),
+                    "chase_score": (uni_by_sym.get(to_symbol(r.get("symbol") or "")) or {}).get("chase_score"),
+                    "chase_level": (uni_by_sym.get(to_symbol(r.get("symbol") or "")) or {}).get("chase_level"),
+                    "trade_timing_score": (uni_by_sym.get(to_symbol(r.get("symbol") or "")) or {}).get(
+                        "trade_timing_score"
+                    ),
+                    "trade_timing_action": (uni_by_sym.get(to_symbol(r.get("symbol") or "")) or {}).get(
+                        "trade_timing_action"
+                    ),
+                    "board_count": (uni_by_sym.get(to_symbol(r.get("symbol") or "")) or {}).get("board_count"),
+                },
                 "chairman": {
                     "confidence": (r.get("chairman") or {}).get("confidence"),
                     "base_case": (r.get("chairman") or {}).get("base_case"),
@@ -525,6 +552,26 @@ def run_research(cfg: dict[str, Any], top_n: int | None = None) -> dict[str, Any
         },
         "generated_at": datetime.now(timezone.utc).isoformat(),
     }
+    try:
+        from ashare.services.leader_monitor import build_leader_monitor
+
+        payload["leader_monitor"] = build_leader_monitor(cfg, payload)
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("leader monitor skipped: %s", exc)
+        payload["leader_monitor"] = {"enabled": False, "error": str(exc)[:200]}
+    try:
+        from ashare.leader.buy_alerts import build_buy_ready_alerts
+
+        payload["buy_ready_alerts"] = build_buy_ready_alerts(
+            cfg,
+            universe=list((uni.get("research_universe") or [])),
+            decisions=canonical_decisions,
+        )
+        if payload.get("leader_monitor") and isinstance(payload["leader_monitor"], dict):
+            payload["leader_monitor"]["buy_ready_alerts"] = payload["buy_ready_alerts"]
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("buy_ready alerts skipped: %s", exc)
+        payload["buy_ready_alerts"] = []
     if canonical_decisions:
         from ashare.research.canonical_decision import validate_decision_consistency
 

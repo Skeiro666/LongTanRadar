@@ -103,10 +103,90 @@ GET /api/leader/dashboard
 
 ---
 
-## 七、产品逻辑（目标态）
+## 七、leader_v2：Re-entry / Pullback Buy（本阶段）
+
+### 新增模块
+
+| 模块 | 作用 |
+|------|------|
+| `pullback_features.py` | 回踩/再加速特征（仅 T 日及以前，带 `feature_as_of`） |
+| `reentry_engine.py` | `reentry_score` + components + phase（WAIT→…→BUY_CANDIDATE） |
+| `TradeTimingEngine` | EXTREME+无 reentry→WAIT；EXTREME+强 reentry→至多 BUY_CANDIDATE；1 板不得 BUY_* |
+| Focus `focus_tier` | CORE / WATCH / BUY_CANDIDATE / BUY_READY |
+| `scripts/leader_entry_research.py` | Stage×Entry / Board×Entry + 8 失败股 as-of 复盘 |
+| 前端 Entry Timeline | `/leader` 显示 Stage→WAIT→分歧→回踩→再加速→BUY_* |
+
+### 保护未放松
+
+- `buy_ready_min=0.72` / `buy_candidate_min=0.55` / `extreme_stage_cap=0.45` **未降低**
+- 非涨停仍不能进 Leader Universe
+- 新闻仍是确认层，不是进池器
+- `research_only: true` 仍不改 canonical BUY 闸门
+
+### Before → After（2026-08-25 dry-run）
+
+| 指标 | Before (v1) | After (v2) |
+|------|-------------|------------|
+| BUY_READY | 0 | **0**（正确：当日多 EXTREME 追涨，未满足 TREND+reentry 真买点） |
+| BUY_CANDIDATE | 0 | **0**（当日多为 EXTREME+涨停或 1 板；reentry 相位可亮，timing 仍 WAIT） |
+| Focus | 8 | **7～8**（跨周期保留；EXTREME→WATCH） |
+| canonical BUY | 0 | 0 |
+| LLM / Token (dry-run) | 0 / 0 | 0 / 0（rules_only；状态未变不刷 LLM） |
+
+### Entry research 要点（60 只缓存样本，无未来函数输入）
+
+| Entry | n | T+5 mean | Win | T+5 跌停率 |
+|-------|---|----------|-----|------------|
+| 3 板 | 15 | +4.8% | 64% | 高 |
+| 4 板 | 11 | **-6.9%** | 12% | **87.5%** |
+| 5 板 | 4 | **-16.9%** | 33% | **100%** |
+| EXTREME 追涨 | 15 | 同高板风险 | — | 高 |
+| 再加速 | 14 | +1.8% | 54% | **~8%**（跌停率明显更低） |
+
+数据方向：**不要追 4～5 板 EXTREME**；等待分歧/再加速后风险结构更好。样本仍小，继续积累。
+
+### 失败股 as-of 复盘结论
+
+| 股票 | 当时为何“强” | 实际风险 | EXTREME 预警 | 等待分歧 | DROP? |
+|------|--------------|----------|--------------|----------|-------|
+| 汉森制药 | 5 板 leader 高 | chase=1.0 | ✅ WAIT | 分歧后仍偏弱 | 结构破坏再 DROP |
+| 哈森股份 | 高连板 | chase=1.0 | ✅ WAIT | 分歧后 T+5 分化 | 观察 |
+| 风范股份 | EXTREME | chase=1.0 | ✅ WAIT | 分歧 T+5 转负 | 警惕 DISTRIBUTION |
+| 天洋新材 | EXTREME | chase~0.64 | ✅ WAIT | 分歧接近平 | 未 DROP |
+| 白银有色 | EXTREME | chase=1.0 | ✅ WAIT | 分歧弱正 | 观察 |
+| 科森科技 | （样本缺 extreme 点） | — | — | 有回踩样本 | — |
+| 盈新发展 | EXTREME | chase=1.0 | ✅ WAIT | 分歧 T+5 负 | 警惕 |
+| 赤天化 | EXTREME | chase=1.0；追涨 T+5 **-24%** | ✅ WAIT | 分歧 T+5 **+38%** | 验证「等分歧」价值 |
+
+### 验收清单（v2）
+
+| # | 目标 | 状态 |
+|---|------|------|
+| 1 | 不再追 3～5 板 EXTREME | ✅ WAIT |
+| 2 | Focus 长期观察 | ✅ |
+| 3 | 正常分歧不立即 DROP | ✅ |
+| 4 | 回踩再强 → BUY_CANDIDATE 路径存在 | ✅（规则+测试） |
+| 5 | 真条件才 BUY_READY（不降阈值） | ✅ 当日 0 |
+| 6 | BREAKDOWN → DROP | ✅ |
+| 7 | Token 不因 Focus 爆炸 | ✅ 事件驱动 + hash |
+| 8 | 无未来函数 | ✅ 测试覆盖 |
+
+---
+
+## 八、产品逻辑（目标态）
 
 ```
-涨停池 → 连板/龙头识别 → Stage/Chase → Focus Watchlist
-  → 持续监控 → 买点出现 → BUY_READY → 通知
-  或 结构恶化 → DROP
+涨停池 → 连板/龙头识别 → Stage/Chase → Focus
+  → EXTREME → WAIT → 分歧/回踩 → 结构确认 → 再转强
+  → Re-entry Score → BUY_CANDIDATE → 新闻确认 → Risk → BUY_READY → 通知
+  或 结构破坏 → DROP
+```
+
+运行：
+
+```bash
+python -m pytest tests/test_reentry_engine.py tests/test_leader_pipeline.py -q
+python scripts/leader_pipeline_dry_run.py
+python scripts/leader_pipeline_summary.py
+python scripts/leader_entry_research.py
 ```

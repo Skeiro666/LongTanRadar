@@ -47,6 +47,9 @@ def build_buy_ready_alerts(
                 "chase_level": row.get("chase_level"),
                 "trade_timing_score": row.get("trade_timing_score"),
                 "trade_timing_action": row.get("trade_timing_action"),
+                "reentry_score": row.get("reentry_score"),
+                "reentry_phase": row.get("reentry_phase"),
+                "focus_tier": row.get("focus_tier"),
                 "news_score": row.get("news_score"),
                 "risk_score": cd.get("risk_status"),
                 "risk_flags": cd.get("risk_flags"),
@@ -54,6 +57,7 @@ def build_buy_ready_alerts(
                 "main_risks": cd.get("committee_risks") or row.get("drop_reason"),
                 "suggested_weight": cd.get("weight"),
                 "trigger_time": row.get("as_of") or cd.get("as_of"),
+                "entry_timeline": row.get("entry_timeline"),
                 "research_only": bool(lc.get("research_only", True)),
                 "auto_trade": False,
             }

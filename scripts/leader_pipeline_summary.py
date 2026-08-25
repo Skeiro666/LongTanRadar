@@ -21,7 +21,7 @@ def _load_json(path: Path) -> dict:
 def main() -> int:
     report = _load_json(ROOT / "data" / "reports" / "latest.json")
     dry = _load_json(ROOT / "data" / "leader" / "dry_run_latest.json")
-    audit = _load_json(ROOT / "docs" / "research" / "buy_pipeline_audit_raw.json")
+    entry = _load_json(ROOT / "data" / "leader" / "entry_research_latest.json")
     usage_path = ROOT / "data" / "ai" / "usage.jsonl"
     usage_lines = usage_path.read_text(encoding="utf-8").strip().splitlines() if usage_path.exists() else []
     cycle_id = (report.get("ai_cost") or {}).get("cycle_id")
@@ -59,9 +59,12 @@ def main() -> int:
         1 for d in decisions if (d.get("leader_timing") or {}).get("trade_timing_action") == "BUY_READY"
     )
     buckets = lm.get("buckets") or {}
+    timing_counts = dry.get("timing_counts") or {}
+    reentry_counts = dry.get("reentry_phase_counts") or {}
 
     print("=== LongTanRadar Leader Pipeline Summary ===")
     print(f"as_of: {as_of}")
+    print(f"leader_version: {(dry.get('leader_version') or lm.get('leader_version') or 'leader_v2')}")
     print(f"positioning: {(lm.get('positioning') or '涨停龙头')}")
     if dry and not (report.get("candidate_union") or {}).get("leader_pipeline"):
         print("source: dry_run_latest.json (full research cycle pending / news LLM slow)")
@@ -77,6 +80,11 @@ def main() -> int:
     for k in ("BUY_READY", "BUY_CANDIDATE", "FOCUS", "WAIT", "DROPPED"):
         print(f"  {k}: {len(buckets.get(k) or [])}")
     print()
+    print("--- Timing / Re-entry (dry-run) ---")
+    print(f"timing_counts: {timing_counts}")
+    print(f"reentry_phase_counts: {reentry_counts}")
+    print(f"buy_candidate_n: {dry.get('buy_candidate_n')} buy_ready_n: {dry.get('buy_ready_n')}")
+    print()
     print("--- BUY / Timing ---")
     print(f"canonical BUY (committee_approve): {buy_n}")
     print(f"trade_timing BUY_READY (research): {timing_ready}")
@@ -89,16 +97,33 @@ def main() -> int:
     ai_cost = report.get("ai_cost") or {}
     print(f"ai_cost summary: {ai_cost.get('total_tokens')} tokens, ${ai_cost.get('estimated_cost_usd')}")
     print()
-    print("--- vs Audit baseline (2026-08-24) ---")
-    if audit:
-        print("  Legacy: 60 pool -> 20 research -> 0 BUY (council WAIT + limit_up risk)")
-    print("  New: limit-up hard gate + focus persistence + timing split + tiered council/news")
+    print("--- Before (leader_v1 2026-08-25) vs After (leader_v2 reentry) ---")
+    print("  Before: BUY_READY=0  BUY=0  Focus=8  BUY_CANDIDATE=0  LLM=0  Token=0")
+    print(
+        f"  After:  BUY_READY={len(buckets.get('BUY_READY') or [])}  "
+        f"BUY={buy_n}  Focus={len(buckets.get('FOCUS') or [])}  "
+        f"BUY_CANDIDATE={len(buckets.get('BUY_CANDIDATE') or [])}  "
+        f"LLM={council_calls}  Token={cycle_tokens or ai_cost.get('total_tokens') or 0}"
+    )
+    print("  Why: Re-entry unlocks BUY_CANDIDATE only when structure improves; EXTREME chase still WAIT;")
+    print("       thresholds not lowered; board<2 cannot BUY_*; dry-run still 0 LLM (rules_only).")
+    if entry.get("aggregate"):
+        print()
+        print("--- Entry research (sample) ---")
+        for mode in ("board_3", "board_4", "board_5", "extreme_chase", "first_divergence", "reacceleration"):
+            cell = (entry.get("aggregate") or {}).get(mode) or {}
+            t5 = cell.get("t+5") or {}
+            if isinstance(t5, dict) and t5.get("mean") is not None:
+                print(
+                    f"  {mode}: n={cell.get('n')} t+5={t5.get('mean'):+.3f} "
+                    f"win={t5.get('win_rate'):.0%} ld5={cell.get('t+5_limit_down_rate')}"
+                )
     print()
     print("--- Remaining risks ---")
     print("  1. research_only=true — canonical BUY unchanged until validation complete")
-    print("  2. Council still outputs WAIT_FOR_CONFIRMATION unless prompts/heuristics updated")
-    print("  3. T-day limit_up still blocks risk filter for same-bar entries")
-    print("  4. Stage/board performance dashboard uses in-cycle samples until counterfactual backtest")
+    print("  2. BUY_READY needs TREND/EARLY + board>=2 + high timing (not EXTREME label)")
+    print("  3. T-day limit_up still blocks same-bar entry (T+1 design)")
+    print("  4. Entry research sample size small for pullback/rebreakout — keep collecting")
     return 0
 
 

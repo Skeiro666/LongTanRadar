@@ -62,6 +62,7 @@ def main() -> int:
     monitor = build_leader_monitor(cfg, payload)
     out = {
         "as_of": str(as_of),
+        "leader_version": str((cfg.get("leader") or {}).get("leader_version") or "leader_v2"),
         "pool_size": len(rows),
         "leader_rejected": len(pack.get("rejected") or []),
         "n_enriched": len(enriched),
@@ -71,15 +72,20 @@ def main() -> int:
         "stage_counts": {},
         "timing_counts": {},
         "lifecycle_counts": {},
+        "reentry_phase_counts": {},
         "top15": [],
     }
     for r in enriched:
         st = str(r.get("stage") or "?")
         ta = str(r.get("trade_timing_action") or "?")
         lc = str(r.get("lifecycle") or "?")
+        ph = str(r.get("reentry_phase") or "?")
         out["stage_counts"][st] = out["stage_counts"].get(st, 0) + 1
         out["timing_counts"][ta] = out["timing_counts"].get(ta, 0) + 1
         out["lifecycle_counts"][lc] = out["lifecycle_counts"].get(lc, 0) + 1
+        out["reentry_phase_counts"][ph] = out["reentry_phase_counts"].get(ph, 0) + 1
+    out["buy_candidate_n"] = out["timing_counts"].get("BUY_CANDIDATE", 0)
+    out["buy_ready_n"] = out["timing_counts"].get("BUY_READY", 0)
     out["top15"] = [
         {
             "symbol": r.get("symbol"),
@@ -89,11 +95,15 @@ def main() -> int:
             "stage": r.get("stage"),
             "chase_score": r.get("chase_score"),
             "chase_level": r.get("chase_level"),
+            "reentry_score": r.get("reentry_score"),
+            "reentry_phase": r.get("reentry_phase"),
             "trade_timing_score": r.get("trade_timing_score"),
             "trade_timing_action": r.get("trade_timing_action"),
             "lifecycle": r.get("lifecycle"),
+            "focus_tier": r.get("focus_tier"),
             "council_tier": r.get("council_tier"),
             "news_tier": r.get("news_tier"),
+            "entry_timeline": r.get("entry_timeline"),
             "status_reason": r.get("status_reason"),
         }
         for r in research[:15]

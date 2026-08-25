@@ -279,12 +279,20 @@ class CandidateEngine:
                 as_of_dt = None
         for r in research:
             tier = str(r.get("news_tier") or "rules_only")
-            if tier == "rules_only" and not r.get("merged_from_focus"):
+            skip_llm = False
+            try:
+                skip_llm = leader_pipe.should_skip_news_llm(r)
+            except Exception:  # noqa: BLE001
+                skip_llm = tier == "rules_only"
+            if (tier == "rules_only" and not r.get("merged_from_focus")) or (
+                skip_llm and not r.get("news_trigger")
+            ):
                 pkg = {
                     "news_data_incomplete": True,
                     "net_event_score": float(r.get("news_score") or 0),
                     "legacy_headlines": [],
                     "news_tier": tier,
+                    "skipped_llm": True,
                 }
                 r["news_package"] = pkg
                 r["news_data_incomplete"] = True

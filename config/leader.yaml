@@ -1,5 +1,5 @@
-# 涨停龙头研究系统 — Stage / Chase / Timing / Focus
-leader_version: leader_v1
+# 涨停龙头研究系统 — Stage / Chase / Reentry / Timing / Focus
+leader_version: leader_v2
 enabled: true
 # 研究模式：只标注 lifecycle/timing，不自动改 canonical BUY 阈值
 research_only: true
@@ -32,6 +32,10 @@ lifecycle:
   drop_on_breakdown: true
   drop_stale_cycles: 5
   downgrade_missing_limit_up_cycles: 3
+  board_potential: 1
+  board_candidate: 2
+  board_confirmed: 3
+  board_core: 4
 
 stage:
   extreme_board_min: 3
@@ -49,6 +53,26 @@ timing:
   wait_max: 0.54
   extreme_stage_cap: 0.45
   breakdown_cap: 0.15
+  reentry_weight: 0.28
+  reentry_buy_candidate_min: 0.55
+  reentry_buy_ready_min: 0.68
+  extreme_requires_reentry: true
+
+reentry:
+  w_structure: 0.25
+  w_pullback: 0.20
+  w_volume: 0.20
+  w_reacceleration: 0.20
+  w_confirmation: 0.15
+  buy_candidate_min: 0.55
+  strong_min: 0.68
+  healthy_divergence_bonus: 0.12
+  structure_break_penalty: 0.45
+  negative_news_penalty: 0.35
+
+refresh:
+  chase_delta: 0.12
+  reentry_delta: 0.10
 
 news_tiers:
   scan: rules_only
@@ -67,3 +91,14 @@ notification:
 counterfactual:
   entry_boards: [1, 2, 3, 4, 5]
   horizons: [1, 3, 5, 10, 20]
+  entry_modes:
+    - first_limit_up
+    - board_2
+    - board_3
+    - board_4
+    - board_5
+    - extreme_chase
+    - first_divergence
+    - pullback
+    - rebreakout
+    - reacceleration

@@ -3,6 +3,8 @@ import { api, num } from "../api";
 import PageShell from "../components/layout/PageShell";
 import ScrollPane from "../components/layout/ScrollPane";
 
+type TimelineStep = { event?: string; detail?: string };
+
 type LeaderRow = {
   symbol: string;
   name?: string;
@@ -14,6 +16,10 @@ type LeaderRow = {
   chase_level?: string;
   trade_timing_score?: number;
   trade_timing_action?: string;
+  reentry_score?: number;
+  reentry_phase?: string;
+  focus_tier?: string;
+  entry_timeline?: TimelineStep[];
   news_score?: number;
   risk_status?: string;
   risk_flags?: string[];
@@ -47,6 +53,20 @@ const BUCKET_LABEL: Record<string, string> = {
   OTHER: "其他",
 };
 
+function Timeline({ steps }: { steps?: TimelineStep[] }) {
+  if (!steps?.length) return <span className="muted">—</span>;
+  return (
+    <ol className="entry-timeline">
+      {steps.map((s, i) => (
+        <li key={`${s.event}-${i}`}>
+          <strong>{s.event}</strong>
+          {s.detail ? <span className="muted small"> · {s.detail}</span> : null}
+        </li>
+      ))}
+    </ol>
+  );
+}
+
 function RowTable({ rows, highlight }: { rows: LeaderRow[]; highlight?: boolean }) {
   if (!rows.length) return <p className="muted">暂无</p>;
   return (
@@ -59,10 +79,11 @@ function RowTable({ rows, highlight }: { rows: LeaderRow[]; highlight?: boolean 
           <th>Leader</th>
           <th>Stage</th>
           <th>Chase</th>
+          <th>Re-entry</th>
           <th>Timing</th>
-          <th>News</th>
+          <th>Focus Tier</th>
           <th>风控</th>
-          <th>状态说明</th>
+          <th>Entry Timeline</th>
         </tr>
       </thead>
       <tbody>
@@ -77,11 +98,17 @@ function RowTable({ rows, highlight }: { rows: LeaderRow[]; highlight?: boolean 
               {num(r.chase_score, 2)} {r.chase_level ? `(${r.chase_level})` : ""}
             </td>
             <td>
+              {num(r.reentry_score, 2)} {r.reentry_phase ? `/ ${r.reentry_phase}` : ""}
+            </td>
+            <td>
               {r.trade_timing_action || "—"} / {num(r.trade_timing_score, 2)}
             </td>
-            <td>{num(r.news_score, 2)}</td>
+            <td>{r.focus_tier || "—"}</td>
             <td>{r.risk_status || "—"}</td>
-            <td className="muted small">{r.status_reason || (r.merged_from_focus ? "Focus 持续跟踪" : "—")}</td>
+            <td>
+              <Timeline steps={r.entry_timeline} />
+              <div className="muted small">{r.status_reason || ""}</div>
+            </td>
           </tr>
         ))}
       </tbody>

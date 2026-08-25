@@ -12,6 +12,7 @@ from ashare.leader.lifecycle import (
 )
 from ashare.leader.limit_up_universe import LimitUpUniverse, is_limit_up_row
 from ashare.leader.pipeline import LeaderPipeline
+from ashare.leader.reentry_engine import ReentryEngine
 from ashare.leader.stage_engine import StageEngine
 from ashare.leader.trade_timing import TradeTimingEngine
 
@@ -28,6 +29,7 @@ __all__ = [
     "LeaderRankingEngine",
     "LifecycleState",
     "LimitUpUniverse",
+    "ReentryEngine",
     "StageEngine",
     "TradeTimingEngine",
     "is_limit_up_row",

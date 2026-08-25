@@ -15,6 +15,8 @@ from ashare.leader.lifecycle import (
     LEADER_CONFIRMED,
     NEW_LIMIT_UP,
     WAIT,
+    board_lifecycle_hint,
+    focus_tier,
 )
 from ashare.symbols import to_symbol
 
@@ -155,6 +157,10 @@ class FocusWatchlistStore:
             "chase_level": row.get("chase_level"),
             "board_count": row.get("board_count"),
             "news_score": row.get("news_score"),
+            "reentry_score": row.get("reentry_score"),
+            "reentry_phase": row.get("reentry_phase"),
+            "focus_tier": row.get("focus_tier") or focus_tier(row),
+            "entry_timeline": row.get("entry_timeline"),
             "state_version": row.get("state_version"),
             "focus_cycles": row.get("focus_cycles", 0),
             "drop_reason": row.get("drop_reason"),
@@ -181,17 +187,21 @@ class FocusWatchlistStore:
     def _initial_lifecycle(self, row: dict[str, Any]) -> str:
         ls = float(row.get("leader_score") or 0)
         ta = str(row.get("trade_timing_action") or WAIT).upper()
-        st = str(row.get("stage") or "EARLY").upper()
         board = int(row.get("board_count") or 0)
         min_ls = float(self.fc["min_leader_score"])
+        lc_cfg = dict(load_yaml_config(self.cfg, "leader") or {})
         if ta == BUY_READY:
             return BUY_READY
         if ta == BUY_CANDIDATE:
             return BUY_CANDIDATE
-        if ls >= min_ls and board >= 2:
+        hint = board_lifecycle_hint(board, ls, lc_cfg)
+        # 1板 stays NEW / potential — do not auto-confirm as leader
+        if hint == LEADER_CONFIRMED and ls >= min_ls:
             return LEADER_CONFIRMED
-        if board >= 1 or ls >= 0.25:
+        if hint == LEADER_CANDIDATE or board >= 2:
             return LEADER_CANDIDATE
+        if board >= 1 or ls >= 0.25:
+            return NEW_LIMIT_UP if board <= 1 else LEADER_CANDIDATE
         return NEW_LIMIT_UP
 
     def _promote(self, lc: str, row: dict[str, Any]) -> str:
@@ -200,23 +210,42 @@ class FocusWatchlistStore:
         ta = str(row.get("trade_timing_action") or "").upper()
         ls = float(row.get("leader_score") or 0)
         st = str(row.get("stage") or "").upper()
+        phase = str(row.get("reentry_phase") or "").upper()
+        flags = row.get("reentry_flags") or {}
         if st == "BREAKDOWN":
+            # Normal divergence after boards is not DROP
+            if float(flags.get("healthy_divergence") or 0) >= 0.5:
+                return FOCUS if lc in {FOCUS, LEADER_CONFIRMED, BUY_CANDIDATE} else lc
             return DROPPED
         if ta == BUY_READY:
             return BUY_READY
         if ta == BUY_CANDIDATE:
             return BUY_CANDIDATE
+        if phase in {"DIVERGENCE", "PULLBACK_WATCH", "STABILIZATION", "REACCELERATION"} and lc in {
+            LEADER_CONFIRMED,
+            FOCUS,
+            WAIT,
+            LEADER_CANDIDATE,
+        }:
+            return FOCUS
         if ls >= float(self.fc["min_leader_score"]) and lc in {LEADER_CANDIDATE, LEADER_CONFIRMED, FOCUS, WAIT}:
             return FOCUS
-        if lc == NEW_LIMIT_UP:
+        if lc == NEW_LIMIT_UP and int(row.get("board_count") or 0) >= 2:
             return LEADER_CANDIDATE
         return lc
 
     def _should_drop(self, row: dict[str, Any]) -> bool:
         lc = dict(load_yaml_config(self.cfg, "leader").get("lifecycle") or {})
         st = str(row.get("stage") or "").upper()
+        flags = row.get("reentry_flags") or {}
+        # Normal divergence after limit-up streak → do not drop
+        if float(flags.get("healthy_divergence") or 0) >= 0.5:
+            return False
         if lc.get("drop_on_breakdown") and st == "BREAKDOWN":
             row["drop_reason"] = "stage_breakdown"
+            return True
+        if float(flags.get("structure_break") or 0) >= 0.5 and float(flags.get("high_open_low_close") or 0) >= 0.5:
+            row["drop_reason"] = "distribution_structure_break"
             return True
         neg = float(row.get("negative_evidence_score") or 0)
         if neg >= 0.85:
@@ -226,8 +255,9 @@ class FocusWatchlistStore:
         if str(row.get("lifecycle")) == DROPPED:
             return True
         if int(row.get("focus_cycles") or 0) >= stale and float(row.get("trade_timing_score") or 0) < 0.2:
-            row["drop_reason"] = "stale_no_improvement"
-            return True
+            if float(row.get("reentry_score") or 0) < 0.25:
+                row["drop_reason"] = "stale_no_improvement"
+                return True
         return False
 
     def _retain_off_rank(self, snap: dict[str, Any]) -> bool:

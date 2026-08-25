@@ -788,6 +788,31 @@ def create_app(config_path: str | None = None) -> FastAPI:
         data["available"] = True
         return data
 
+    @app.get("/api/leader/entry-dataset")
+    def api_leader_entry_dataset() -> dict[str, Any]:
+        from pathlib import Path
+        import json
+
+        root = Path(get_cfg().get("_root") or Path(__file__).resolve().parents[3])
+        path = root / "data" / "leader" / "entry_dataset_latest.json"
+        audit = root / "data" / "leader" / "pullback_definition_audit.json"
+        if not path.exists():
+            return {
+                "available": False,
+                "message": "尚未生成统一事件集。请运行: python scripts/leader_entry_event_audit.py",
+            }
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except Exception as exc:  # noqa: BLE001
+            return {"available": False, "message": f"读取失败: {exc}"}
+        data["available"] = True
+        if audit.exists():
+            try:
+                data["definition_audit"] = json.loads(audit.read_text(encoding="utf-8"))
+            except Exception:  # noqa: BLE001
+                data["definition_audit"] = None
+        return data
+
     @app.get("/api/alpha-lab")
     def api_alpha_lab(window: str = "all") -> dict[str, Any]:
         from ashare.services.alpha_lab import build_alpha_lab

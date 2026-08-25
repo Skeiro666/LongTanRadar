@@ -125,6 +125,7 @@ export const api = {
   leaderEntryValidation: () => req<any>("/api/leader/entry-validation"),
   leaderEntryDistribution: () => req<any>("/api/leader/entry-distribution"),
   leaderHealthyPullback: () => req<any>("/api/leader/healthy-pullback"),
+  leaderEntryDataset: () => req<any>("/api/leader/entry-dataset"),
 };
 
 export function pct(n: number | undefined) {

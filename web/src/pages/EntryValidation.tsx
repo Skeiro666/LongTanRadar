@@ -291,6 +291,7 @@ export default function EntryValidation() {
   const [data, setData] = useState<Record<string, unknown> | null>(null);
   const [dist, setDist] = useState<Record<string, unknown> | null>(null);
   const [hp, setHp] = useState<Record<string, unknown> | null>(null);
+  const [ds, setDs] = useState<Record<string, unknown> | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
@@ -298,11 +299,13 @@ export default function EntryValidation() {
       api.leaderEntryValidation(),
       api.leaderEntryDistribution(),
       api.leaderHealthyPullback(),
+      api.leaderEntryDataset(),
     ])
-      .then(([validation, distribution, healthy]) => {
+      .then(([validation, distribution, healthy, dataset]) => {
         setData(validation);
         setDist(distribution?.available === false ? null : distribution);
         setHp(healthy?.available === false ? null : healthy);
+        setDs(dataset?.available === false ? null : dataset);
       })
       .catch((e) => setErr(String(e)));
   }, []);
@@ -362,6 +365,100 @@ export default function EntryValidation() {
                 </li>
               </ul>
             </section>
+
+            {ds ? (
+              <section className="panel">
+                <h3>统一事件集（主口径）</h3>
+                <p className="muted">
+                  主成交：T收盘信号 → T+1开盘买入扣费净收益 · 再入场分数仅研究用 · 买入流程未改
+                </p>
+                <ul className="muted">
+                  <li>
+                    事件总数 {String((ds.meta as Record<string, unknown>)?.n_events)} · 股票{" "}
+                    {String((ds.meta as Record<string, unknown>)?.n_symbols_scanned)} · 交易日{" "}
+                    {String((ds.meta as Record<string, unknown>)?.n_trading_days_covered)}（
+                    {String((ds.meta as Record<string, unknown>)?.date_start)} →{" "}
+                    {String((ds.meta as Record<string, unknown>)?.date_end)}）
+                  </li>
+                  <li>
+                    是否达到可研究规模（≥3000）：
+                    {zhBool((ds.meta as Record<string, unknown>)?.research_scale_ok)}
+                  </li>
+                  <li>
+                    回踩优势结论：
+                    {String(ds.pullback_edge_verdict) === "NO_EDGE_PROVEN"
+                      ? "尚未证明"
+                      : String(ds.pullback_edge_verdict)}
+                  </li>
+                </ul>
+                {ds.definition_audit ? (
+                  <div className="muted">
+                    <h4>旧口径差异（为何 37 vs 79）</h4>
+                    <p>{String((ds.definition_audit as Record<string, unknown>).why_different)}</p>
+                    <ul>
+                      <li>
+                        互斥回踩样本{" "}
+                        {String((ds.definition_audit as Record<string, unknown>).exclusive_n)} · 健康扫描{" "}
+                        {String((ds.definition_audit as Record<string, unknown>).healthy_n)} · 交集{" "}
+                        {String((ds.definition_audit as Record<string, unknown>).intersection_n)}
+                      </li>
+                      <li>
+                        仅互斥{" "}
+                        {String((ds.definition_audit as Record<string, unknown>).only_exclusive_n)} · 仅健康扫描{" "}
+                        {String((ds.definition_audit as Record<string, unknown>).only_healthy_n)}
+                      </li>
+                    </ul>
+                  </div>
+                ) : null}
+                <DistTable
+                  title="统一事件集 · 各买点（T+1开盘净收益）"
+                  data={Object.fromEntries(
+                    Object.entries((ds.by_mode as Record<string, Record<string, unknown>>) || {}).map(
+                      ([k, cell]) => [
+                        k,
+                        {
+                          n: cell.n as number,
+                          status: String(cell.sample_quality || ""),
+                          mean_return: cell.primary_net_mean as number,
+                          median_return: cell.primary_net_median as number,
+                          win_rate: cell.primary_net_win as number,
+                          limit_down_rate: cell.limit_down_rate as number,
+                          MDD: cell.mdd_mean as number,
+                          MAE_mean: cell.mae_mean as number,
+                          risk_adjusted_return: cell.risk_adjusted_return as number,
+                        },
+                      ]
+                    )
+                  )}
+                />
+                <DistTable
+                  title="统一事件集 · 回踩健康度"
+                  data={Object.fromEntries(
+                    Object.entries((ds.pullback_by_health as Record<string, Record<string, unknown>>) || {}).map(
+                      ([k, cell]) => [
+                        k,
+                        {
+                          n: cell.n as number,
+                          status: String(cell.sample_quality || ""),
+                          mean_return: cell.primary_net_mean as number,
+                          median_return: cell.primary_net_median as number,
+                          win_rate: cell.primary_net_win as number,
+                          limit_down_rate: cell.limit_down_rate as number,
+                          MDD: cell.mdd_mean as number,
+                          MAE_mean: cell.mae_mean as number,
+                          risk_adjusted_return: cell.risk_adjusted_return as number,
+                        },
+                      ]
+                    )
+                  )}
+                />
+              </section>
+            ) : (
+              <section className="panel">
+                <h3>统一事件集</h3>
+                <p className="muted">尚未生成。请运行：python scripts/leader_entry_event_audit.py</p>
+              </section>
+            )}
 
             {lab ? (
               <section className="panel">

@@ -813,6 +813,47 @@ def create_app(config_path: str | None = None) -> FastAPI:
                 data["definition_audit"] = None
         return data
 
+    @app.get("/api/leader/universe-integrity")
+    def api_leader_universe_integrity() -> dict[str, Any]:
+        from pathlib import Path
+        import json
+
+        root = Path(get_cfg().get("_root") or Path(__file__).resolve().parents[3])
+        path = root / "data" / "leader" / "conditional_edge_latest.json"
+        if not path.exists():
+            return {
+                "available": False,
+                "message": "尚未生成龙头宇宙审计。请运行: python scripts/leader_canonical_edge_lab.py",
+            }
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except Exception as exc:  # noqa: BLE001
+            return {"available": False, "message": f"读取失败: {exc}"}
+        return {
+            "available": True,
+            "meta": data.get("meta"),
+            "integrity": data.get("integrity"),
+        }
+
+    @app.get("/api/leader/conditional-edge")
+    def api_leader_conditional_edge() -> dict[str, Any]:
+        from pathlib import Path
+        import json
+
+        root = Path(get_cfg().get("_root") or Path(__file__).resolve().parents[3])
+        path = root / "data" / "leader" / "conditional_edge_latest.json"
+        if not path.exists():
+            return {
+                "available": False,
+                "message": "尚未生成条件边挖掘。请运行: python scripts/leader_canonical_edge_lab.py",
+            }
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except Exception as exc:  # noqa: BLE001
+            return {"available": False, "message": f"读取失败: {exc}"}
+        data["available"] = True
+        return data
+
     @app.get("/api/alpha-lab")
     def api_alpha_lab(window: str = "all") -> dict[str, Any]:
         from ashare.services.alpha_lab import build_alpha_lab

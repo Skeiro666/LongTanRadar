@@ -19,7 +19,11 @@ def limit_up_universe_from_bars(df: pd.DataFrame, *, as_of: str) -> bool:
         return False
     frame = df.copy()
     frame["date"] = pd.to_datetime(frame["date"])
-    cut = pd.Timestamp(as_of).normalize()
+    from ashare.asof import asof_cutoff
+
+    cut = asof_cutoff(as_of)
+    if cut is None:
+        return False
     day = frame[frame["date"].dt.normalize() == cut]
     if day.empty:
         return False

@@ -60,10 +60,11 @@ def trading_dates(panel: dict[str, pd.DataFrame], start: str, end: str) -> list[
 
 
 def history_asof(panel: dict[str, pd.DataFrame], as_of: date) -> dict[str, pd.DataFrame]:
+    from ashare.asof import mask_on_or_before
+
     out: dict[str, pd.DataFrame] = {}
-    cutoff = pd.Timestamp(as_of)
     for sym, df in panel.items():
-        sub = df[pd.to_datetime(df["date"]) <= cutoff]
+        sub = df[mask_on_or_before(df["date"], as_of)]
         if not sub.empty:
             out[sym] = sub
     return out

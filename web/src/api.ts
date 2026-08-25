@@ -126,6 +126,8 @@ export const api = {
   leaderEntryDistribution: () => req<any>("/api/leader/entry-distribution"),
   leaderHealthyPullback: () => req<any>("/api/leader/healthy-pullback"),
   leaderEntryDataset: () => req<any>("/api/leader/entry-dataset"),
+  leaderUniverseIntegrity: () => req<any>("/api/leader/universe-integrity"),
+  leaderConditionalEdge: () => req<any>("/api/leader/conditional-edge"),
 };
 
 export function pct(n: number | undefined) {

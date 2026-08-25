@@ -20,11 +20,14 @@ logger = logging.getLogger("ashare.services.research")
 def _panel_asof(panel: dict, as_of) -> dict[str, Any]:
     import pandas as pd
 
+    from ashare.asof import mask_on_or_before
+
     bars: dict[str, Any] = {}
     hist: dict[str, Any] = {}
-    cutoff = pd.Timestamp(as_of)
     for sym, df in panel.items():
-        sub = df[pd.to_datetime(df["date"]) <= cutoff]
+        if df is None or getattr(df, "empty", True):
+            continue
+        sub = df[mask_on_or_before(df["date"], as_of)]
         if sub.empty:
             continue
         hist[sym] = sub
@@ -248,7 +251,8 @@ def run_research(cfg: dict[str, Any], top_n: int | None = None) -> dict[str, Any
                     panel=panel,
                     pool=pool,
                     news_discovery=news_discovery,
-                    as_of=as_of_dt.isoformat(),
+                    # date-only for bar filters; news collect still uses end-of-day UTC inside engine
+                    as_of=as_of.isoformat(),
                 )
             progress.log(
                 "candidate",

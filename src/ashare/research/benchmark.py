@@ -11,11 +11,13 @@ from ashare.config_loaders import load_yaml_config
 
 
 def _forward_return(df: pd.DataFrame, as_of: pd.Timestamp, horizon: int) -> float | None:
+    from ashare.asof import mask_on_or_before
+
     sub = df.copy()
     sub["date"] = pd.to_datetime(sub["date"])
     sub = sub.sort_values("date")
-    hist = sub[sub["date"] <= as_of]
-    fut = sub[sub["date"] > as_of]
+    hist = sub[mask_on_or_before(sub["date"], as_of)]
+    fut = sub[~mask_on_or_before(sub["date"], as_of)]
     if hist.empty or len(fut) < horizon:
         return None
     entry = float(hist.iloc[-1]["close"])

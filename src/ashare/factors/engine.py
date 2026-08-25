@@ -212,7 +212,9 @@ class FactorEngine:
         z = self.normalize(raw)
         scored = self.leader_scores(z)
         if as_of is not None:
-            scored = scored[pd.to_datetime(scored["date"]) <= pd.Timestamp(as_of)]
+            from ashare.asof import mask_on_or_before
+
+            scored = scored[mask_on_or_before(scored["date"], as_of)]
         # latest row per symbol
         scored = scored.sort_values("date")
         last = scored.groupby("symbol", as_index=False).tail(1)

@@ -55,9 +55,10 @@ def _legacy_ml_picks(cfg: dict[str, Any], top_n: int | None = None) -> dict[str,
 
     bars: dict[str, Any] = {}
     hist: dict[str, Any] = {}
-    cutoff = pd.Timestamp(as_of)
+    from ashare.asof import mask_on_or_before
+
     for sym, df in panel.items():
-        sub = df[pd.to_datetime(df["date"]) <= cutoff]
+        sub = df[mask_on_or_before(df["date"], as_of)]
         if sub.empty:
             continue
         hist[sym] = sub

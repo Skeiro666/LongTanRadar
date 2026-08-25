@@ -103,7 +103,7 @@ class CandidateEngine:
 
         factor_rows: list[dict[str, Any]] = []
         if panel:
-            factor_rows = self.factors.asof_rows(panel)
+            factor_rows = self.factors.asof_rows(panel, as_of=as_of_str or None)
         by_f = {f["symbol"]: f for f in factor_rows}
 
         scored: list[dict[str, Any]] = []
@@ -267,6 +267,7 @@ class CandidateEngine:
             )
 
         from datetime import datetime as _dt
+        from datetime import timezone as _tz
 
         from ashare.news.engine import NewsIntelligenceEngine
 
@@ -274,7 +275,21 @@ class CandidateEngine:
         as_of_dt = None
         if as_of_str:
             try:
-                as_of_dt = _dt.fromisoformat(str(as_of_str).replace("Z", "+00:00"))
+                raw = str(as_of_str).replace("Z", "+00:00")
+                as_of_dt = _dt.fromisoformat(raw)
+                # date-only → end of day UTC so filter_asof keeps same-day news
+                if len(raw.strip()) <= 10 and as_of_dt.tzinfo is None:
+                    as_of_dt = _dt(
+                        as_of_dt.year,
+                        as_of_dt.month,
+                        as_of_dt.day,
+                        23,
+                        59,
+                        59,
+                        tzinfo=_tz.utc,
+                    )
+                elif as_of_dt.tzinfo is None:
+                    as_of_dt = as_of_dt.replace(tzinfo=_tz.utc)
             except Exception:  # noqa: BLE001
                 as_of_dt = None
         for r in research:

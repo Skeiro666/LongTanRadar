@@ -10,12 +10,9 @@ from ashare.strategy.anti_chase import enrich_structure
 
 
 def _cutoff_ts(as_of: str | None) -> pd.Timestamp | None:
-    if not as_of:
-        return None
-    ts = pd.Timestamp(as_of)
-    if getattr(ts, "tz", None) is not None:
-        ts = ts.tz_convert(None)
-    return ts.normalize()
+    from ashare.asof import asof_cutoff
+
+    return asof_cutoff(as_of)
 
 
 def compute_leader_features(

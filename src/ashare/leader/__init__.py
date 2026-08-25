@@ -16,6 +16,7 @@ from ashare.leader.reentry_engine import ReentryEngine
 from ashare.leader.stage_engine import StageEngine
 from ashare.leader.trade_timing import TradeTimingEngine
 
+
 __all__ = [
     "BUY_CANDIDATE",
     "BUY_READY",

@@ -140,14 +140,19 @@ def compute_pullback_features(
     out["reclaim_ma10"] = reclaim_ma10
     out["reclaim_ma20"] = reclaim_ma20
 
-    # breakout after pullback: was below recent high by >3%, now within 1.5% and rising
-    was_pullback = pullback_from_high < -0.03
-    near_high = pullback_from_high > -0.015
+    # breakout after pullback: prior days (T-1 and earlier) had a pullback; today near high + rising.
+    # Must NOT require same-day pullback_from_high < -3% AND near high (contradiction / dead feature).
     ret1 = float(c.iloc[-1] / c.iloc[-2] - 1.0) if len(c) >= 2 else 0.0
-    breakout_after_pullback = 1.0 if was_pullback and near_high and ret1 > 0.01 else 0.0
-    if was_pullback and last >= high20 * 0.99 and ret1 > 0:
-        breakout_after_pullback = 1.0
+    had_prior_pullback = False
+    if len(frame) >= 6:
+        prior_high = float(h.iloc[:-1].tail(20).max())
+        prior_min_close = float(c.iloc[:-1].tail(5).min())
+        if prior_high > 0 and (prior_min_close / prior_high - 1.0) < -0.03:
+            had_prior_pullback = True
+    near_high_today = pullback_from_high > -0.015 or last >= high20 * 0.985
+    breakout_after_pullback = 1.0 if had_prior_pullback and near_high_today and ret1 > 0.01 else 0.0
     out["breakout_after_pullback"] = breakout_after_pullback
+    out["had_prior_pullback"] = 1.0 if had_prior_pullback else 0.0
 
     # reacceleration: volume up + price up after contraction
     reacceleration = 0.0

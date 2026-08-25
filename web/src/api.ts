@@ -122,6 +122,7 @@ export const api = {
   exitSymbol: (symbol: string) => req<any>(`/api/exit/${encodeURIComponent(symbol)}`),
   leaderMonitor: () => req<any>("/api/leader/monitor"),
   leaderDashboard: () => req<any>("/api/leader/dashboard"),
+  leaderEntryValidation: () => req<any>("/api/leader/entry-validation"),
 };
 
 export function pct(n: number | undefined) {

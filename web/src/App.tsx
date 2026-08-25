@@ -2,6 +2,7 @@ import { NavLink, Route, Routes } from "react-router-dom";
 import Agent from "./pages/Agent";
 import AlphaLab from "./pages/AlphaLab";
 import LeaderMonitor from "./pages/LeaderMonitor";
+import EntryValidation from "./pages/EntryValidation";
 import Notifications from "./pages/Notifications";
 import Overview from "./pages/Overview";
 import PositionDetail from "./pages/PositionDetail";
@@ -27,6 +28,7 @@ export default function App() {
           </NavLink>
           <NavLink to="/research">圆桌研报</NavLink>
           <NavLink to="/leader">龙头监控</NavLink>
+          <NavLink to="/entry-validation">买点验证</NavLink>
           <NavLink to="/positions">持仓/退出</NavLink>
           <NavLink to="/notifications">通知</NavLink>
           <NavLink to="/alpha-lab">Alpha 实验室</NavLink>
@@ -39,6 +41,7 @@ export default function App() {
           <Route path="/" element={<Overview />} />
           <Route path="/research" element={<Research />} />
           <Route path="/leader" element={<LeaderMonitor />} />
+          <Route path="/entry-validation" element={<EntryValidation />} />
           <Route path="/research/:researchId/:symbol" element={<ResearchDetail />} />
           <Route path="/positions" element={<Positions />} />
           <Route path="/positions/:symbol" element={<PositionDetail />} />

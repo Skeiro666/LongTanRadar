@@ -729,6 +729,63 @@ def create_app(config_path: str | None = None) -> FastAPI:
         except Exception as exc:  # noqa: BLE001
             return {"available": False, "message": f"读取失败: {exc}"}
         data["available"] = True
+        # attach distribution lab if present
+        dist_path = root / "data" / "leader" / "entry_distribution_latest.json"
+        preview_path = root / "data" / "leader" / "entry_distribution_preview.json"
+        if dist_path.exists():
+            try:
+                data["distribution_lab"] = json.loads(dist_path.read_text(encoding="utf-8"))
+            except Exception:  # noqa: BLE001
+                data["distribution_lab"] = None
+        if preview_path.exists():
+            try:
+                data["distribution_preview"] = json.loads(preview_path.read_text(encoding="utf-8"))
+            except Exception:  # noqa: BLE001
+                data["distribution_preview"] = []
+        return data
+
+    @app.get("/api/leader/entry-distribution")
+    def api_leader_entry_distribution() -> dict[str, Any]:
+        from pathlib import Path
+        import json
+
+        root = Path(get_cfg().get("_root") or Path(__file__).resolve().parents[3])
+        path = root / "data" / "leader" / "entry_distribution_latest.json"
+        if not path.exists():
+            return {
+                "available": False,
+                "message": "尚未生成分布研究结果。请运行: python scripts/leader_entry_distribution.py",
+            }
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except Exception as exc:  # noqa: BLE001
+            return {"available": False, "message": f"读取失败: {exc}"}
+        data["available"] = True
+        preview = root / "data" / "leader" / "entry_distribution_preview.json"
+        if preview.exists():
+            try:
+                data["preview"] = json.loads(preview.read_text(encoding="utf-8"))
+            except Exception:  # noqa: BLE001
+                data["preview"] = []
+        return data
+
+    @app.get("/api/leader/healthy-pullback")
+    def api_leader_healthy_pullback() -> dict[str, Any]:
+        from pathlib import Path
+        import json
+
+        root = Path(get_cfg().get("_root") or Path(__file__).resolve().parents[3])
+        path = root / "data" / "leader" / "healthy_pullback_latest.json"
+        if not path.exists():
+            return {
+                "available": False,
+                "message": "尚未生成健康回踩研究。请运行: python scripts/leader_healthy_pullback_lab.py",
+            }
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except Exception as exc:  # noqa: BLE001
+            return {"available": False, "message": f"读取失败: {exc}"}
+        data["available"] = True
         return data
 
     @app.get("/api/alpha-lab")

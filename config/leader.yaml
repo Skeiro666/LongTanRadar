@@ -102,3 +102,10 @@ counterfactual:
     - pullback
     - rebreakout
     - reacceleration
+
+# research-only distribution / risk-adjusted diagnostics (NOT wired to BUY)
+distribution:
+  lambda_ld: 0.35
+  lambda_dd: 0.50
+  entry_quality_research_only: true
+  risk_adjusted_score_research_only: true

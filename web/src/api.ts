@@ -123,6 +123,8 @@ export const api = {
   leaderMonitor: () => req<any>("/api/leader/monitor"),
   leaderDashboard: () => req<any>("/api/leader/dashboard"),
   leaderEntryValidation: () => req<any>("/api/leader/entry-validation"),
+  leaderEntryDistribution: () => req<any>("/api/leader/entry-distribution"),
+  leaderHealthyPullback: () => req<any>("/api/leader/healthy-pullback"),
 };
 
 export function pct(n: number | undefined) {

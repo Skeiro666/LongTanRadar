@@ -42,6 +42,13 @@ type AlphaDash = {
 };
 
 type LogRow = { ts?: string; message?: string; phase?: string };
+
+function fmtClock(iso?: string) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso.slice(11, 19);
+  return d.toLocaleTimeString("zh-CN", { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" });
+}
 type AgentState = {
   running?: boolean;
   cycle?: number;
@@ -292,7 +299,7 @@ export default function Agent() {
               <div className="persona-log" style={{ minHeight: "320px" }}>
                 {[...(st?.logs || [])].reverse().map((row, i) => (
                   <div key={i} className="persona-log-line">
-                    <span className="ts">{row.ts ? row.ts.slice(11, 19) : ""}</span>
+                    <span className="ts">{fmtClock(row.ts)}</span>
                     <span className="phase">[{row.phase || "—"}]</span>
                     <span className="msg">{row.message}</span>
                   </div>

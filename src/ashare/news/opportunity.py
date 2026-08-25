@@ -100,14 +100,22 @@ class NewsOpportunityEngine:
         from ashare.news.schema import discovery_grade
 
         intel_stats = {"calls": 0, "cache_hits": 0, "tokens": 0, "skipped": 0}
+        max_map = int(disc.get("max_llm_mapping_per_cycle") or 8)
+        map_calls = 0
+        skip_mapping = False
 
         for n in news:
             cat = classify_news(n)
             ents = [annotate_entity_source(e) for e in link_entities_open(n, name_map=names, aliases=als)]
-            if not ents and use_llm and news_client is not None:
-                from ashare.news.llm_mapping import infer_entities_from_news
+            if not ents and use_llm and news_client is not None and not skip_mapping and map_calls < max_map:
+                from ashare.news.llm_mapping import MappingTimeout, infer_entities_from_news
 
-                ents = infer_entities_from_news(n, news_client)
+                try:
+                    ents = infer_entities_from_news(n, news_client)
+                except MappingTimeout:
+                    skip_mapping = True
+                    logger.warning("news llm mapping timed out — skip remaining mapping this cycle")
+                map_calls += 1
             intel = extract_for_news(n, intel_engine, ents, classification=cat)
             if intel:
                 if intel.get("cache_hit"):

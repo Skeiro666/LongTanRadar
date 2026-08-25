@@ -30,6 +30,16 @@ def test_news_negative_price_strong():
 def test_aligned_no_conflict():
     out = compute_news_quant_conflict(
         intelligence={"direction": "positive"},
-        candidate={"leader_score": 0.8, "rs_score": 0.6, "momentum_score": 0.5},
+        candidate={"leader_score": 0.8, "rs_score": 0.6, "momentum_score": 0.5, "news_score": 0.2},
     )
     assert out["conflict_score"] == 0.0
+
+
+def test_news_weak_quant_strong_conflict():
+    out = compute_news_quant_conflict(
+        intelligence=None,
+        candidate={"leader_score": 0.45, "candidate_score": 0.5, "news_score": 0.0},
+    )
+    assert out["news_conflict"] is True
+    assert out["reason"] == "news_weak_quant_strong"
+    assert out["conflict_score"] >= 0.65

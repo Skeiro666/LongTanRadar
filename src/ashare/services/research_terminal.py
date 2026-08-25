@@ -74,9 +74,18 @@ def _signal_contribution(candidate: dict[str, Any]) -> list[dict[str, Any]]:
 
 def _top_reasons(candidate: dict[str, Any], limit: int = 3) -> list[str]:
     reasons: list[tuple[float, str]] = []
+    thesis = str(candidate.get("thesis") or "").strip()
+    if thesis:
+        reasons.append((0.9, thesis[:120]))
+    board = int(candidate.get("board_count") or 0)
+    if board > 0:
+        reasons.append((0.85, f"连板 {board} 天（事件/情绪驱动，需防回撤）"))
+    tags = [str(t) for t in (candidate.get("event_tags") or []) if t][:3]
+    if tags:
+        reasons.append((0.8, "事件标签：" + "、".join(tags)))
     pi = candidate.get("profit_inflection") or {}
-    if pi.get("score"):
-        reasons.append((float(pi["score"]), f"利润断层 +{float(pi['score']):.2f}"))
+    if pi.get("reason") and pi.get("available"):
+        reasons.append((float(pi.get("score") or 0.5), str(pi["reason"])[:100]))
     tr = candidate.get("trigger") or {}
     if tr.get("reason"):
         reasons.append((float(tr.get("score") or 0.5), str(tr["reason"])[:80]))
@@ -151,9 +160,16 @@ def _conflict_detail(candidate: dict[str, Any]) -> dict[str, Any]:
     c = candidate.get("news_conflict") or {}
     if not c:
         return {"news_conflict": False, "conflict_score": 0}
+    reason = str(c.get("reason") or "")
+    display = None
+    if c.get("news_conflict"):
+        if reason == "news_weak_quant_strong":
+            display = "弱新闻强量化（纯事件/因子驱动，缺新闻确认）"
+        else:
+            display = "新闻/量化冲突"
     return {
         **c,
-        "display": "新闻/量化冲突" if c.get("news_conflict") else None,
+        "display": display,
         "reason_labels": [
             lbl
             for lbl, flag in (

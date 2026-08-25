@@ -30,6 +30,7 @@ discovery:
   # 规则映射失败时，用本地 LLM（NEWS_AI_*）推断受益股；置信度硬顶 0.45
   # 可由 .env NEWS_AI_LLM_MAPPING 覆盖
   llm_mapping: true
+  max_llm_mapping_per_cycle: 8
   # 简称 → 代码；不含歧义词（如单独「平安」）
   aliases:
     茅台: 600519.SH
@@ -41,7 +42,11 @@ llm:
   model: qwen3.5:latest
   api_key_env: NEWS_AI_API_KEY
   temperature: 0.1
-  timeout_sec: 120
+  timeout_sec: 90
+  max_tokens: 768
+  extra_body:
+    think: false
+    reasoning_effort: none
 
 # Local News Intelligence (Task B). Never calls Council.
 intelligence:

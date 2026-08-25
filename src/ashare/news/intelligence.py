@@ -238,6 +238,9 @@ class LocalNewsIntelligence:
             except Exception as exc:  # noqa: BLE001
                 last_err = str(exc)[:200]
                 logger.warning("news intelligence failed id=%s attempt=%s: %s", news.id, attempt, exc)
+                blob = f"{type(exc).__name__} {exc}".lower()
+                if "timeout" in blob or "timed out" in blob:
+                    break
         latency = (time.perf_counter() - t0) * 1000.0
         inp = estimate_tokens(_INTEL_SYSTEM + user)
         out_n = estimate_tokens(str(parsed or last_err))

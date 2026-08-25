@@ -91,6 +91,15 @@ def test_profit_inflection_quality_d():
     assert fin.available is False
 
 
+def test_profit_gap_score_not_used_as_yoy():
+    eng = ProfitInflectionEngine()
+    r = eng.score_from_forecast_meta(
+        {"symbol": "600000.SH", "forecast_type": "预增", "profit_gap_score": 1.5}
+    )
+    assert "150%" not in r.reason
+    assert "growth≈" not in r.reason
+
+
 def test_event_score_bounds():
     eng = EventEngine()
     rows = eng.enrich_candidates(

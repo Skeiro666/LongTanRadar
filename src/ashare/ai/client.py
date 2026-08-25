@@ -48,6 +48,22 @@ def detect_provider(base_url: str, hint: str | None = None) -> str:
     return "compatible"
 
 
+def extract_chat_content(message: Any) -> str:
+    """Qwen3.5 via Ollama /v1 often leaves content empty and fills reasoning_*."""
+    names = ("content", "reasoning_content", "reasoning")
+    extra: dict[str, Any] = {}
+    if not isinstance(message, dict):
+        extra = dict(getattr(message, "model_extra", None) or {})
+    for name in names:
+        val = message.get(name) if isinstance(message, dict) else getattr(message, name, extra.get(name))
+        if val is None:
+            val = extra.get(name)
+        text = str(val).strip() if val is not None else ""
+        if text:
+            return text
+    return ""
+
+
 def normalize_openai_base_url(base_url: str, *, provider: str | None = None) -> str:
     """
     Official OpenAI-SDK base_url values:
@@ -153,6 +169,7 @@ class LLMClient:
         cache_hit: bool = False,
         cycle_id: str | None = None,
         research_session_id: str | None = None,
+        max_tokens: int | None = None,
     ) -> str:
         if not self.configured:
             raise RuntimeError(
@@ -174,7 +191,7 @@ class LLMClient:
             "model": self.model,
             "messages": messages,
             "stream": False,
-            "max_tokens": self.max_tokens,
+            "max_tokens": int(max_tokens if max_tokens is not None else self.max_tokens),
         }
         if self.send_temperature and self.temperature is not None:
             kwargs["temperature"] = float(self.temperature)
@@ -310,8 +327,8 @@ class LLMClient:
             timeout=self.timeout_sec,
         )
         resp = client.chat.completions.create(**kwargs)
-        content = resp.choices[0].message.content
-        if content is None or str(content).strip() == "":
+        content = extract_chat_content(resp.choices[0].message)
+        if not content:
             raise RuntimeError(f"{self.provider} empty content (model={self.model})")
         usage = None
         u = getattr(resp, "usage", None)
@@ -338,10 +355,10 @@ class LLMClient:
                 raise RuntimeError(f"{self.provider} HTTP {resp.status_code} @ {url}: {resp.text[:800]}")
             data = resp.json()
         try:
-            content = data["choices"][0]["message"]["content"]
+            content = extract_chat_content(data["choices"][0]["message"])
         except (KeyError, IndexError, TypeError) as exc:
             raise RuntimeError(f"Unexpected response: {json.dumps(data, ensure_ascii=False)[:500]}") from exc
-        if content is None or str(content).strip() == "":
+        if not content:
             raise RuntimeError(f"{self.provider} empty content")
         usage = data.get("usage") if isinstance(data.get("usage"), dict) else None
         return str(content), usage
@@ -395,6 +412,10 @@ def client_from_cfg(cfg: dict[str, Any], profile: dict[str, Any] | None = None) 
     # Only inject Kimi thinking flag when talking to Moonshot native endpoint
     if provider == "kimi" and "thinking" not in extra_body:
         extra_body["thinking"] = {"type": "disabled"}
+    # /v1 ignores think=false; reasoning_effort=none is what actually turns thinking off.
+    if provider == "ollama":
+        extra_body.setdefault("think", False)
+        extra_body.setdefault("reasoning_effort", "none")
 
     return LLMClient(
         base_url=base_url,
@@ -428,6 +449,8 @@ def client_for_news(cfg: dict[str, Any]) -> LLMClient | None:
     prof.setdefault("api_key_env", "NEWS_AI_API_KEY")
     prof.setdefault("temperature", 0.1)
     prof.setdefault("timeout_sec", 120)
+    # Do not inherit Council max_tokens=4096 — local mapping/intel needs short JSON.
+    prof.setdefault("max_tokens", 768)
     return client_from_cfg(cfg, prof)
 
 

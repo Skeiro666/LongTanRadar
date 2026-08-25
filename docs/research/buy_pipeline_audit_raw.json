@@ -1,0 +1,1218 @@
+{
+  "as_of": "2026-08-24",
+  "report_count": 3,
+  "data_limitations": {
+    "trading_days_in_production_cycles": 6,
+    "outcome_records": 80,
+    "forward_bars_note": "T+N returns limited by parquet cache end date; refresh attempted",
+    "requested_windows_20_40_60": "insufficient calendar history — using all available cycles"
+  },
+  "funnel": [
+    {
+      "layer": "Universe (market screen)",
+      "input_count": 2337,
+      "output_count": 780,
+      "reject_count": 1557,
+      "reject_reason": "screen_filters"
+    },
+    {
+      "layer": "Pool",
+      "input_count": 780,
+      "output_count": 60,
+      "reject_count": 720,
+      "reject_reason": "pool_cap_and_rank"
+    },
+    {
+      "layer": "News discovery",
+      "input_count": 42,
+      "output_count": 0,
+      "reject_count": 42,
+      "reject_reason": "NOT_ENOUGH_EVIDENCE / mapping fail"
+    },
+    {
+      "layer": "Candidate Union",
+      "input_count": 60,
+      "output_count": 20,
+      "reject_count": 80,
+      "reject_reason": "union_rank_cap_20"
+    },
+    {
+      "layer": "Research Gate",
+      "input_count": 20,
+      "output_count": 10,
+      "reject_count": 10,
+      "reject_reason": {
+        "DEEP_BUDGET": 10
+      }
+    },
+    {
+      "layer": "Council (LLM/heuristic)",
+      "input_count": 10,
+      "output_count": 20,
+      "reject_count": 0,
+      "reject_reason": "none"
+    },
+    {
+      "layer": "Chairman rating",
+      "input_count": 20,
+      "output_count": 7,
+      "reject_count": 13,
+      "reject_reason": {
+        "WATCH": 7,
+        "AVOID": 1,
+        "GATE_SKIP": 12
+      }
+    },
+    {
+      "layer": "Trading Action (SMALL_POSITION required)",
+      "input_count": 7,
+      "output_count": 0,
+      "reject_count": 7,
+      "reject_reason": {
+        "WAIT_FOR_CONFIRMATION": 6,
+        "NO_ACTION": 14
+      }
+    },
+    {
+      "layer": "Risk Filter",
+      "input_count": 8,
+      "output_count": 2,
+      "reject_count": 6,
+      "reject_reason": {
+        "('limit_up',)": 6
+      }
+    },
+    {
+      "layer": "Final BUY (committee_approve)",
+      "input_count": 0,
+      "output_count": 0,
+      "reject_count": 20,
+      "reject_reason": "rating×action×risk compound gate"
+    }
+  ],
+  "zero_buy": {
+    "cycles_recorded": 6,
+    "unique_as_of_dates": [
+      "2026-08-21",
+      "2026-08-24"
+    ],
+    "candidate_count_avg": 61.166666666666664,
+    "research_count_avg": 20.0,
+    "buy_count_total": 0,
+    "strong_buy_count_total": 0,
+    "latest_cycle": {
+      "candidates": 60,
+      "council": 20,
+      "buy_rating": 0,
+      "strong_buy": 0,
+      "small_position": 0,
+      "final_buy": 0
+    },
+    "BUY_RATE": 0.0
+  },
+  "council_buy_sessions": 5,
+  "threshold_audit": {
+    "thresholds": {
+      "enabled": true,
+      "min_candidate_score": 0.12,
+      "min_leader_score": 0.1,
+      "min_ml_prediction": 0.003,
+      "min_profit_score": 0.15,
+      "min_event_score": 0.08,
+      "min_news_score": 0.12,
+      "always_pass_top_n": 3,
+      "boost_sources": [
+        "news",
+        "profit",
+        "event"
+      ],
+      "boost_score_floor": 0.08,
+      "deep_threshold": 0.22,
+      "light_threshold": 0.12,
+      "max_deep": 10,
+      "max_light": 8,
+      "max_llm_calls": 30
+    },
+    "counts": {
+      "min_candidate_score": {
+        "pass": 20,
+        "fail": 40
+      },
+      "min_leader_score": {
+        "pass": 0,
+        "fail": 60
+      },
+      "min_ml_prediction": {
+        "pass": 0,
+        "fail": 60
+      },
+      "min_profit_score": {
+        "pass": 0,
+        "fail": 60
+      },
+      "min_event_score": {
+        "pass": 0,
+        "fail": 60
+      },
+      "min_news_score": {
+        "pass": 0,
+        "fail": 60
+      },
+      "research_gate_composite": {
+        "pass": 3,
+        "fail": 57
+      },
+      "gate_reject_WEAK_SIGNALS": {
+        "pass": 0,
+        "fail": 17
+      },
+      "gate_reject_LOW_CANDIDATE_SCORE": {
+        "pass": 0,
+        "fail": 40
+      }
+    }
+  },
+  "ab_test": {
+    "quant_only": {
+      "label": "quant_only",
+      "n": 31,
+      "horizons": {
+        "1": {
+          "mean": -0.004077777777777777,
+          "win_rate": 0.3333333333333333,
+          "n": 27
+        }
+      },
+      "profit_factor": null,
+      "max_drawdown_mean": 0.0
+    },
+    "quant_plus_ai": {
+      "label": "quant_plus_ai",
+      "n": 1,
+      "horizons": {},
+      "profit_factor": null,
+      "max_drawdown_mean": null
+    }
+  },
+  "quadrants": {},
+  "weak_news_strong_quant": {
+    "n": 2,
+    "samples": [
+      {
+        "symbol": "003032.SZ",
+        "quant": 0.6628363783544524,
+        "news": -0.24466865919445022,
+        "stage": "EXTREME",
+        "forward": {
+          "available": true,
+          "entry": 9.96,
+          "signal_date": "2026-08-24",
+          "horizons": {
+            "1": -0.002,
+            "3": null,
+            "5": null,
+            "10": null,
+            "20": null
+          },
+          "max_drawdown": 0.0,
+          "limit_down_hit": false
+        },
+        "feats": {
+          "mom_5": -0.20143884892086328,
+          "mom_20": 0.6594684385382061,
+          "vol_20": 0.07760723596014826,
+          "vol_ratio": 1.2289345799893046,
+          "ma_gap_20": -0.0811258278145695,
+          "ma_gap_60": 0.33368933983045224,
+          "ret_1": -0.0715613382899628,
+          "high_low": 0.10710710710710714,
+          "near_20d_low": 0.0,
+          "is_breakdown": 0.0,
+          "ma_gap_5": -0.15510825439783502,
+          "mom_10": -0.16957605985037405,
+          "limit_up_count_20d": 8.0,
+          "consecutive_up_days": 0.0,
+          "turnover_zscore": 0.1500793899322662,
+          "volume_acceleration": 0.09676670444252106,
+          "chase_score": 1.3189368770764123
+        },
+        "conflict": {
+          "news_conflict": true,
+          "conflict_score": 0.74,
+          "news_direction": 0,
+          "quant_direction": 1,
+          "reason": "news_weak_quant_strong",
+          "signals": {
+            "rs_weak": true,
+            "momentum_weak": true,
+            "volume_weak": true,
+            "price_strong": false,
+            "news_support": 0.0
+          }
+        }
+      },
+      {
+        "symbol": "603333.SH",
+        "quant": 0.5206501408950838,
+        "news": -0.5,
+        "stage": "TREND",
+        "forward": {
+          "available": true,
+          "entry": 9.53,
+          "signal_date": "2026-08-24",
+          "horizons": {},
+          "note": "no_forward_bars_in_cache",
+          "max_drawdown": null
+        },
+        "feats": {
+          "mom_5": 0.05784204671857607,
+          "mom_20": 0.13892215568862287,
+          "vol_20": 0.0337785802046557,
+          "vol_ratio": 2.9292051489515964,
+          "ma_gap_20": 0.06310435414454203,
+          "ma_gap_60": 0.12613234916813038,
+          "ret_1": -0.034517766497461966,
+          "high_low": 0.17770767613038901,
+          "near_20d_low": 0.0,
+          "is_breakdown": 0.0,
+          "ma_gap_5": 0.035947712418300665,
+          "mom_10": 0.02922077922077926,
+          "limit_up_count_20d": 1.0,
+          "consecutive_up_days": 0.0,
+          "turnover_zscore": 3.5579447178288053,
+          "volume_acceleration": 0.5494633089505325,
+          "chase_score": 0.4908160897441939
+        },
+        "conflict": {
+          "news_conflict": true,
+          "conflict_score": 0.74,
+          "news_direction": 0,
+          "quant_direction": 1,
+          "reason": "news_weak_quant_strong",
+          "signals": {
+            "rs_weak": true,
+            "momentum_weak": true,
+            "volume_weak": true,
+            "price_strong": false,
+            "news_support": 0.0
+          }
+        }
+      }
+    ],
+    "T+5_mean": null
+  },
+  "stage_analysis_sqwn": {},
+  "stock_dives": [
+    {
+      "symbol": "002412.SZ",
+      "name": "汉森制药",
+      "scores": {
+        "quant_score": 1.0894986447837294,
+        "leader_score": null,
+        "factor_score": null,
+        "profit_score": null,
+        "event_score": null,
+        "news_score": 0.5559558359089848,
+        "ml_score": null,
+        "candidate_score": 1.0894986447837294,
+        "conflict_recomputed": {
+          "news_conflict": false,
+          "conflict_score": 0.0,
+          "news_direction": 0,
+          "quant_direction": 1,
+          "reason": "insufficient_signals",
+          "signals": {
+            "rs_weak": true,
+            "momentum_weak": true,
+            "volume_weak": true,
+            "price_strong": false,
+            "news_support": 0.5559558359089848
+          }
+        },
+        "stage": "EXTREME",
+        "chase_score": 3.0418356478525768,
+        "board_count": 4
+      },
+      "conflict": {
+        "news_conflict": false,
+        "conflict_score": 0.0,
+        "news_direction": 0,
+        "quant_direction": 1,
+        "reason": "insufficient_signals",
+        "signals": {
+          "rs_weak": true,
+          "momentum_weak": true,
+          "volume_weak": true,
+          "price_strong": false,
+          "news_support": 0.5559558359089848
+        }
+      },
+      "conflict_saved": {
+        "news_conflict": false,
+        "conflict_score": 0.0,
+        "news_direction": 1,
+        "quant_direction": 1,
+        "reason": "aligned",
+        "signals": {
+          "rs_weak": true,
+          "momentum_weak": true,
+          "volume_weak": true,
+          "price_strong": false
+        }
+      },
+      "council_rating": "WATCH",
+      "trading_action": "WAIT_FOR_CONFIRMATION",
+      "risk_filter_reason": [
+        "limit_up"
+      ],
+      "forward": {
+        "available": true,
+        "entry": 11.21,
+        "signal_date": "2026-08-24",
+        "horizons": {
+          "1": -0.0018,
+          "3": null,
+          "5": null,
+          "10": null,
+          "20": null
+        },
+        "max_drawdown": 0.0,
+        "limit_down_hit": false
+      },
+      "feats": {
+        "mom_5": 0.49267643142476714,
+        "mom_20": 0.5356164383561646,
+        "vol_20": 0.045394999500250936,
+        "vol_ratio": 1.083199287304264,
+        "ma_gap_20": 0.46564685886121465,
+        "ma_gap_60": 0.6823411705852929,
+        "ret_1": 0.10009813542688928,
+        "high_low": 0.028545941123996454,
+        "near_20d_low": 0.0,
+        "is_breakdown": 0.0,
+        "ma_gap_5": 0.19944361224053078,
+        "mom_10": 0.5419532324621734,
+        "limit_up_count_20d": 4.0,
+        "consecutive_up_days": 6.0,
+        "turnover_zscore": 1.4649650994601628,
+        "volume_acceleration": 0.8777579826744204,
+        "chase_score": 3.0418356478525768
+      },
+      "counterfactual_path": {
+        "in_pool": true,
+        "in_union": true,
+        "in_research_universe": true,
+        "gate_passed": true,
+        "gate_reason": null,
+        "council_rating": "WATCH",
+        "trading_action": "WAIT_FOR_CONFIRMATION",
+        "committee_approve": false,
+        "risk_flags": [
+          "limit_up"
+        ],
+        "why_no_buy": [
+          "council_not_buy:WATCH",
+          "trading_action:WAIT_FOR_CONFIRMATION",
+          "risk:['limit_up']"
+        ]
+      }
+    },
+    {
+      "symbol": "603958.SH",
+      "name": "哈森股份",
+      "scores": {
+        "quant_score": 1.0406625379139856,
+        "leader_score": null,
+        "factor_score": null,
+        "profit_score": null,
+        "event_score": null,
+        "news_score": 0.6499999999999999,
+        "ml_score": null,
+        "candidate_score": 1.0406625379139856,
+        "conflict_recomputed": {
+          "news_conflict": false,
+          "conflict_score": 0.0,
+          "news_direction": 0,
+          "quant_direction": 1,
+          "reason": "insufficient_signals",
+          "signals": {
+            "rs_weak": true,
+            "momentum_weak": true,
+            "volume_weak": true,
+            "price_strong": false,
+            "news_support": 0.6499999999999999
+          }
+        },
+        "stage": "EXTREME",
+        "chase_score": 3.072790966226686,
+        "board_count": 3
+      },
+      "conflict": {
+        "news_conflict": false,
+        "conflict_score": 0.0,
+        "news_direction": 0,
+        "quant_direction": 1,
+        "reason": "insufficient_signals",
+        "signals": {
+          "rs_weak": true,
+          "momentum_weak": true,
+          "volume_weak": true,
+          "price_strong": false,
+          "news_support": 0.6499999999999999
+        }
+      },
+      "conflict_saved": {
+        "news_conflict": false,
+        "conflict_score": 0.0,
+        "news_direction": 0,
+        "quant_direction": 1,
+        "reason": "insufficient_signals",
+        "signals": {
+          "rs_weak": true,
+          "momentum_weak": true,
+          "volume_weak": true,
+          "price_strong": false
+        }
+      },
+      "council_rating": "WATCH",
+      "trading_action": "WAIT_FOR_CONFIRMATION",
+      "risk_filter_reason": [
+        "limit_up"
+      ],
+      "forward": {
+        "available": true,
+        "entry": 21.95,
+        "signal_date": "2026-08-24",
+        "horizons": {},
+        "note": "no_forward_bars_in_cache",
+        "max_drawdown": null
+      },
+      "feats": {
+        "mom_5": 0.3474374255065553,
+        "mom_20": 0.6822916666666667,
+        "vol_20": 0.051714388962026896,
+        "vol_ratio": 5.084349201465548,
+        "ma_gap_20": 0.4431607838131102,
+        "ma_gap_60": 0.34754450095359213,
+        "ret_1": 0.10024330900243306,
+        "high_low": 0.07032286598850065,
+        "near_20d_low": 0.0,
+        "is_breakdown": 0.0,
+        "ma_gap_5": 0.162109375,
+        "mom_10": 0.5184687709872398,
+        "limit_up_count_20d": 5.0,
+        "consecutive_up_days": 3.0,
+        "turnover_zscore": 3.4604511255826127,
+        "volume_acceleration": 5.450088518081072,
+        "chase_score": 3.072790966226686
+      },
+      "counterfactual_path": {
+        "in_pool": true,
+        "in_union": true,
+        "in_research_universe": true,
+        "gate_passed": true,
+        "gate_reason": null,
+        "council_rating": "WATCH",
+        "trading_action": "WAIT_FOR_CONFIRMATION",
+        "committee_approve": false,
+        "risk_flags": [
+          "limit_up"
+        ],
+        "why_no_buy": [
+          "council_not_buy:WATCH",
+          "trading_action:WAIT_FOR_CONFIRMATION",
+          "risk:['limit_up']"
+        ]
+      }
+    },
+    {
+      "symbol": "601700.SH",
+      "name": "风范股份",
+      "scores": {
+        "quant_score": 0.8693665130935764,
+        "leader_score": null,
+        "factor_score": null,
+        "profit_score": null,
+        "event_score": null,
+        "news_score": 0.65,
+        "ml_score": null,
+        "candidate_score": 0.8693665130935764,
+        "conflict_recomputed": {
+          "news_conflict": false,
+          "conflict_score": 0.0,
+          "news_direction": 0,
+          "quant_direction": 1,
+          "reason": "insufficient_signals",
+          "signals": {
+            "rs_weak": true,
+            "momentum_weak": true,
+            "volume_weak": true,
+            "price_strong": false,
+            "news_support": 0.65
+          }
+        },
+        "stage": "EXTREME",
+        "chase_score": 1.9156995327834745,
+        "board_count": 1
+      },
+      "conflict": {
+        "news_conflict": false,
+        "conflict_score": 0.0,
+        "news_direction": 0,
+        "quant_direction": 1,
+        "reason": "insufficient_signals",
+        "signals": {
+          "rs_weak": true,
+          "momentum_weak": true,
+          "volume_weak": true,
+          "price_strong": false,
+          "news_support": 0.65
+        }
+      },
+      "conflict_saved": {
+        "news_conflict": false,
+        "conflict_score": 0.0,
+        "news_direction": 1,
+        "quant_direction": 1,
+        "reason": "aligned",
+        "signals": {
+          "rs_weak": true,
+          "momentum_weak": true,
+          "volume_weak": true,
+          "price_strong": false
+        }
+      },
+      "council_rating": "WATCH",
+      "trading_action": "WAIT_FOR_CONFIRMATION",
+      "risk_filter_reason": [
+        "limit_up"
+      ],
+      "forward": {
+        "available": true,
+        "entry": 7.71,
+        "signal_date": "2026-08-24",
+        "horizons": {
+          "1": 0.0337,
+          "3": null,
+          "5": null,
+          "10": null,
+          "20": null
+        },
+        "max_drawdown": 0.0,
+        "limit_down_hit": false
+      },
+      "feats": {
+        "mom_5": 0.06786703601108046,
+        "mom_20": 0.5670731707317074,
+        "vol_20": 0.07531912369051265,
+        "vol_ratio": 1.1796860307884909,
+        "ma_gap_20": 0.19009029868025015,
+        "ma_gap_60": 0.45489998741980125,
+        "ret_1": 0.09985734664764623,
+        "high_low": 0.14396887159533078,
+        "near_20d_low": 0.0,
+        "is_breakdown": 0.0,
+        "ma_gap_5": 0.06052269601100405,
+        "mom_10": 0.08898305084745761,
+        "limit_up_count_20d": 8.0,
+        "consecutive_up_days": 1.0,
+        "turnover_zscore": 0.3977140972360817,
+        "volume_acceleration": 0.24169812917680178,
+        "chase_score": 1.9156995327834745
+      },
+      "counterfactual_path": {
+        "in_pool": true,
+        "in_union": true,
+        "in_research_universe": true,
+        "gate_passed": true,
+        "gate_reason": null,
+        "council_rating": "WATCH",
+        "trading_action": "WAIT_FOR_CONFIRMATION",
+        "committee_approve": false,
+        "risk_flags": [
+          "limit_up"
+        ],
+        "why_no_buy": [
+          "council_not_buy:WATCH",
+          "trading_action:WAIT_FOR_CONFIRMATION",
+          "risk:['limit_up']"
+        ]
+      }
+    },
+    {
+      "symbol": "603330.SH",
+      "name": "天洋新材",
+      "scores": {
+        "quant_score": 0.8613414343839321,
+        "leader_score": null,
+        "factor_score": null,
+        "profit_score": null,
+        "event_score": null,
+        "news_score": 0.16100741379596306,
+        "ml_score": null,
+        "candidate_score": 0.8613414343839321,
+        "conflict_recomputed": {
+          "news_conflict": false,
+          "conflict_score": 0.0,
+          "news_direction": 0,
+          "quant_direction": 1,
+          "reason": "insufficient_signals",
+          "signals": {
+            "rs_weak": true,
+            "momentum_weak": true,
+            "volume_weak": true,
+            "price_strong": false,
+            "news_support": 0.16100741379596306
+          }
+        },
+        "stage": "EXTREME",
+        "chase_score": 2.1718722436635463,
+        "board_count": 2
+      },
+      "conflict": {
+        "news_conflict": false,
+        "conflict_score": 0.0,
+        "news_direction": 0,
+        "quant_direction": 1,
+        "reason": "insufficient_signals",
+        "signals": {
+          "rs_weak": true,
+          "momentum_weak": true,
+          "volume_weak": true,
+          "price_strong": false,
+          "news_support": 0.16100741379596306
+        }
+      },
+      "conflict_saved": {
+        "news_conflict": false,
+        "conflict_score": 0.0,
+        "news_direction": 1,
+        "quant_direction": 1,
+        "reason": "aligned",
+        "signals": {
+          "rs_weak": true,
+          "momentum_weak": true,
+          "volume_weak": true,
+          "price_strong": false
+        }
+      },
+      "council_rating": "WATCH",
+      "trading_action": "WAIT_FOR_CONFIRMATION",
+      "risk_filter_reason": [
+        "limit_up"
+      ],
+      "forward": {
+        "available": true,
+        "entry": 10.97,
+        "signal_date": "2026-08-24",
+        "horizons": {
+          "1": -0.0264,
+          "3": null,
+          "5": null,
+          "10": null,
+          "20": null
+        },
+        "max_drawdown": 0.0,
+        "limit_down_hit": false
+      },
+      "feats": {
+        "mom_5": -0.06638297872340415,
+        "mom_20": 0.659606656580938,
+        "vol_20": 0.06535249724980638,
+        "vol_ratio": 2.506798672438137,
+        "ma_gap_20": 0.27587811118864874,
+        "ma_gap_60": 0.3643712947224409,
+        "ret_1": 0.1003009027081243,
+        "high_low": 0.1103008204193255,
+        "near_20d_low": 0.0,
+        "is_breakdown": 0.0,
+        "ma_gap_5": 0.07003511509949296,
+        "mom_10": 0.3798742138364781,
+        "limit_up_count_20d": 6.0,
+        "consecutive_up_days": 2.0,
+        "turnover_zscore": 1.6137226201766732,
+        "volume_acceleration": 2.4055940806811478,
+        "chase_score": 2.1718722436635463
+      },
+      "counterfactual_path": {
+        "in_pool": true,
+        "in_union": true,
+        "in_research_universe": true,
+        "gate_passed": true,
+        "gate_reason": null,
+        "council_rating": "WATCH",
+        "trading_action": "WAIT_FOR_CONFIRMATION",
+        "committee_approve": false,
+        "risk_flags": [
+          "limit_up"
+        ],
+        "why_no_buy": [
+          "council_not_buy:WATCH",
+          "trading_action:WAIT_FOR_CONFIRMATION",
+          "risk:['limit_up']"
+        ]
+      }
+    },
+    {
+      "symbol": "601212.SH",
+      "name": "白银有色",
+      "scores": {
+        "quant_score": 0.7335101070439348,
+        "leader_score": null,
+        "factor_score": null,
+        "profit_score": null,
+        "event_score": null,
+        "news_score": 0.39999999999999997,
+        "ml_score": null,
+        "candidate_score": 0.7335101070439348,
+        "conflict_recomputed": {
+          "news_conflict": false,
+          "conflict_score": 0.0,
+          "news_direction": 0,
+          "quant_direction": 1,
+          "reason": "insufficient_signals",
+          "signals": {
+            "rs_weak": true,
+            "momentum_weak": true,
+            "volume_weak": true,
+            "price_strong": false,
+            "news_support": 0.39999999999999997
+          }
+        },
+        "stage": "EXTREME",
+        "chase_score": 1.767991342699777,
+        "board_count": 2
+      },
+      "conflict": {
+        "news_conflict": false,
+        "conflict_score": 0.0,
+        "news_direction": 0,
+        "quant_direction": 1,
+        "reason": "insufficient_signals",
+        "signals": {
+          "rs_weak": true,
+          "momentum_weak": true,
+          "volume_weak": true,
+          "price_strong": false,
+          "news_support": 0.39999999999999997
+        }
+      },
+      "conflict_saved": {
+        "news_conflict": false,
+        "conflict_score": 0.0,
+        "news_direction": 1,
+        "quant_direction": 1,
+        "reason": "aligned",
+        "signals": {
+          "rs_weak": true,
+          "momentum_weak": true,
+          "volume_weak": true,
+          "price_strong": false
+        }
+      },
+      "council_rating": "WATCH",
+      "trading_action": "WAIT_FOR_CONFIRMATION",
+      "risk_filter_reason": [
+        "limit_up"
+      ],
+      "forward": {
+        "available": true,
+        "entry": 6.7,
+        "signal_date": "2026-08-24",
+        "horizons": {
+          "1": 0.0537,
+          "3": null,
+          "5": null,
+          "10": null,
+          "20": null
+        },
+        "max_drawdown": 0.0,
+        "limit_down_hit": false
+      },
+      "feats": {
+        "mom_5": 0.18165784832451504,
+        "mom_20": 0.375770020533881,
+        "vol_20": 0.04074482514493276,
+        "vol_ratio": 1.081458735134751,
+        "ma_gap_20": 0.2217359591539021,
+        "ma_gap_60": 0.2464343296539751,
+        "ret_1": 0.10016420361247946,
+        "high_low": 0.03432835820895529,
+        "near_20d_low": 0.0,
+        "is_breakdown": 0.0,
+        "ma_gap_5": 0.14217524718718047,
+        "mom_10": 0.1355932203389829,
+        "limit_up_count_20d": 1.0,
+        "consecutive_up_days": 3.0,
+        "turnover_zscore": 0.4903725459968658,
+        "volume_acceleration": 0.18161739522198556,
+        "chase_score": 1.767991342699777
+      },
+      "counterfactual_path": {
+        "in_pool": true,
+        "in_union": true,
+        "in_research_universe": true,
+        "gate_passed": true,
+        "gate_reason": null,
+        "council_rating": "WATCH",
+        "trading_action": "WAIT_FOR_CONFIRMATION",
+        "committee_approve": false,
+        "risk_flags": [
+          "limit_up"
+        ],
+        "why_no_buy": [
+          "council_not_buy:WATCH",
+          "trading_action:WAIT_FOR_CONFIRMATION",
+          "risk:['limit_up']"
+        ]
+      }
+    },
+    {
+      "symbol": "603626.SH",
+      "name": "科森科技",
+      "scores": {
+        "quant_score": 0.7228535958060962,
+        "leader_score": null,
+        "factor_score": null,
+        "profit_score": null,
+        "event_score": null,
+        "news_score": 0.27674919621997934,
+        "ml_score": null,
+        "candidate_score": 0.7228535958060962,
+        "conflict_recomputed": {
+          "news_conflict": false,
+          "conflict_score": 0.0,
+          "news_direction": 0,
+          "quant_direction": 1,
+          "reason": "insufficient_signals",
+          "signals": {
+            "rs_weak": true,
+            "momentum_weak": true,
+            "volume_weak": true,
+            "price_strong": false,
+            "news_support": 0.27674919621997934
+          }
+        },
+        "stage": "EXTREME",
+        "chase_score": 1.7882313291146075,
+        "board_count": 0
+      },
+      "conflict": {
+        "news_conflict": false,
+        "conflict_score": 0.0,
+        "news_direction": 0,
+        "quant_direction": 1,
+        "reason": "insufficient_signals",
+        "signals": {
+          "rs_weak": true,
+          "momentum_weak": true,
+          "volume_weak": true,
+          "price_strong": false,
+          "news_support": 0.27674919621997934
+        }
+      },
+      "conflict_saved": {
+        "news_conflict": false,
+        "conflict_score": 0.0,
+        "news_direction": 0,
+        "quant_direction": 1,
+        "reason": "insufficient_signals",
+        "signals": {
+          "rs_weak": true,
+          "momentum_weak": true,
+          "volume_weak": true,
+          "price_strong": false
+        }
+      },
+      "council_rating": "AVOID",
+      "trading_action": "NO_ACTION",
+      "risk_filter_reason": [],
+      "forward": {
+        "available": true,
+        "entry": 19.48,
+        "signal_date": "2026-08-24",
+        "horizons": {
+          "1": -0.0354,
+          "3": null,
+          "5": null,
+          "10": null,
+          "20": null
+        },
+        "max_drawdown": 0.0,
+        "limit_down_hit": false
+      },
+      "feats": {
+        "mom_5": 0.15198107628622126,
+        "mom_20": 0.4613653413353338,
+        "vol_20": 0.05165973915712893,
+        "vol_ratio": 2.6145565840846507,
+        "ma_gap_20": 0.25200848383572205,
+        "ma_gap_60": 0.1012493640115324,
+        "ret_1": 0.044504021447721254,
+        "high_low": 0.09599589322381935,
+        "near_20d_low": 0.0,
+        "is_breakdown": 0.0,
+        "ma_gap_5": 0.11428898295389528,
+        "mom_10": 0.2352568167406468,
+        "limit_up_count_20d": 3.0,
+        "consecutive_up_days": 3.0,
+        "turnover_zscore": 3.592577302066389,
+        "volume_acceleration": 0.2146415398797961,
+        "chase_score": 1.7882313291146075
+      },
+      "counterfactual_path": {
+        "in_pool": true,
+        "in_union": true,
+        "in_research_universe": true,
+        "gate_passed": true,
+        "gate_reason": null,
+        "council_rating": "AVOID",
+        "trading_action": "NO_ACTION",
+        "committee_approve": false,
+        "risk_flags": [],
+        "why_no_buy": [
+          "council_not_buy:AVOID",
+          "trading_action:NO_ACTION"
+        ]
+      }
+    },
+    {
+      "symbol": "000620.SZ",
+      "name": "盈新发展",
+      "scores": {
+        "quant_score": 0.6858996000976377,
+        "leader_score": null,
+        "factor_score": null,
+        "profit_score": null,
+        "event_score": null,
+        "news_score": 0.4408279903590744,
+        "ml_score": null,
+        "candidate_score": 0.6858996000976377,
+        "conflict_recomputed": {
+          "news_conflict": false,
+          "conflict_score": 0.0,
+          "news_direction": 0,
+          "quant_direction": 1,
+          "reason": "insufficient_signals",
+          "signals": {
+            "rs_weak": true,
+            "momentum_weak": true,
+            "volume_weak": true,
+            "price_strong": false,
+            "news_support": 0.4408279903590744
+          }
+        },
+        "stage": "EXTREME",
+        "chase_score": 1.4062994286690222,
+        "board_count": 1
+      },
+      "conflict": {
+        "news_conflict": false,
+        "conflict_score": 0.0,
+        "news_direction": 0,
+        "quant_direction": 1,
+        "reason": "insufficient_signals",
+        "signals": {
+          "rs_weak": true,
+          "momentum_weak": true,
+          "volume_weak": true,
+          "price_strong": false,
+          "news_support": 0.4408279903590744
+        }
+      },
+      "conflict_saved": {
+        "news_conflict": false,
+        "conflict_score": 0.0,
+        "news_direction": 1,
+        "quant_direction": 1,
+        "reason": "aligned",
+        "signals": {
+          "rs_weak": true,
+          "momentum_weak": true,
+          "volume_weak": true,
+          "price_strong": false
+        }
+      },
+      "council_rating": "WATCH",
+      "trading_action": "WAIT_FOR_CONFIRMATION",
+      "risk_filter_reason": [
+        "limit_up"
+      ],
+      "forward": {
+        "available": true,
+        "entry": 3.47,
+        "signal_date": "2026-08-24",
+        "horizons": {
+          "1": -0.0202,
+          "3": null,
+          "5": null,
+          "10": null,
+          "20": null
+        },
+        "max_drawdown": 0.0,
+        "limit_down_hit": false
+      },
+      "feats": {
+        "mom_5": 0.11935483870967745,
+        "mom_20": 0.2710622710622712,
+        "vol_20": 0.047624558587024655,
+        "vol_ratio": 1.3629301545157795,
+        "ma_gap_20": 0.19019036185902932,
+        "ma_gap_60": 0.14351623002142042,
+        "ret_1": 0.10158730158730167,
+        "high_low": 0.06916426512968306,
+        "near_20d_low": 0.0,
+        "is_breakdown": 0.0,
+        "ma_gap_5": 0.03151010701545788,
+        "mom_10": 0.25724637681159446,
+        "limit_up_count_20d": 3.0,
+        "consecutive_up_days": 1.0,
+        "turnover_zscore": 0.7003159112357414,
+        "volume_acceleration": -0.3794287178163342,
+        "chase_score": 1.4062994286690222
+      },
+      "counterfactual_path": {
+        "in_pool": true,
+        "in_union": true,
+        "in_research_universe": true,
+        "gate_passed": true,
+        "gate_reason": null,
+        "council_rating": "WATCH",
+        "trading_action": "WAIT_FOR_CONFIRMATION",
+        "committee_approve": false,
+        "risk_flags": [
+          "limit_up"
+        ],
+        "why_no_buy": [
+          "council_not_buy:WATCH",
+          "trading_action:WAIT_FOR_CONFIRMATION",
+          "risk:['limit_up']"
+        ]
+      }
+    },
+    {
+      "symbol": "600227.SH",
+      "name": "赤天化",
+      "scores": {
+        "quant_score": 0.6803038566147009,
+        "leader_score": null,
+        "factor_score": null,
+        "profit_score": null,
+        "event_score": null,
+        "news_score": 0.1989941320149387,
+        "ml_score": null,
+        "candidate_score": 0.6803038566147009,
+        "conflict_recomputed": {
+          "news_conflict": false,
+          "conflict_score": 0.0,
+          "news_direction": 0,
+          "quant_direction": 1,
+          "reason": "insufficient_signals",
+          "signals": {
+            "rs_weak": true,
+            "momentum_weak": true,
+            "volume_weak": true,
+            "price_strong": false,
+            "news_support": 0.1989941320149387
+          }
+        },
+        "stage": "EXTREME",
+        "chase_score": 1.0175467915176786,
+        "board_count": 0
+      },
+      "conflict": {
+        "news_conflict": false,
+        "conflict_score": 0.0,
+        "news_direction": 0,
+        "quant_direction": 1,
+        "reason": "insufficient_signals",
+        "signals": {
+          "rs_weak": true,
+          "momentum_weak": true,
+          "volume_weak": true,
+          "price_strong": false,
+          "news_support": 0.1989941320149387
+        }
+      },
+      "conflict_saved": {
+        "news_conflict": false,
+        "conflict_score": 0.0,
+        "news_direction": 1,
+        "quant_direction": 1,
+        "reason": "aligned",
+        "signals": {
+          "rs_weak": true,
+          "momentum_weak": true,
+          "volume_weak": true,
+          "price_strong": false
+        }
+      },
+      "council_rating": "WATCH",
+      "trading_action": "NO_ACTION",
+      "risk_filter_reason": [],
+      "forward": {
+        "available": true,
+        "entry": 3.95,
+        "signal_date": "2026-08-24",
+        "horizons": {
+          "1": -0.0456,
+          "3": null,
+          "5": null,
+          "10": null,
+          "20": null
+        },
+        "max_drawdown": 0.0,
+        "limit_down_hit": false
+      },
+      "feats": {
+        "mom_5": 0.15835777126099715,
+        "mom_20": 0.25396825396825395,
+        "vol_20": 0.04617634177431683,
+        "vol_ratio": 1.5300238973316191,
+        "ma_gap_20": 0.13603681334483744,
+        "ma_gap_60": 0.30895835634596297,
+        "ret_1": 0.0,
+        "high_low": 0.0911392405063292,
+        "near_20d_low": 0.0,
+        "is_breakdown": 0.0,
+        "ma_gap_5": 0.03349031920460495,
+        "mom_10": 0.07629427792915533,
+        "limit_up_count_20d": 2.0,
+        "consecutive_up_days": 0.0,
+        "turnover_zscore": 1.7335136284009869,
+        "volume_acceleration": 0.28810417074881406,
+        "chase_score": 1.0175467915176786
+      },
+      "counterfactual_path": {
+        "in_pool": true,
+        "in_union": true,
+        "in_research_universe": true,
+        "gate_passed": true,
+        "gate_reason": null,
+        "council_rating": "WATCH",
+        "trading_action": "NO_ACTION",
+        "committee_approve": false,
+        "risk_flags": [],
+        "why_no_buy": [
+          "council_not_buy:WATCH",
+          "trading_action:NO_ACTION"
+        ]
+      }
+    }
+  ],
+  "negative_evidence": {
+    "risk_warning": 2,
+    "abnormal_volatility": 8,
+    "performance_miss": 2,
+    "overextension": 5,
+    "valuation_warning": 1,
+    "insider_selling": 1,
+    "high_turnover": 1
+  },
+  "horizon_stats_all_outcomes": {
+    "1": {
+      "n": 61,
+      "mean": -0.0021393442622950824
+    }
+  }
+}

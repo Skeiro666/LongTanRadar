@@ -50,6 +50,15 @@ def build_canonical_decision(
     chairman = dict(rep.get("chairman") or {})
     rating = str(decision.get("research_rating") or chairman.get("rating") or "WATCH").upper()
     action = str(decision.get("action") or chairman.get("trading_action") or "WATCH").upper()
+    conflict = dict(rep.get("news_conflict") or {})
+    if float(conflict.get("conflict_score") or 0) >= 0.65 and str(conflict.get("reason") or "") in {
+        "news_weak_quant_strong",
+        "news_negative_price_strong",
+    }:
+        if rating in {"BUY", "STRONG_BUY"}:
+            rating = "WATCH"
+        if action in {"SMALL_POSITION", "BUY"}:
+            action = "WAIT_FOR_CONFIRMATION"
     gate = dict(rep.get("gate") or {})
     gate_passed = bool(gate.get("passed", True)) and rating not in {"GATE_SKIP", "SKIP"}
 

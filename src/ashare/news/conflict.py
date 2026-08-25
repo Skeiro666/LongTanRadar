@@ -71,6 +71,29 @@ def _quant_dir(candidate: dict[str, Any] | None, price_signal: str | None = None
     return 0
 
 
+def _news_support_score(
+    intelligence: dict[str, Any] | None,
+    candidate: dict[str, Any] | None,
+    *,
+    news_threshold: float = 0.12,
+) -> float:
+    c = candidate or {}
+    intel = intelligence or c.get("news_intelligence") or {}
+    try:
+        net = float(c.get("news_score") or 0)
+    except (TypeError, ValueError):
+        net = 0.0
+    try:
+        intel_score = float(c.get("news_intelligence_score") or intel.get("news_intelligence_score") or 0)
+    except (TypeError, ValueError):
+        intel_score = 0.0
+    try:
+        imp = float(intel.get("importance") or 0)
+    except (TypeError, ValueError):
+        imp = 0.0
+    return max(net, intel_score, imp)
+
+
 def compute_news_quant_conflict(
     *,
     intelligence: dict[str, Any] | None = None,
@@ -86,13 +109,22 @@ def compute_news_quant_conflict(
     mom_weak = _factor_weak(c, "momentum_score", 0.2)
     vol_weak = _factor_weak(c, "volume_confirm", 0.35)
     price_strong = _price_strong(c)
+    news_support = _news_support_score(intelligence, c)
+    quant_strong = qd > 0 or float(c.get("leader_score") or c.get("candidate_score") or 0) >= 0.15
 
-    if nd == 0 or qd == 0:
+    if news_support < 0.12 and quant_strong and nd >= 0:
+        score = 0.74
+        reason = "news_weak_quant_strong"
+    elif nd == 0 or qd == 0:
         score = 0.0
         reason = "insufficient_signals"
     elif nd == qd:
-        score = 0.0
-        reason = "aligned"
+        if news_support < 0.12 and quant_strong:
+            score = 0.68
+            reason = "news_weak_quant_strong"
+        else:
+            score = 0.0
+            reason = "aligned"
     else:
         score = 0.55
         if nd > 0 and qd < 0:
@@ -118,6 +150,7 @@ def compute_news_quant_conflict(
             "momentum_weak": mom_weak,
             "volume_weak": vol_weak,
             "price_strong": price_strong,
+            "news_support": news_support,
         },
     }
 

@@ -44,6 +44,39 @@ def _log(msg: str, **extra: Any) -> None:
     logger.info("%s %s", msg, extra)
 
 
+def _pump_research_progress(stop: threading.Event) -> None:
+    """Mirror research pipeline steps into agent logs so UI is not stuck on 'picks'."""
+    seen: set[tuple[Any, Any, Any]] = set()
+    while not stop.is_set():
+        try:
+            from ashare.research.progress import get_research_progress
+
+            snap = get_research_progress().snapshot()
+            phase = snap.get("current_phase")
+            if phase:
+                with _lock:
+                    _state["phase"] = str(phase)
+            for s in snap.get("steps") or []:
+                if s.get("type") != "step":
+                    continue
+                key = (s.get("ts"), s.get("phase"), s.get("status"))
+                if key in seen:
+                    continue
+                seen.add(key)
+                label = str(s.get("label") or s.get("phase") or "")
+                status = str(s.get("status") or "")
+                if status == "running":
+                    note = str(s.get("note") or "")
+                    _log(f"{label}开始" + (f" · {note}" if note else ""), phase=str(s.get("phase") or "picks"))
+                elif status in {"done", "error"}:
+                    dur = s.get("duration_sec")
+                    tail = f" {float(dur):.0f}s" if isinstance(dur, (int, float)) else ""
+                    _log(f"{label}{'失败' if status == 'error' else '完成'}{tail}", phase=str(s.get("phase") or "picks"))
+        except Exception:  # noqa: BLE001
+            pass
+        stop.wait(1.5)
+
+
 def snapshot() -> dict[str, Any]:
     with _lock:
         return dict(_state)
@@ -124,8 +157,15 @@ def run_cycle(cfg: dict[str, Any], *, reset_paper: bool = False, do_retrain: boo
         _log("重置模拟账户并买入", phase="trade")
         traded = run_auto_paper(cfg, reset=True)
     else:
-        _log("构建龙头/事件池并因子打分", phase="picks")
-        picks = run_picks(cfg)
+        _log("开始研究流水线（池 / 日线 / 新闻 / 圆桌 / Council），不是轻量打分", phase="picks")
+        pump_stop = threading.Event()
+        pump = threading.Thread(target=_pump_research_progress, args=(pump_stop,), daemon=True, name="research-progress-pump")
+        pump.start()
+        try:
+            picks = run_picks(cfg)
+        finally:
+            pump_stop.set()
+            pump.join(timeout=3.0)
         _log(
             "候选 %d 只 · 池来源 %s"
             % (
@@ -290,7 +330,17 @@ def run_cycle(cfg: dict[str, Any], *, reset_paper: bool = False, do_retrain: boo
     return result
 
 
-def _loop(interval_sec: float) -> None:
+def _sleep_until_next_cycle(interval_sec: float) -> None:
+    waited = 0.0
+    while waited < interval_sec and not _stop.is_set():
+        slice_sec = min(2.0, interval_sec - waited)
+        time.sleep(slice_sec)
+        waited += slice_sec
+
+
+def _loop(interval_sec: float, *, wait_first: bool = False) -> None:
+    if wait_first:
+        _sleep_until_next_cycle(interval_sec)
     while not _stop.is_set():
         try:
             cfg = load_config()
@@ -302,10 +352,7 @@ def _loop(interval_sec: float) -> None:
                 _state["last_error"] = str(exc)
                 _state["phase"] = "error"
             _log("本轮失败: %s" % exc, phase="error")
-        waited = 0.0
-        while waited < interval_sec and not _stop.is_set():
-            time.sleep(min(2.0, interval_sec - waited))
-            waited += 2.0
+        _sleep_until_next_cycle(interval_sec)
         if _stop.is_set():
             break
     with _lock:
@@ -335,7 +382,7 @@ def start_agent(*, interval_sec: float | None = None, run_now: bool = True) -> d
                 with _lock:
                     _state["last_error"] = str(exc)
                 _log("首轮失败: %s" % exc, phase="error")
-        _loop(sec)
+        _loop(sec, wait_first=run_now)
 
     _thread = threading.Thread(target=target, name="ashare-agent", daemon=True)
     _thread.start()

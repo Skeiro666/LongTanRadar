@@ -367,7 +367,12 @@ class ChairmanEngine:
 
                 ok, budget_reason = budget_allows_llm_call(get_cost_tracker(self.cfg).cycle_summary(), self.cfg)
                 if not ok:
-                    return self._heuristic(opinions, missing, ver, snapshot=snapshot)
+                    out = self._heuristic(opinions, missing, ver, snapshot=snapshot)
+                    out["llm_failed"] = True
+                    out["fallback_reason"] = f"budget_{budget_reason}"
+                    out["chairman_source"] = "LLM_FAILED"
+                    out["source"] = "heuristic"
+                    return out
             except Exception:  # noqa: BLE001
                 pass
             factor_version = str((load_yaml_config(self.cfg, "research").get("snapshot") or {}).get("factor_version") or "factor_v1")
@@ -398,6 +403,8 @@ class ChairmanEngine:
             if cached:
                 out = dict(cached)
                 out["source"] = "cache"
+                out["chairman_source"] = "CACHE"
+                out["fallback_reason"] = None
                 return out
             try:
                 text = client.chat(
@@ -413,12 +420,24 @@ class ChairmanEngine:
                 data["prompt_version"] = ver
                 data["model"] = getattr(client, "model", "")
                 data["source"] = "llm"
+                data["chairman_source"] = "LLM"
+                data["fallback_reason"] = None
                 data.setdefault("trading_action", "WATCH")
                 cache.set(cache_key, data, {"symbol": snapshot.get("symbol"), "role": "chairman"})
                 return data
             except Exception as exc:  # noqa: BLE001
                 logger.warning("chairman failed: %s", exc)
-        return self._heuristic(opinions, missing, ver, snapshot=snapshot)
+                out = self._heuristic(opinions, missing, ver, snapshot=snapshot)
+                out["llm_failed"] = True
+                out["fallback_reason"] = str(exc)[:200]
+                out["chairman_source"] = "LLM_FAILED"
+                out["source"] = "heuristic"
+                out["error"] = str(exc)[:200]
+                return out
+        out = self._heuristic(opinions, missing, ver, snapshot=snapshot)
+        out["chairman_source"] = "HEURISTIC"
+        out["fallback_reason"] = out.get("fallback_reason") or "llm_not_configured"
+        return out
 
     def _heuristic(
         self,
@@ -496,5 +515,7 @@ class ChairmanEngine:
             "missing_roles": missing,
             "prompt_version": ver,
             "source": "heuristic",
+            "chairman_source": "HEURISTIC",
+            "fallback_reason": None,
             "status": "ok",
         }

@@ -41,15 +41,43 @@ class SnapshotStore:
         root = Path(self.cfg.get("_root") or Path(__file__).resolve().parents[2])
         self.dir = root / "data" / "research_snapshots"
         self.dir.mkdir(parents=True, exist_ok=True)
+        self.rev_index = self.dir / "_revisions.jsonl"
 
     def save(self, snapshot: dict[str, Any]) -> Path:
         rid = snapshot.get("research_id") or f"R{datetime.now().strftime('%Y%m%d%H%M%S')}"
         path = self.dir / f"{rid}.json"
+        # Never overwrite an existing snapshot file — bump id if collision
+        if path.exists():
+            rid = f"R{datetime.now(timezone.utc).strftime('%Y%m%d')}{uuid4().hex[:6].upper()}"
+            snapshot["research_id"] = rid
+            path = self.dir / f"{rid}.json"
         path.write_text(json.dumps(snapshot, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
         sym = snapshot.get("symbol")
         if sym:
             sym_path = self.dir / f"_latest_{sym}.json"
             sym_path.write_text(json.dumps(snapshot, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
+            # Formal day pointer (latest revision for symbol+research_date)
+            day = str(snapshot.get("research_date") or snapshot.get("as_of") or "")[:10]
+            if day:
+                day_ptr = self.dir / f"_formal_{sym}_{day}.json"
+                day_ptr.write_text(json.dumps(snapshot, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
+        with self.rev_index.open("a", encoding="utf-8") as f:
+            f.write(
+                json.dumps(
+                    {
+                        "snapshot_id": rid,
+                        "research_id": rid,
+                        "symbol": snapshot.get("symbol"),
+                        "research_date": snapshot.get("research_date") or snapshot.get("as_of"),
+                        "revision": snapshot.get("revision", 1),
+                        "trigger": snapshot.get("revision_trigger") or snapshot.get("trigger"),
+                        "created_at": snapshot.get("research_time") or datetime.now(timezone.utc).isoformat(),
+                    },
+                    ensure_ascii=False,
+                    default=str,
+                )
+                + "\n"
+            )
         return path
 
     def load_latest_for_symbol(self, symbol: str) -> dict[str, Any] | None:
@@ -60,6 +88,64 @@ class SnapshotStore:
             except Exception:  # noqa: BLE001
                 pass
         return None
+
+    def load_formal_for_date(self, symbol: str, research_date: str) -> dict[str, Any] | None:
+        """Immutable formal ResearchSnapshot for symbol+date (latest revision pointer)."""
+        day = str(research_date)[:10]
+        ptr = self.dir / f"_formal_{symbol}_{day}.json"
+        if ptr.exists():
+            try:
+                return json.loads(ptr.read_text(encoding="utf-8"))
+            except Exception:  # noqa: BLE001
+                pass
+        # Fallback: scan R*.json
+        best: dict[str, Any] | None = None
+        best_rev = -1
+        for p in self.dir.glob("R*.json"):
+            try:
+                raw = json.loads(p.read_text(encoding="utf-8"))
+            except Exception:  # noqa: BLE001
+                continue
+            if str(raw.get("symbol") or "") != str(symbol):
+                continue
+            if str(raw.get("research_date") or raw.get("as_of") or "")[:10] != day:
+                continue
+            rev = int(raw.get("revision") or 1)
+            if rev > best_rev:
+                best_rev = rev
+                best = raw
+        return best
+
+    def next_revision(self, symbol: str, research_date: str) -> int:
+        cur = self.load_formal_for_date(symbol, research_date)
+        if not cur:
+            return 1
+        return int(cur.get("revision") or 1) + 1
+
+
+REASSESSMENT_TRIGGERS = frozenset(
+    {
+        "BREAK_LIMIT",
+        "BREAK_LIMIT_PERSISTED",
+        "STATE_RECOVERED",
+        "MANUAL_REASSESSMENT",
+        "EXPLICIT_REASSESSMENT",
+    }
+)
+
+
+def reassessment_trigger_of(candidate: dict[str, Any]) -> str | None:
+    for key in ("reassessment_trigger", "revision_trigger", "explicit_reassessment"):
+        v = candidate.get(key)
+        if v is True:
+            return "EXPLICIT_REASSESSMENT"
+        if isinstance(v, str) and v.upper() in REASSESSMENT_TRIGGERS:
+            return v.upper()
+    recon = candidate.get("reconciliation") or {}
+    for code in recon.get("trigger_codes") or []:
+        if str(code).upper() in REASSESSMENT_TRIGGERS:
+            return str(code).upper()
+    return None
 
 
 def build_snapshot(candidate: dict[str, Any], cfg: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -79,14 +165,23 @@ def build_snapshot(candidate: dict[str, Any], cfg: dict[str, Any] | None = None)
 
     attach_signal_contract(candidate)
     sig_fields = serialize_signal_fields(candidate)
+    rev_trigger = reassessment_trigger_of(candidate)
+    store = SnapshotStore(cfg)
+    rev = 1
+    if rev_trigger:
+        rev = store.next_revision(str(candidate.get("symbol") or ""), as_of)
     snap = {
         "research_id": rid,
+        "snapshot_id": rid,
         "symbol": candidate.get("symbol"),
         "name": candidate.get("name"),
         "research_time": datetime.now(timezone.utc).isoformat(),
         "snapshot_time": datetime.now(timezone.utc).isoformat(),
         "research_date": as_of,
         "as_of": as_of,
+        "revision": rev,
+        "revision_trigger": rev_trigger or "INITIAL",
+        "created_at": datetime.now(timezone.utc).isoformat(),
         "versions": {
             "as_of": as_of,
             "factor_version": snap_cfg.get("factor_version") or candidate.get("factor_version") or "factor_v1",
@@ -170,6 +265,9 @@ def build_snapshot(candidate: dict[str, Any], cfg: dict[str, Any] | None = None)
             "provider_version": ((candidate.get("news_package") or {}).get("versions") or {}).get("provider_version"),
             "news_data_incomplete": (candidate.get("news_package") or {}).get("news_data_incomplete"),
         },
+        "priority_rank": candidate.get("priority_rank") or (candidate.get("gate") or {}).get("rank"),
+        "research_eligibility": (candidate.get("gate") or {}).get("research_tier")
+        or candidate.get("research_tier"),
     }
     snap["research_intelligence"] = build_research_intelligence(snap)
     return snap

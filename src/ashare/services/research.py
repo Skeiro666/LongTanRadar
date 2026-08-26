@@ -46,15 +46,24 @@ def _reports_dir(cfg: dict[str, Any]) -> Path:
 
 
 def persist_report(cfg: dict[str, Any], payload: dict[str, Any]) -> Path:
+    """Persist research report without overwriting prior same-day runs."""
+    from ashare.services.production_cycle import persist_production_report
+
+    # Prefer scheduler / agent production run id when present
+    if cfg.get("_production_run_id") and not payload.get("run_id"):
+        payload = {
+            **payload,
+            "run_id": cfg["_production_run_id"],
+            "production_run_id": cfg["_production_run_id"],
+            "cycle_type": cfg.get("_cycle_type"),
+            "scheduled_slot": cfg.get("_scheduled_slot"),
+        }
+    path = persist_production_report(cfg, payload)
+    # Keep markdown latest pointer
     folder = _reports_dir(cfg)
-    latest = folder / "latest.json"
-    latest.write_text(json.dumps(payload, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
-    as_of = str(payload.get("as_of") or "na")
-    dated = folder / f"{as_of}.json"
-    dated.write_text(latest.read_text(encoding="utf-8"), encoding="utf-8")
     md = folder / "latest.md"
     md.write_text(_to_markdown(payload), encoding="utf-8")
-    return latest
+    return path
 
 
 def _to_markdown(payload: dict[str, Any]) -> str:
@@ -110,6 +119,12 @@ def run_research(cfg: dict[str, Any], top_n: int | None = None) -> dict[str, Any
 
     progress = get_research_progress()
     cycle_id = f"research_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    run_id = str(cfg.get("_production_run_id") or "")
+    if not run_id:
+        from ashare.services.production_cycle import new_run_id
+
+        run_id = new_run_id()
+        cfg["_production_run_id"] = run_id
     get_cost_tracker(cfg).begin_cycle(cycle_id)
 
     with progress.step("pool", "构建龙头/事件池", note="akshare 涨停/强势/利润断层"):
@@ -383,6 +398,17 @@ def run_research(cfg: dict[str, Any], top_n: int | None = None) -> dict[str, Any
                     break
     payload = {
         "as_of": as_of.isoformat(),
+        "run_id": run_id,
+        "production_run_id": run_id,
+        "cycle_type": cfg.get("_cycle_type"),
+        "scheduled_slot": cfg.get("_scheduled_slot"),
+        "signals": {
+            "ml": {"status": "AGGREGATED", "note": "see candidate_union.universe.*.ml_prediction_status"},
+            "profit": {"status": "AGGREGATED", "note": "see candidate_union.universe.*.profit_score_status"},
+            "event": {"status": "AGGREGATED", "note": "see candidate_union.universe.*.event_score_status"},
+            "news": {"status": "AGGREGATED", "note": "see candidate_union.universe.*.news_score_status"},
+            "valuation": {"status": "AGGREGATED", "note": "see candidate_union.universe value_available"},
+        },
         "quant_top_n_symbols": uni.get("quant_top_n_symbols") or [],
         "strategy": "leader_roundtable",
         "picks_style": "leader",
@@ -477,9 +503,28 @@ def run_research(cfg: dict[str, Any], top_n: int | None = None) -> dict[str, Any
                 "research_id": r.get("research_id"),
                 "symbol": r.get("symbol"),
                 "name": r.get("name"),
-                "rating": (r.get("decision") or {}).get("research_rating"),
-                "action": (r.get("decision") or {}).get("action"),
+                "decision_status": (r.get("decision") or {}).get("decision_status")
+                or ("SKIPPED" if (r.get("decision") or {}).get("research_rating") in {"GATE_SKIP", "SKIP"} else "COMPLETED"),
+                "rating": (
+                    None
+                    if (r.get("decision") or {}).get("decision_status") == "SKIPPED"
+                    or (r.get("decision") or {}).get("research_rating") in {"GATE_SKIP", "SKIP"}
+                    else (r.get("decision") or {}).get("research_rating")
+                ),
+                "action": (
+                    None
+                    if (r.get("decision") or {}).get("decision_status") == "SKIPPED"
+                    or (r.get("decision") or {}).get("research_rating") in {"GATE_SKIP", "SKIP"}
+                    else (r.get("decision") or {}).get("action")
+                ),
+                "skip_reason": (r.get("decision") or {}).get("skip_reason")
+                or (
+                    (r.get("gate") or {}).get("reason")
+                    if (r.get("decision") or {}).get("research_rating") in {"GATE_SKIP", "SKIP"}
+                    else None
+                ),
                 "gate": r.get("gate"),
+                "priority_rank": (r.get("gate") or {}).get("rank"),
                 "candidate_sources": r.get("candidate_sources") or [],
                 "research_hypotheses": r.get("research_hypotheses") or [],
                 "news_conflict": r.get("news_conflict"),
@@ -504,6 +549,9 @@ def run_research(cfg: dict[str, Any], top_n: int | None = None) -> dict[str, Any
                     "risks": (r.get("chairman") or {}).get("risks"),
                     "trading_action": (r.get("chairman") or {}).get("trading_action"),
                     "rating": (r.get("chairman") or {}).get("rating"),
+                    "source": (r.get("chairman") or {}).get("source"),
+                    "chairman_source": str((r.get("chairman") or {}).get("source") or "").upper() or None,
+                    "fallback_reason": (r.get("chairman") or {}).get("fallback_reason"),
                 },
                 "news": _news_from_package(r.get("news_package") or {}),
             }

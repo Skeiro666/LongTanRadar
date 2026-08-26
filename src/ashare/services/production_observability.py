@@ -53,22 +53,35 @@ def classify_day_status(
     cycle_with_candidates: int,
     cycle_with_research: int,
     report_parse_ok: bool,
+    is_trading_day: bool = True,
+    n_reports: int = 0,
+    scheduler_expected: bool | None = None,
+    opening_done: bool = False,
 ) -> str:
-    """Explain why a calendar day may lack a usable dated report."""
+    """Explain calendar day status — distinguish non-trading vs missed vs failed vs persisted."""
+    if not is_trading_day:
+        return "NOT_TRADING_DAY"
     if has_report and report_parse_ok:
-        if cycle_count > 1:
-            return "HAS_REPORT_OVERWRITTEN"  # multiple cycles, one dated file
-        return "HAS_REPORT"
+        # Multiple cycles with a single report → overwrite (legacy flat file)
+        if cycle_count > 1 and n_reports <= 1:
+            return "REPORT_OVERWRITTEN"
+        if n_reports > 1:
+            return "REPORT_PERSISTED"
+        return "REPORT_PERSISTED" if n_reports >= 1 or has_report else "HAS_REPORT"
     if not report_parse_ok and has_report:
         return "REPORT_PARSE_ERROR"
     if cycle_count <= 0:
+        # scheduler_expected=None → legacy NOT_RUN (unknown whether scheduler should run)
+        if scheduler_expected is True:
+            return "MISSED_RUN" if not opening_done else "SCHEDULED_NOT_STARTED"
+        if scheduler_expected is False:
+            return "SCHEDULED_NOT_STARTED"
         return "NOT_RUN"
     if cycle_with_candidates <= 0 and cycle_with_research <= 0:
-        return "RUN_NO_CANDIDATES"
+        return "SCHEDULED_FAILED"
     if cycle_with_research <= 0:
-        return "RUN_NO_RESEARCH"
-    # Cycles recorded research but dated report missing → overwrite lost / persist fail / as_of mismatch
-    return "RUN_NO_PERSISTED_REPORT"
+        return "RUNNING_NO_REPORT"
+    return "RUNNING_NO_REPORT"
 
 
 def analyze_calendar_coverage(
@@ -77,79 +90,142 @@ def analyze_calendar_coverage(
     end: date,
     reports: list[dict[str, Any]],
     cycles: list[dict[str, Any]],
+    calendar=None,
+    missed_runs: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
+    from ashare.calendar.trading_calendar import WeekdayTradingCalendar
+
+    cal = calendar or WeekdayTradingCalendar()
     calendar_days: list[str] = []
     d = start
     while d <= end:
         calendar_days.append(d.isoformat())
         d += timedelta(days=1)
 
-    reports_by_day: dict[str, dict[str, Any]] = {}
+    reports_by_day: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for r in reports:
         key = str(r.get("_as_of_date") or r.get("as_of") or "")[:10]
         if key:
-            reports_by_day[key] = r
+            reports_by_day[key].append(r)
 
     cycles_by_day: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for c in cycles:
-        key = str(c.get("as_of") or "")[:10]
+        key = str(c.get("as_of") or c.get("trading_date") or "")[:10]
         if key:
             cycles_by_day[key].append(c)
 
+    missed_dates = {str(m.get("date") or "")[:10] for m in (missed_runs or [])}
+
     day_rows: list[dict[str, Any]] = []
     status_c: Counter = Counter()
+    trading_day_list: list[str] = []
     for day in calendar_days:
+        day_d = date.fromisoformat(day)
+        is_td = cal.is_trading_day(day_d)
+        if is_td:
+            trading_day_list.append(day)
         creps = cycles_by_day.get(day) or []
-        rep = reports_by_day.get(day)
+        reps = reports_by_day.get(day) or []
         cand_n = sum(1 for c in creps if int(c.get("candidate_count") or 0) > 0)
         res_n = sum(1 for c in creps if int(c.get("research_count") or 0) > 0)
+        opening_done = any(
+            str(c.get("cycle_type") or c.get("scheduled_slot") or "").upper().startswith("OPENING")
+            for c in creps
+        )
         st = classify_day_status(
-            has_report=rep is not None,
+            has_report=len(reps) > 0,
             cycle_count=len(creps),
             cycle_with_candidates=cand_n,
             cycle_with_research=res_n,
             report_parse_ok=True,
+            is_trading_day=is_td,
+            n_reports=len(reps),
+            scheduler_expected=True if is_td else False,
+            opening_done=opening_done,
         )
+        if day in missed_dates and is_td and st in {"SCHEDULED_NOT_STARTED", "MISSED_RUN"}:
+            st = "MISSED_RUN"
+        # Compat aliases for older consumers
+        if st == "REPORT_PERSISTED":
+            compat = "HAS_REPORT"
+        elif st == "REPORT_OVERWRITTEN":
+            compat = "HAS_REPORT_OVERWRITTEN"
+        elif st == "NOT_TRADING_DAY":
+            compat = "MARKET_CLOSED"
+        elif st == "MISSED_RUN":
+            compat = "NOT_RUN"
+        else:
+            compat = st
         status_c[st] += 1
         day_rows.append(
             {
                 "date": day,
                 "status": st,
+                "compat_status": compat,
+                "is_trading_day": is_td,
                 "n_cycles": len(creps),
+                "n_reports": len(reps),
                 "n_cycles_with_candidates": cand_n,
                 "n_cycles_with_research": res_n,
-                "has_dated_report": rep is not None,
-                "report_file": (rep or {}).get("_report_file"),
-                "note": _coverage_note(st, len(creps)),
+                "has_dated_report": len(reps) > 0,
+                "report_file": (reps[-1] or {}).get("_report_file") if reps else None,
+                "note": _coverage_note(st, len(creps), len(reps)),
             }
         )
 
-    active_days = [x["date"] for x in day_rows if x["status"] in {"HAS_REPORT", "HAS_REPORT_OVERWRITTEN"}]
-    missing_days = [x["date"] for x in day_rows if x["date"] not in active_days]
+    active_days = [
+        x["date"]
+        for x in day_rows
+        if x["status"] in {"REPORT_PERSISTED", "REPORT_OVERWRITTEN", "HAS_REPORT", "HAS_REPORT_OVERWRITTEN"}
+    ]
+    scheduled_days = [x["date"] for x in day_rows if x.get("is_trading_day")]
+    missed_days = [x["date"] for x in day_rows if x["status"] == "MISSED_RUN"]
+    failed_days = [x["date"] for x in day_rows if x["status"] in {"SCHEDULED_FAILED", "RUNNING_NO_REPORT"}]
+    successful_days = list(active_days)
     n_cal = len(calendar_days) or 1
+    n_td = len(trading_day_list) or 1
     return {
         "calendar_days": len(calendar_days),
         "calendar_day_list": calendar_days,
+        "trading_days": len(trading_day_list),
+        "trading_day_list": trading_day_list,
         "active_days": len(active_days),
         "active_day_list": active_days,
-        "missing_days": len(missing_days),
-        "missing_day_list": missing_days,
+        "scheduled_days": len(scheduled_days),
+        "missed_days": len(missed_days),
+        "missed_day_list": missed_days,
+        "failed_days": len(failed_days),
+        "failed_day_list": failed_days,
+        "successful_days": len(successful_days),
+        "successful_day_list": successful_days,
+        "missing_days": len(calendar_days) - len(active_days),
+        "missing_day_list": [x["date"] for x in day_rows if x["date"] not in active_days],
         "coverage_pct": round(100.0 * len(active_days) / n_cal, 2),
+        "trading_day_coverage_pct": round(100.0 * len(active_days) / n_td, 2),
         "status_counts": dict(status_c),
         "per_day": day_rows,
         "explanation": (
-            "Dated reports are keyed by as_of and overwrite same-day files. "
-            "Multiple production_cycles on one as_of collapse to one report day. "
-            "Days with status=NOT_RUN had no agent/research cycle recorded."
+            "coverage_pct = active report days / calendar days (not strategy edge). "
+            "trading_day_coverage_pct = active / trading days. "
+            "MISSED_RUN = trading day with no scheduler opening cycle. "
+            "NOT_TRADING_DAY = weekend/holiday (MARKET_CLOSED)."
         ),
     }
 
 
-def _coverage_note(status: str, n_cycles: int) -> str:
+def _coverage_note(status: str, n_cycles: int, n_reports: int = 0) -> str:
     return {
+        "REPORT_PERSISTED": f"{n_reports} report(s) persisted; {n_cycles} cycle(s)",
+        "REPORT_OVERWRITTEN": f"{n_cycles} cycles collapsed to 1 legacy report",
         "HAS_REPORT": "dated report present",
         "HAS_REPORT_OVERWRITTEN": f"{n_cycles} cycles same as_of; latest report kept",
         "NOT_RUN": "no production_cycles and no dated report",
+        "MISSED_RUN": "trading day; scheduler expected but opening cycle missing",
+        "SCHEDULED_NOT_STARTED": "trading day; no cycles started",
+        "SCHEDULED_FAILED": "cycles ran but produced no candidates/research",
+        "RUNNING_NO_REPORT": "cycles claim research but report missing",
+        "NOT_TRADING_DAY": "non-trading day (weekend/holiday)",
+        "MARKET_CLOSED": "non-trading day",
         "RUN_NO_CANDIDATES": "cycles exist but candidate_count=0",
         "RUN_NO_RESEARCH": "cycles exist but research_count=0",
         "RUN_NO_PERSISTED_REPORT": "cycles claim research but dated report missing (persist/as_of issue)",
@@ -170,42 +246,67 @@ def extract_gate_skip_cases(reports: list[dict[str, Any]]) -> dict[str, Any]:
         for pr in rep.get("platform_reports") or []:
             if not isinstance(pr, dict):
                 continue
-            rating = str(pr.get("rating") or (pr.get("decision") or {}).get("research_rating") or "").upper()
+            decision_status = str(pr.get("decision_status") or (pr.get("decision") or {}).get("decision_status") or "").upper()
+            rating = pr.get("rating")
+            if rating is None:
+                rating = (pr.get("decision") or {}).get("research_rating")
+            rating_s = str(rating or "").upper() if rating is not None else ""
             gate = dict(pr.get("gate") or {})
-            reason = str(gate.get("reason") or "")
-            if rating != "GATE_SKIP" and reason not in {"DEEP_BUDGET", "LLM_BUDGET", "LIGHT_BUDGET"}:
+            reason = str(
+                pr.get("skip_reason")
+                or (pr.get("decision") or {}).get("skip_reason")
+                or gate.get("reason")
+                or ""
+            )
+            is_skip = (
+                decision_status == "SKIPPED"
+                or rating_s == "GATE_SKIP"
+                or reason in {"DEEP_BUDGET", "LLM_BUDGET", "LIGHT_BUDGET"}
+            )
+            if not is_skip:
                 continue
-            if rating != "GATE_SKIP" and reason in {"DEEP_BUDGET", "LLM_BUDGET", "LIGHT_BUDGET"}:
-                # budget rejects are persisted as GATE_SKIP rating typically
-                pass
-            if rating != "GATE_SKIP":
-                continue
-            cat = categorize_gate_skip(reason, rating=rating)
+            cat = categorize_gate_skip(reason, rating=rating_s or "GATE_SKIP")
             cat_c[cat] += 1
             sym = to_symbol(str(pr.get("symbol") or ""))
             u = uni_by.get(sym) or {}
             signals = dict(gate.get("signals") or {})
+            priority = dict(gate.get("priority") or pr.get("research_priority") or {})
             cases.append(
                 {
                     "symbol": sym,
                     "name": pr.get("name") or u.get("name"),
                     "research_date": as_of,
+                    "decision_status": "SKIPPED",
+                    "rating": None,
+                    "trading_action": None,
                     "gate": {
                         "passed": gate.get("passed"),
                         "reason": reason,
                         "research_tier": gate.get("research_tier"),
-                        "rank": gate.get("rank"),
+                        "rank": gate.get("rank") or pr.get("priority_rank"),
                         "reject_codes": gate.get("reject_codes") or [],
+                        "budget_limit": gate.get("budget_limit"),
+                        "budget_used": gate.get("budget_used"),
+                        "budget_remaining": gate.get("budget_remaining"),
                     },
                     "reason_code": cat,
                     "reason_detail": reason or "GATE_SKIP",
-                    "candidate_score": gate.get("candidate_score")
-                    if gate.get("candidate_score") is not None
-                    else u.get("candidate_score"),
-                    "leader_score": signals.get("leader_score")
-                    if signals.get("leader_score") is not None
-                    else u.get("leader_score"),
-                    "board_count": u.get("board_count"),
+                    "candidate_score": priority.get("candidate_score")
+                    if priority.get("candidate_score") is not None
+                    else (
+                        gate.get("candidate_score")
+                        if gate.get("candidate_score") is not None
+                        else u.get("candidate_score")
+                    ),
+                    "leader_score": priority.get("leader_score")
+                    if priority.get("leader_score") is not None
+                    else (
+                        signals.get("leader_score")
+                        if signals.get("leader_score") is not None
+                        else u.get("leader_score")
+                    ),
+                    "board_count": priority.get("board_count") if priority.get("board_count") is not None else u.get("board_count"),
+                    "priority_rank": priority.get("priority_rank") or gate.get("rank") or pr.get("priority_rank"),
                     "trade_timing_action": u.get("trade_timing_action"),
                     "in_council_flag": u.get("in_council"),
                     "entered_full_ai_council": False,
@@ -215,7 +316,10 @@ def extract_gate_skip_cases(reports: list[dict[str, Any]]) -> dict[str, Any]:
         "n_gate_skip": len(cases),
         "category_counts": dict(cat_c),
         "cases": cases,
-        "note": "GATE_SKIP is a platform_reports rating for budget/gate rejects — not a full AI Council decision.",
+        "note": (
+            "GATE_SKIP is decision_status=SKIPPED with rating=null — not a research_rating. "
+            "reason_code explains DEEP_BUDGET / LLM_BUDGET / etc."
+        ),
     }
 
 
@@ -636,50 +740,66 @@ def build_production_health_table(
     cycles: list[dict[str, Any]],
     council: dict[str, Any],
 ) -> list[dict[str, Any]]:
-    reports_by = {str(r.get("_as_of_date") or r.get("as_of"))[:10]: r for r in reports}
+    reports_by: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for r in reports:
+        reports_by[str(r.get("_as_of_date") or r.get("as_of"))[:10]].append(r)
     cycles_by: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for c in cycles:
-        cycles_by[str(c.get("as_of") or "")[:10]].append(c)
+        cycles_by[str(c.get("as_of") or c.get("trading_date") or "")[:10]].append(c)
 
     # council counts by day from platform rows
     by_day_council: dict[str, Counter] = defaultdict(Counter)
     for rep in reports:
         day = str(rep.get("_as_of_date") or "")[:10]
         for pr in rep.get("platform_reports") or []:
-            rating = str(pr.get("rating") or "").upper()
-            reason = str((pr.get("gate") or {}).get("reason") or "")
+            dstat = str(pr.get("decision_status") or "").upper()
+            rating = pr.get("rating")
+            rating_s = str(rating or "").upper() if rating is not None else ""
+            reason = str(pr.get("skip_reason") or (pr.get("gate") or {}).get("reason") or "")
             by_day_council[day]["council_total"] += 1
-            if rating == "GATE_SKIP" or reason in {"DEEP_BUDGET", "LLM_BUDGET"}:
+            if dstat == "SKIPPED" or rating_s == "GATE_SKIP" or reason in {"DEEP_BUDGET", "LLM_BUDGET"}:
                 by_day_council[day]["gate_skip"] += 1
             else:
                 by_day_council[day]["full_ai"] += 1
-            if rating in {"BUY", "STRONG_BUY"}:
+            if rating_s in {"BUY", "STRONG_BUY"}:
                 by_day_council[day]["buy"] += 1
 
     rows = []
     for day_info in coverage.get("per_day") or []:
         day = day_info["date"]
-        rep = reports_by.get(day)
+        day_reps = reports_by.get(day) or []
+        rep = day_reps[-1] if day_reps else None
         creps = cycles_by.get(day) or []
         cu = (rep or {}).get("candidate_union") or {}
         cds = list((rep or {}).get("canonical_decisions") or [])
         final_buy = sum(1 for d in cds if d.get("committee_approve"))
         cc = by_day_council.get(day) or Counter()
-        # data quality proxy
+        st = str(day_info.get("status") or "")
         dq = "UNKNOWN"
-        if rep:
+        if st in {"NOT_TRADING_DAY", "MARKET_CLOSED"}:
+            dq = "MARKET_CLOSED"
+        elif st in {"MISSED_RUN", "SCHEDULED_NOT_STARTED", "NOT_RUN"}:
+            dq = "NO_RUN"
+        elif rep:
             uni = cu.get("universe") or []
             if uni and any(u.get("ml_prediction_status") or u.get("data_quality") for u in uni if isinstance(u, dict)):
                 dq = "CONTRACT_PRESENT"
             else:
                 dq = "LEGACY_STRIPPED_FIELDS"
-        elif day_info["status"] == "NOT_RUN":
-            dq = "NO_RUN"
         rows.append(
             {
                 "date": day,
+                "is_trading_day": day_info.get("is_trading_day"),
                 "scheduler_started": len(creps) > 0 or bool(rep),
-                "universe_loaded": bool(rep) and int(((rep or {}).get("funnel") or {}).get("universe_raw") or (cu.get("n_union") or 0)) >= 0 and bool(rep),
+                "cycles": len(creps) or int(day_info.get("n_cycles") or 0),
+                "successful_cycles": sum(1 for c in creps if c.get("success") is not False),
+                "failed_cycles": sum(1 for c in creps if c.get("success") is False),
+                "reports": len(day_reps) or int(day_info.get("n_reports") or 0),
+                "research_snapshots": None,
+                "council_runs": int(cc.get("council_total") or 0),
+                "final_buy": final_buy,
+                "coverage": st,
+                "universe_loaded": bool(rep),
                 "candidate_count": (cu.get("n_union") if rep else None)
                 if rep
                 else (max((int(c.get("candidate_count") or 0) for c in creps), default=None)),
@@ -693,7 +813,8 @@ def build_production_health_table(
                 "final_buy_count": final_buy,
                 "data_quality": dq,
                 "report_persisted": bool(rep),
-                "day_status": day_info.get("status"),
+                "day_status": st,
+                "status": st,
                 "n_cycles": day_info.get("n_cycles"),
             }
         )
@@ -707,54 +828,79 @@ def build_no_buy_reason_detail(
     coverage: dict[str, Any],
 ) -> list[dict[str, Any]]:
     out = []
-    reports_by = {str(r.get("_as_of_date") or r.get("as_of"))[:10]: r for r in reports}
+    reports_by: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for r in reports:
+        reports_by[str(r.get("_as_of_date") or r.get("as_of"))[:10]].append(r)
     for row in health_table:
         day = row["date"]
-        rep = reports_by.get(day)
+        day_reps = reports_by.get(day) or []
+        rep = day_reps[-1] if day_reps else None
         blockers: Counter = Counter()
-        if not row.get("scheduler_started") and not row.get("report_persisted"):
-            reason = "SYSTEM_NOT_RUN"
-            blockers["NOT_RUN"] = 1
+        st = str(row.get("day_status") or row.get("status") or "")
+        if st in {"NOT_TRADING_DAY", "MARKET_CLOSED"}:
+            reason = "MARKET_CLOSED"
+            blockers["MARKET_CLOSED"] = 1
+        elif st in {"MISSED_RUN", "SCHEDULED_NOT_STARTED", "NOT_RUN"} or (
+            not row.get("scheduler_started") and not row.get("report_persisted")
+        ):
+            reason = "SCHEDULER_NOT_RUN"
+            blockers["SCHEDULER_NOT_RUN"] = 1
         elif not row.get("report_persisted"):
             reason = "NO_PERSISTED_REPORT"
-            blockers[str(row.get("day_status") or "NO_REPORT")] = 1
+            blockers[st or "NO_REPORT"] = 1
         else:
             cds = list((rep or {}).get("canonical_decisions") or [])
             if not cds:
                 # derive from platform ratings
                 for pr in (rep or {}).get("platform_reports") or []:
-                    rating = str(pr.get("rating") or "").upper()
-                    action = str(pr.get("action") or "").upper()
-                    reason_g = str((pr.get("gate") or {}).get("reason") or "")
-                    if rating == "GATE_SKIP":
-                        blockers[f"GATE_SKIP:{reason_g or 'GATE'}"] += 1
-                    elif rating not in {"BUY", "STRONG_BUY"}:
-                        blockers[f"RATING_NOT_BUY:{rating}"] += 1
-                    elif action != "SMALL_POSITION":
-                        blockers[f"NO_VALID_ENTRY:{action}"] += 1
-                reason = blockers.most_common(1)[0][0] if blockers else "NO_CANONICAL"
+                    dstat = str(pr.get("decision_status") or "").upper()
+                    rating = pr.get("rating")
+                    rating_s = str(rating or "").upper() if rating is not None else ""
+                    action = str(pr.get("action") or "").upper() if pr.get("action") is not None else ""
+                    reason_g = str(pr.get("skip_reason") or (pr.get("gate") or {}).get("reason") or "")
+                    if dstat == "SKIPPED" or rating_s == "GATE_SKIP" or reason_g in {"DEEP_BUDGET", "LLM_BUDGET"}:
+                        blockers["GATE_SKIP"] += 1
+                    elif rating_s in {"BUY", "STRONG_BUY"} and action != "SMALL_POSITION":
+                        blockers["NO_ENTRY_SETUP"] += 1
+                    elif rating_s and rating_s not in {"BUY", "STRONG_BUY"}:
+                        blockers["NO_BUY_RATING"] += 1
+                    else:
+                        blockers["NO_RESEARCH"] += 1
+                reason = blockers.most_common(1)[0][0] if blockers else "NO_RESEARCH"
             else:
                 for d in cds:
                     if d.get("committee_approve"):
+                        blockers["BUY"] += 1
                         continue
-                    blockers[str(d.get("no_buy_reason") or _fallback_no_buy(d))] += 1
-                if row.get("final_buy_count"):
-                    reason = "HAS_BUY"
-                else:
-                    reason = blockers.most_common(1)[0][0] if blockers else "NO_BUY"
+                    if str(d.get("decision_status") or "").upper() == "SKIPPED":
+                        blockers[str(d.get("skip_reason") or "GATE_SKIP")] += 1
+                    elif str(d.get("risk_status") or "") == "BLOCK":
+                        blockers["RISK_BLOCK"] += 1
+                    elif str(d.get("research_rating") or "") not in {"BUY", "STRONG_BUY"}:
+                        blockers["NO_BUY_RATING"] += 1
+                    elif str(d.get("trading_action") or "") != "SMALL_POSITION":
+                        blockers["NO_ENTRY_SETUP"] += 1
+                    else:
+                        blockers["COMMITTEE_REJECT"] += 1
+                reason = "HAS_BUY" if blockers.get("BUY") else (blockers.most_common(1)[0][0] if blockers else "NO_BUY")
         out.append(
             {
                 "date": day,
                 "NO_BUY_REASON": reason,
-                "NO_BUY_COUNT": 0 if reason == "HAS_BUY" else int(row.get("council_count") or row.get("candidate_count") or 0),
+                "day_status": st,
+                "blockers": dict(blockers),
+                "scheduler_started": row.get("scheduler_started"),
+                "report_persisted": row.get("report_persisted"),
+                "final_buy_count": row.get("final_buy_count"),
+                "NO_BUY_COUNT": 0 if reason in {"HAS_BUY", "MARKET_CLOSED"} else int(row.get("council_count") or row.get("candidate_count") or 0),
                 "DATA_COVERAGE": {
                     "report_persisted": row.get("report_persisted"),
-                    "day_status": row.get("day_status"),
+                    "day_status": st,
                     "data_quality": row.get("data_quality"),
                     "window_coverage_pct": coverage.get("coverage_pct"),
+                    "trading_day_coverage_pct": coverage.get("trading_day_coverage_pct"),
                 },
                 "TOP_BLOCKERS": dict(blockers.most_common(8)),
-                "final_buy_count": row.get("final_buy_count"),
             }
         )
     return out

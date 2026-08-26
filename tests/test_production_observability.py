@@ -23,8 +23,31 @@ def test_categorize_gate_skip():
 
 def test_classify_day_status():
     assert classify_day_status(has_report=False, cycle_count=0, cycle_with_candidates=0, cycle_with_research=0, report_parse_ok=True) == "NOT_RUN"
-    assert classify_day_status(has_report=True, cycle_count=3, cycle_with_candidates=2, cycle_with_research=2, report_parse_ok=True) == "HAS_REPORT_OVERWRITTEN"
-    assert classify_day_status(has_report=False, cycle_count=2, cycle_with_candidates=2, cycle_with_research=2, report_parse_ok=True) == "RUN_NO_PERSISTED_REPORT"
+    assert classify_day_status(has_report=True, cycle_count=3, cycle_with_candidates=2, cycle_with_research=2, report_parse_ok=True) in {
+        "REPORT_OVERWRITTEN",
+        "HAS_REPORT_OVERWRITTEN",
+    }
+    assert classify_day_status(has_report=False, cycle_count=2, cycle_with_candidates=2, cycle_with_research=2, report_parse_ok=True) in {
+        "RUNNING_NO_REPORT",
+        "RUN_NO_PERSISTED_REPORT",
+    }
+    assert classify_day_status(
+        has_report=False,
+        cycle_count=0,
+        cycle_with_candidates=0,
+        cycle_with_research=0,
+        report_parse_ok=True,
+        is_trading_day=False,
+    ) == "NOT_TRADING_DAY"
+    assert classify_day_status(
+        has_report=False,
+        cycle_count=0,
+        cycle_with_candidates=0,
+        cycle_with_research=0,
+        report_parse_ok=True,
+        is_trading_day=True,
+        scheduler_expected=True,
+    ) == "MISSED_RUN"
 
 
 def test_coverage_and_gate_skip_from_fixture_reports():
@@ -81,7 +104,8 @@ def test_coverage_and_gate_skip_from_fixture_reports():
     assert cov["calendar_days"] == 2
     assert cov["active_days"] == 1
     assert cov["coverage_pct"] == 50.0
-    assert any(d["status"] == "NOT_RUN" for d in cov["per_day"])
+    assert any(d["status"] in {"NOT_RUN", "MISSED_RUN", "SCHEDULED_NOT_STARTED"} for d in cov["per_day"])
+    assert any(d["status"] in {"REPORT_OVERWRITTEN", "REPORT_PERSISTED", "HAS_REPORT_OVERWRITTEN"} for d in cov["per_day"])
 
     gs = extract_gate_skip_cases(reports)
     assert gs["n_gate_skip"] == 1

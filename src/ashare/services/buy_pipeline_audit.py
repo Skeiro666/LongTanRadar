@@ -115,28 +115,62 @@ def _in_window(d: date | None, start: date, end: date) -> bool:
 
 
 def load_dated_reports(root: Path, start: date, end: date) -> list[dict[str, Any]]:
+    """Load all production reports in window — never collapse same-day runs.
+
+    Prefers data/reports/{as_of}/{run_id}.json; also accepts legacy flat {as_of}.json
+    when no per-run files exist for that day.
+    """
     reports_dir = root / "data" / "reports"
     out: list[dict[str, Any]] = []
     if not reports_dir.exists():
         return out
+    seen_run_ids: set[str] = set()
+    # New layout: reports/{as_of}/*.json
+    for day_dir in sorted(reports_dir.iterdir()):
+        if not day_dir.is_dir():
+            continue
+        day = _parse_day(day_dir.name)
+        if not _in_window(day, start, end):
+            continue
+        for p in sorted(day_dir.glob("*.json")):
+            if p.name.startswith("_"):
+                continue
+            raw = _load_json(p)
+            if not isinstance(raw, dict):
+                continue
+            run_id = str(raw.get("run_id") or raw.get("production_run_id") or p.stem)
+            if run_id in seen_run_ids:
+                continue
+            seen_run_ids.add(run_id)
+            as_of = _parse_day(raw.get("as_of") or day_dir.name)
+            raw["_report_file"] = f"{day_dir.name}/{p.name}"
+            raw["_as_of_date"] = as_of.isoformat() if as_of else day_dir.name
+            raw["_run_id"] = run_id
+            out.append(raw)
+    # Legacy flat files only when that day has no per-run directory entries
+    days_with_runs = {str(r.get("_as_of_date")) for r in out}
     for p in sorted(reports_dir.glob("*.json")):
         if p.name in {"latest.json"}:
+            continue
+        day = _parse_day(p.stem)
+        if not _in_window(day, start, end):
+            continue
+        if day and day.isoformat() in days_with_runs:
             continue
         raw = _load_json(p)
         if not isinstance(raw, dict):
             continue
         as_of = _parse_day(raw.get("as_of") or p.stem)
-        if not _in_window(as_of, start, end):
+        run_id = str(raw.get("run_id") or raw.get("production_run_id") or f"legacy-{p.stem}")
+        if run_id in seen_run_ids:
             continue
+        seen_run_ids.add(run_id)
         raw["_report_file"] = p.name
         raw["_as_of_date"] = as_of.isoformat() if as_of else None
+        raw["_run_id"] = run_id
+        raw["_legacy_flat"] = True
         out.append(raw)
-    # Deduplicate by as_of (keep latest file order)
-    by_day: dict[str, dict[str, Any]] = {}
-    for r in out:
-        key = str(r.get("_as_of_date") or r.get("as_of") or r.get("_report_file"))
-        by_day[key] = r
-    return list(by_day.values())
+    return out
 
 
 def load_snapshots(root: Path, start: date, end: date) -> list[dict[str, Any]]:

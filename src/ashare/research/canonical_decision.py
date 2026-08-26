@@ -82,11 +82,13 @@ def build_decision_explanation(
     if approve:
         final_reason = "COMMITTEE_APPROVED"
     elif not gate_passed:
-        final_reason = "GATE_REJECT"
+        final_reason = "GATE_REJECT" if rating is not None else f"GATE_SKIP_{entry_setup or 'SKIPPED'}"
     elif risk_status == "BLOCK":
         final_reason = risk_flags[0] if risk_flags else "RISK_BLOCK"
     elif risk_status == "UNKNOWN":
         final_reason = "RISK_UNKNOWN"
+    elif rating is None:
+        final_reason = "GATE_SKIP"
     elif rating not in {"BUY", "STRONG_BUY"}:
         final_reason = f"NO_BUY_RATING_{rating}"
     elif action != "SMALL_POSITION":
@@ -119,21 +121,31 @@ def build_canonical_decision(
     sym = to_symbol(rep["symbol"])
     decision = dict(rep.get("decision") or {})
     chairman = dict(rep.get("chairman") or {})
-    rating = str(decision.get("research_rating") or chairman.get("rating") or "WATCH").upper()
-    action = str(decision.get("action") or chairman.get("trading_action") or "WATCH").upper()
-    entry_setup = str(chairman.get("entry_setup") or decision.get("entry_setup") or "").upper()
-    if not entry_setup:
-        if action == "SMALL_POSITION":
-            entry_setup = "READY"
-        elif action == "WAIT_FOR_CONFIRMATION":
-            entry_setup = "CONFIRMATION_REQUIRED"
-        elif action in {"NO_ACTION", "AVOID"}:
-            entry_setup = "NO_SETUP"
-        else:
-            entry_setup = "WATCH"
+    decision_status = str(decision.get("decision_status") or "").upper()
+    skip_reason = str(decision.get("skip_reason") or (rep.get("gate") or {}).get("reason") or "")
+    raw_rating = decision.get("research_rating")
+    if decision_status == "SKIPPED" or raw_rating in {"GATE_SKIP", "SKIP"}:
+        decision_status = "SKIPPED"
+        rating = None
+        action = None
+        entry_setup = "SKIPPED"
+    else:
+        decision_status = decision_status or "COMPLETED"
+        rating = str(raw_rating or chairman.get("rating") or "WATCH").upper()
+        action = str(decision.get("action") or chairman.get("trading_action") or "WATCH").upper()
+        entry_setup = str(chairman.get("entry_setup") or decision.get("entry_setup") or "").upper()
+        if not entry_setup:
+            if action == "SMALL_POSITION":
+                entry_setup = "READY"
+            elif action == "WAIT_FOR_CONFIRMATION":
+                entry_setup = "CONFIRMATION_REQUIRED"
+            elif action in {"NO_ACTION", "AVOID"}:
+                entry_setup = "NO_SETUP"
+            else:
+                entry_setup = "WATCH"
 
     conflict = dict(rep.get("news_conflict") or {})
-    if float(conflict.get("conflict_score") or 0) >= 0.65 and str(conflict.get("reason") or "") in {
+    if rating and float(conflict.get("conflict_score") or 0) >= 0.65 and str(conflict.get("reason") or "") in {
         "news_weak_quant_strong",
         "news_negative_price_strong",
     }:
@@ -144,7 +156,10 @@ def build_canonical_decision(
             entry_setup = "CONFIRMATION_REQUIRED"
 
     gate = dict(rep.get("gate") or {})
-    gate_passed = bool(gate.get("passed", True)) and rating not in {"GATE_SKIP", "SKIP"}
+    if decision_status == "SKIPPED":
+        gate_passed = False
+    else:
+        gate_passed = bool(gate.get("passed", True)) and rating not in {"GATE_SKIP", "SKIP", None}
 
     allow, risk_reason = (True, "ok")
     risk_ev: dict[str, Any] | None = None
@@ -157,14 +172,15 @@ def build_canonical_decision(
             allow, risk_reason = risk_allow_fn(bar_like)
 
     # Fence: only platform_council may approve trades; quant_routing_skip cannot.
-    chair_source = str(chairman.get("source") or "")
-    routing_skip = chair_source in {"quant_routing_skip", "leader_scan", "research_gate"}
+    chair_source = str(chairman.get("source") or chairman.get("chairman_source") or "")
+    routing_skip = chair_source.lower() in {"quant_routing_skip", "leader_scan", "research_gate", "skipped"}
     if routing_skip and action == "SMALL_POSITION":
         action = "WAIT_FOR_CONFIRMATION"
         entry_setup = "CONFIRMATION_REQUIRED"
 
     approve = (
-        gate_passed
+        decision_status != "SKIPPED"
+        and gate_passed
         and allow
         and action == "SMALL_POSITION"
         and rating in {"BUY", "STRONG_BUY"}
@@ -172,15 +188,18 @@ def build_canonical_decision(
         and not routing_skip
     )
     risk_status, risk_flags = _risk_from_eval(risk_ev, allow, risk_reason)
-    if not gate_passed:
+    if decision_status == "SKIPPED" or not gate_passed:
         risk_status = "SKIPPED"
-        risk_flags = [str(gate.get("reason") or "GATE_REJECT")]
+        risk_flags = [skip_reason or str(gate.get("reason") or "GATE_REJECT")]
 
     uni = universe_row or {}
     timing_action = str(uni.get("trade_timing_action") or "").upper()
     timing_ready = timing_action == "BUY_READY" and gate_passed and allow
     versions = _versions_from_report(rep)
-    verdict = "buy" if approve else ("watch" if rating in {"BUY", "WATCH", "STRONG_BUY"} else "pass")
+    if decision_status == "SKIPPED":
+        verdict = "skip"
+    else:
+        verdict = "buy" if approve else ("watch" if rating in {"BUY", "WATCH", "STRONG_BUY"} else "pass")
 
     missing_data: list[str] = []
     for k in ("ml_prediction", "profit_score", "event_score", "news_score"):
@@ -215,6 +234,8 @@ def build_canonical_decision(
         "context_id": context_id,
         "created_at": created_at,
         "decision_version": DECISION_VERSION,
+        "decision_status": decision_status,
+        "skip_reason": skip_reason or None,
         "research_rating": rating,
         "rating_confidence": chairman.get("confidence"),
         "trading_action": action,
@@ -231,7 +252,14 @@ def build_canonical_decision(
         "confidence": chairman.get("confidence"),
         "decision_source": decision_source,
         "research_session_id": rep.get("research_id"),
-        "snapshot_id": rep.get("research_id"),
+        "snapshot_id": rep.get("snapshot_id") or rep.get("research_id"),
+        "research_snapshot_id": rep.get("snapshot_id") or rep.get("research_id"),
+        "production_run_id": rep.get("production_run_id"),
+        "council_decision_id": rep.get("research_id"),
+        "risk_decision_id": f"RISK-{decision_id}",
+        "committee_decision_id": decision_id,
+        "chairman_source": chairman.get("chairman_source") or chairman.get("source"),
+        "fallback_reason": chairman.get("fallback_reason"),
         "candidate_score": uni.get("candidate_score") or (rep.get("quant") or {}).get("factor_score"),
         "candidate_sources": list(rep.get("candidate_sources") or uni.get("candidate_sources") or []),
         "factor_version": versions["factor_version"],

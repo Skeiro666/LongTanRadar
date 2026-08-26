@@ -70,14 +70,20 @@ def create_app(config_path: str | None = None) -> FastAPI:
     async def lifespan(_app: FastAPI):
         cfg = get_cfg()
         from ashare.services.agent import restore_state, start_agent
+        from ashare.services.scheduler import start_scheduler, stop_scheduler
 
         restore_state(cfg)
+        # Interval agent loop: only when agent.autostart (dev/test convenience).
         if bool(cfg.get("agent", {}).get("autostart", False)):
             start_agent(interval_sec=float(cfg.get("agent", {}).get("interval_sec") or 3600), run_now=True)
+        # Trading-day scheduler: production default via scheduler.enabled (independent of autostart).
+        if bool((cfg.get("scheduler") or {}).get("enabled", True)):
+            start_scheduler(cfg)
         yield
         from ashare.services.agent import stop_agent
 
         stop_agent()
+        stop_scheduler()
 
     app = FastAPI(title="寻龙尺 API", version="0.2.0", lifespan=lifespan)
     app.add_middleware(
@@ -1015,6 +1021,7 @@ def create_app(config_path: str | None = None) -> FastAPI:
     def api_agent_status() -> dict[str, Any]:
         from ashare.services.agent import snapshot
         from ashare.services.pnl import pnl_summary
+        from ashare.services.scheduler import health_snapshot as scheduler_health
 
         cfg = get_cfg()
         st = snapshot()
@@ -1024,6 +1031,7 @@ def create_app(config_path: str | None = None) -> FastAPI:
         st["ai_model"] = cfg.get("ai", {}).get("model")
         st["picks_style"] = "leader"
         st["universe_mode"] = cfg.get("universe", {}).get("mode")
+        st["scheduler"] = scheduler_health()
         try:
             st["pnl"] = {
                 k: pnl_summary(cfg).get(k)
@@ -1033,20 +1041,58 @@ def create_app(config_path: str | None = None) -> FastAPI:
             st["pnl"] = None
         return st
 
+    @app.get("/api/agent/health")
+    def api_agent_health() -> dict[str, Any]:
+        """Production health: scheduler + agent + last cycle metrics."""
+        from ashare.services.agent import snapshot
+        from ashare.services.scheduler import health_snapshot as scheduler_health
+
+        agent_st = snapshot()
+        sch = scheduler_health()
+        missed = list(sch.get("missed_runs") or [])
+        today = sch.get("today_date")
+        today_missed = any(m.get("date") == today for m in missed)
+        return {
+            "scheduler_state": sch.get("scheduler_state"),
+            "scheduler_enabled": sch.get("enabled"),
+            "agent_state": agent_st.get("state") or agent_st.get("status") or ("RUNNING" if agent_st.get("running") else "STOPPED"),
+            "agent_running": bool(agent_st.get("running")),
+            "last_run_id": sch.get("last_run_id") or agent_st.get("last_run_id"),
+            "last_success_at": sch.get("last_success_at") or agent_st.get("last_success_at"),
+            "last_failure_at": sch.get("last_failure_at") or agent_st.get("last_error_at"),
+            "last_cycle_duration": sch.get("last_cycle_duration_sec"),
+            "last_candidate_count": sch.get("last_candidate_count"),
+            "last_research_count": sch.get("last_research_count"),
+            "last_council_count": sch.get("last_council_count"),
+            "last_buy_count": sch.get("last_buy_count"),
+            "today_runs": sch.get("today_runs"),
+            "today_success": sch.get("today_success"),
+            "today_failed": sch.get("today_failed"),
+            "today_date": sch.get("today_date"),
+            "missed_runs": missed[-10:],
+            "status": "MISSED_RUN" if today_missed else sch.get("scheduler_state"),
+            "last_error": sch.get("last_error") or agent_st.get("last_error"),
+        }
+
     @app.post("/api/agent/start")
     def api_agent_start(body: AgentStartBody = AgentStartBody()) -> dict[str, Any]:
         from ashare.services.agent import start_agent
+        from ashare.services.scheduler import start_scheduler
 
         try:
-            return start_agent(interval_sec=body.interval_sec, run_now=body.run_now)
+            out = start_agent(interval_sec=body.interval_sec, run_now=body.run_now)
+            sch = start_scheduler(get_cfg())
+            out["scheduler"] = sch
+            return out
         except Exception as exc:  # noqa: BLE001
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     @app.post("/api/agent/stop")
     def api_agent_stop() -> dict[str, Any]:
         from ashare.services.agent import stop_agent
+        from ashare.services.scheduler import stop_scheduler
 
-        return stop_agent()
+        return {"agent": stop_agent(), "scheduler": stop_scheduler()}
 
     @app.post("/api/agent/reset")
     def api_agent_reset() -> dict[str, Any]:

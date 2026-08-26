@@ -228,9 +228,27 @@ broker:
   qmt_account_id: ""
 
 agent:
+  # Dev/test: do not auto-start the interval agent loop.
+  # Production trading-day runs use scheduler.enabled (independent of this flag).
   autostart: false
   interval_sec: 1800
   paper_only: true
+
+# Trading-day scheduler (P0). Independent of agent.autostart.
+scheduler:
+  enabled: true
+  timezone: Asia/Shanghai
+  market: SSE
+  run_on_trading_days: true
+  poll_sec: 20
+  pre_open: "09:15"
+  opening: "09:35"
+  intraday:
+    - "10:30"
+    - "11:00"
+    - "14:00"
+  closing: "15:05"
+  execute_cycles: true
 
 optimizer:
   auto_apply: false  # V5: proposals go to experiments; never direct prod by default

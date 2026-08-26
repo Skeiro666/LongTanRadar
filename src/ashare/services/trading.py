@@ -513,7 +513,31 @@ def execute_picks(
             results.append({"symbol": sym, "ok": False, "message": "budget too small for 1 lot"})
             continue
         cid = str(uuid.uuid4())
-        order = Order(symbol=sym, side=Side.BUY, quantity=qty, reason="picks+ai_ok", client_order_id=cid)
+        final_decision_id = str(p.get("decision_id") or p.get("committee_decision_id") or "")
+        if final_decision_id:
+            from ashare.services.production_cycle import PaperOrderIdempotencyStore
+
+            store = PaperOrderIdempotencyStore(cfg)
+            prev = store.get(final_decision_id)
+            if prev:
+                results.append(
+                    {
+                        "symbol": sym,
+                        "ok": True,
+                        "skipped": True,
+                        "reason": "IDEMPOTENT",
+                        "final_decision_id": final_decision_id,
+                        "prior_order": prev,
+                    }
+                )
+                continue
+        order = Order(
+            symbol=sym,
+            side=Side.BUY,
+            quantity=qty,
+            reason="picks+ai_ok",
+            client_order_id=cid if not final_decision_id else f"FD-{final_decision_id}",
+        )
         res = broker.place_order(order, price=px)
         oid = _save_order(
             cfg,
@@ -528,6 +552,18 @@ def execute_picks(
             reason="picks+ai_ok",
             error="" if res.ok else res.message,
         )
+        if final_decision_id and res.ok:
+            from ashare.services.production_cycle import PaperOrderIdempotencyStore
+
+            PaperOrderIdempotencyStore(cfg).mark(
+                final_decision_id,
+                {
+                    "order_id": oid,
+                    "symbol": sym,
+                    "client_order_id": res.client_order_id or cid,
+                    "final_decision_id": final_decision_id,
+                },
+            )
         _save_fill(cfg, oid, res, sym, "BUY", broker.mode)
         results.append({"symbol": sym, "quantity": qty, **res.__dict__})
         acc = broker.get_account()

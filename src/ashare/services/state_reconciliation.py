@@ -526,6 +526,38 @@ def build_market_state_bundle(
     recon = reconcile(research, live, hist, cfg=cfg, now=now)
     meta = build_context_meta(research, live, cfg=cfg, now=now)
 
+    # Append-only LiveObservation — never mutates Research Snapshot
+    observation_id = None
+    try:
+        from ashare.services.production_cycle import append_live_observation
+
+        obs_path = append_live_observation(
+            cfg or {},
+            {
+                "symbol": sym,
+                "observed_at": (live.get("observed_at") or now.isoformat()),
+                "price": live.get("live_price") or row.get("live_price") or row.get("close"),
+                "change_pct": live.get("live_change_pct") or row.get("live_change_pct") or row.get("pct_chg"),
+                "limit_status": live.get("live_status") or live_status,
+                "volume": row.get("volume") or row.get("vol"),
+                "turnover": row.get("amount") or row.get("turnover"),
+                "market_state": recon.get("state"),
+                "research_date": research.get("research_date"),
+                "as_of": research.get("research_date"),
+                "research_snapshot_id": row.get("research_id") or row.get("snapshot_id"),
+                "production_run_id": (cfg or {}).get("_production_run_id"),
+            },
+        )
+        # observation_id is written inside append; re-read last line id if needed
+        observation_id = f"L{sym}-{now.strftime('%H%M%S')}"
+        live["observation_id"] = observation_id
+    except Exception:  # noqa: BLE001
+        pass
+
+    recon["research_snapshot_id"] = row.get("research_id") or row.get("snapshot_id")
+    recon["live_observation_id"] = live.get("observation_id") or observation_id
+    recon["production_run_id"] = (cfg or {}).get("_production_run_id")
+
     if recon.get("triggered"):
         enqueue_reassessment(
             symbol=sym,

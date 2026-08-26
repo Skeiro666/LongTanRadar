@@ -10,8 +10,25 @@ from ashare.config_loaders import load_yaml_config
 from ashare.ml.ranking import MLRankingEngine
 from ashare.research.council import AICouncilEngine, ChairmanEngine, DebateEngine
 from ashare.research.gate import apply_research_gate
-from ashare.research.snapshot import SnapshotStore, build_snapshot
+from ashare.research.snapshot import SnapshotStore, build_snapshot, reassessment_trigger_of
 from ashare.symbols import to_symbol
+
+
+def _normalize_chairman_source(raw: str | None, *, llm_failed: bool = False, fallback_reason: str | None = None) -> str:
+    s = str(raw or "").strip().lower()
+    if llm_failed:
+        return "LLM_FAILED"
+    if s in {"llm", "LLM"}:
+        return "LLM"
+    if s in {"cache", "incremental_reuse"}:
+        return "CACHE"
+    if s in {"heuristic", "quant_routing_skip", "research_gate", "leader_scan"}:
+        return "HEURISTIC"
+    if s in {"llm_failed", "failed"}:
+        return "LLM_FAILED"
+    if fallback_reason:
+        return "LLM_FAILED" if "fail" in str(fallback_reason).lower() or "budget" in str(fallback_reason).lower() else "HEURISTIC"
+    return "HEURISTIC"
 
 
 class ResearchSessionEngine:
@@ -26,8 +43,63 @@ class ResearchSessionEngine:
         self.store = SnapshotStore(self.cfg)
         self.ml = MLRankingEngine(self.cfg)
 
+    def _reuse_formal_report(self, formal: dict[str, Any], candidate: dict[str, Any]) -> dict[str, Any]:
+        """Reuse existing ResearchSnapshot for same research_date — do not overwrite."""
+        report = dict(formal.get("report") or {})
+        if not report:
+            report = {
+                "research_id": formal.get("research_id"),
+                "symbol": formal.get("symbol"),
+                "name": formal.get("name"),
+                "research_time": formal.get("research_time"),
+                "trigger": formal.get("trigger"),
+                "quant": formal.get("quant"),
+                "profit_inflection": formal.get("profit_inflection"),
+                "event": formal.get("event"),
+                "council": formal.get("council") or {},
+                "debate": formal.get("debate") or [],
+                "chairman": formal.get("chairman") or {},
+                "decision": {
+                    "decision_status": "COMPLETED",
+                    "research_rating": (formal.get("chairman") or {}).get("rating"),
+                    "action": (formal.get("chairman") or {}).get("trading_action"),
+                    "position_suggestion": (formal.get("chairman") or {}).get("position_suggestion") or 0,
+                },
+                "versions": formal.get("versions"),
+                "news_package": formal.get("news_package") or {},
+                "candidate_sources": formal.get("candidate_sources") or [],
+                "research_hypotheses": formal.get("research_hypotheses") or [],
+            }
+        chair = dict(report.get("chairman") or formal.get("chairman") or {})
+        src = _normalize_chairman_source(chair.get("source") or chair.get("chairman_source"))
+        chair["chairman_source"] = src
+        chair["source"] = str(chair.get("source") or src.lower())
+        report["chairman"] = chair
+        report["snapshot_reused"] = True
+        report["snapshot_id"] = formal.get("snapshot_id") or formal.get("research_id")
+        report["research_id"] = formal.get("research_id")
+        report["revision"] = formal.get("revision") or 1
+        report["gate"] = candidate.get("gate")
+        report["production_run_id"] = self.cfg.get("_production_run_id")
+        decision = dict(report.get("decision") or {})
+        decision.setdefault("decision_status", "COMPLETED")
+        report["decision"] = decision
+        return report
+
     def run_session(self, candidate: dict[str, Any]) -> dict[str, Any]:
-        prior = self.store.load_latest_for_symbol(str(candidate.get("symbol") or ""))
+        sym = str(candidate.get("symbol") or "")
+        as_of = str(
+            candidate.get("as_of")
+            or candidate.get("research_date")
+            or (candidate.get("versions") or {}).get("as_of")
+            or datetime.now(timezone.utc).date().isoformat()
+        )[:10]
+        rev_trigger = reassessment_trigger_of(candidate)
+        formal = self.store.load_formal_for_date(sym, as_of) if sym else None
+        if formal and not rev_trigger:
+            return self._reuse_formal_report(formal, candidate)
+
+        prior = formal or self.store.load_latest_for_symbol(sym)
         snap = build_snapshot(candidate, self.cfg)
         # Refresh live+reconciliation registry for AI context only (not written as research facts).
         try:
@@ -77,6 +149,16 @@ class ResearchSessionEngine:
         )
         council_meta = dict(opinions.get("_meta") or {})
         role_opinions = {k: v for k, v in opinions.items() if not k.startswith("_")}
+        # Stamp analyst provenance
+        for rid, op in role_opinions.items():
+            if not isinstance(op, dict):
+                continue
+            src = str(op.get("source") or "heuristic").lower()
+            op["source"] = src
+            op.setdefault("model", op.get("model") or "")
+            op.setdefault("prompt_version", op.get("prompt_version") or f"{rid}_v1")
+            op.setdefault("created_at", datetime.now(timezone.utc).isoformat())
+            op.setdefault("data_quality", op.get("data_quality") or "PARTIAL")
         incremental_reused = sum(1 for v in role_opinions.values() if v.get("source") == "incremental_reuse")
         debate = self.debate.run(snap, role_opinions)
         from ashare.research.incremental import detect_change_reasons, roles_to_refresh, _incremental_cfg
@@ -88,14 +170,29 @@ class ResearchSessionEngine:
             and _incremental_cfg(self.cfg).get("enabled", True)
             and not roles_to_refresh(snap, prior, self.cfg)
             and (prior.get("chairman") or {}).get("rating")
+            and not rev_trigger
         )
         if reuse_chair:
             chairman = dict(prior["chairman"])
             chairman["source"] = "incremental_reuse"
+            chairman["chairman_source"] = "CACHE"
+            chairman["fallback_reason"] = None
         else:
             chairman = self.chair.summarize(snap, role_opinions, debate)
+            raw_src = str(chairman.get("source") or "")
+            llm_failed = bool(chairman.get("llm_failed")) or raw_src.lower() in {"llm_failed", "failed"}
+            chairman["chairman_source"] = _normalize_chairman_source(
+                raw_src,
+                llm_failed=llm_failed,
+                fallback_reason=chairman.get("fallback_reason"),
+            )
+            if chairman["chairman_source"] == "LLM_FAILED" and not chairman.get("fallback_reason"):
+                chairman["fallback_reason"] = chairman.get("error") or "llm_call_failed"
         report = {
             "research_id": snap["research_id"],
+            "snapshot_id": snap.get("snapshot_id") or snap["research_id"],
+            "revision": snap.get("revision") or 1,
+            "revision_trigger": snap.get("revision_trigger"),
             "symbol": snap["symbol"],
             "name": snap.get("name"),
             "research_time": snap["research_time"],
@@ -110,6 +207,7 @@ class ResearchSessionEngine:
             "chairman": chairman,
             "change_reasons": change_reasons,
             "decision": {
+                "decision_status": "COMPLETED",
                 "research_rating": chairman.get("rating"),
                 "action": chairman.get("trading_action"),
                 "position_suggestion": chairman.get("position_suggestion") or 0,
@@ -126,6 +224,8 @@ class ResearchSessionEngine:
             "research_hypotheses": snap.get("research_hypotheses") or [],
             "research_intelligence": snap.get("research_intelligence") or {},
             "incremental_reused_roles": incremental_reused,
+            "production_run_id": self.cfg.get("_production_run_id"),
+            "gate": candidate.get("gate"),
         }
         # persist full snapshot including AI outputs for replay
         full = {**snap, "council": opinions, "debate": debate, "chairman": chairman, "report": report}
@@ -142,6 +242,9 @@ class ResearchSessionEngine:
                 "reconciliation_version": ctx_meta.get("reconciliation_version"),
                 "reconciliation_state": recon_meta.get("state"),
                 "trigger_codes": list(recon_meta.get("trigger_codes") or [])[:8],
+                "research_snapshot_id": snap.get("research_id"),
+                "live_observation_id": (snap.get("live_state") or {}).get("observation_id"),
+                "production_run_id": self.cfg.get("_production_run_id"),
             }
         # Strip ephemeral live advisory so Research Snapshot remains historical-only.
         for k in (
@@ -336,14 +439,51 @@ class ResearchSessionEngine:
 
     def _budget_skip_report(self, candidate: dict[str, Any], llm_used: int) -> dict[str, Any]:
         rep = self._gate_skip_report(candidate)
-        rep["gate"] = {**(rep.get("gate") or {}), "reason": "LLM_BUDGET", "llm_used": llm_used}
-        rep["chairman"]["rationale"] = "LLM_BUDGET"
+        max_llm = int((self.research_cfg.get("research_gate") or {}).get("max_llm_calls") or 30)
+        remaining = max(0, max_llm - int(llm_used))
+        rep["gate"] = {
+            **(rep.get("gate") or {}),
+            "reason": "LLM_BUDGET",
+            "llm_used": llm_used,
+            "budget_limit": max_llm,
+            "budget_used": llm_used,
+            "budget_remaining": remaining,
+            "candidate_rank": (candidate.get("gate") or {}).get("rank"),
+        }
+        rep["decision"] = {
+            "decision_status": "SKIPPED",
+            "research_rating": None,
+            "action": None,
+            "skip_reason": "LLM_BUDGET",
+            "position_suggestion": 0,
+        }
+        rep["chairman"] = {
+            **(rep.get("chairman") or {}),
+            "rationale": "LLM_BUDGET",
+            "source": "research_gate",
+            "chairman_source": "SKIPPED",
+            "fallback_reason": "LLM_BUDGET",
+            "rating": None,
+            "status": "skipped",
+        }
         return rep
 
     def _gate_skip_report(self, candidate: dict[str, Any]) -> dict[str, Any]:
         gate = dict(candidate.get("gate") or {})
         rid = f"G{datetime.now(timezone.utc).strftime('%Y%m%d')}{uuid4().hex[:6].upper()}"
         reason = str(gate.get("reason") or "GATE_REJECT")
+        # Enrich priority fields for budget-cut analysis (no threshold change)
+        priority = {
+            "candidate_score": candidate.get("candidate_score") or gate.get("candidate_score"),
+            "leader_score": candidate.get("leader_score") or (gate.get("signals") or {}).get("leader_score"),
+            "board_count": candidate.get("board_count"),
+            "ml_prediction": candidate.get("ml_prediction"),
+            "profit_score": candidate.get("profit_score"),
+            "event_score": candidate.get("event_score"),
+            "news_score": candidate.get("news_score"),
+            "priority_rank": gate.get("rank"),
+            "reason": reason,
+        }
         return {
             "research_id": rid,
             "symbol": candidate.get("symbol"),
@@ -357,23 +497,28 @@ class ResearchSessionEngine:
             },
             "profit_inflection": candidate.get("profit_inflection") or {},
             "event": candidate.get("event") or {},
-            "gate": gate,
+            "gate": {**gate, "priority": priority},
             "candidate_sources": candidate.get("candidate_sources") or [],
             "research_hypotheses": candidate.get("research_hypotheses") or [],
             "council": {},
             "debate": [],
             "chairman": {
                 "source": "research_gate",
-                "rating": "SKIP",
+                "chairman_source": "SKIPPED",
+                "rating": None,
                 "status": "skipped",
                 "rationale": reason,
+                "fallback_reason": reason,
             },
             "decision": {
-                "research_rating": "GATE_SKIP",
-                "action": "NO_ACTION",
+                "decision_status": "SKIPPED",
+                "research_rating": None,
+                "action": None,
+                "skip_reason": reason,
                 "position_suggestion": 0,
             },
             "news_package": candidate.get("news_package") or {},
+            "research_priority": priority,
         }
 
     def _append_index(self, report: dict[str, Any]) -> None:
@@ -381,4 +526,17 @@ class ResearchSessionEngine:
         idx = root / "data" / "research_sessions.jsonl"
         idx.parent.mkdir(parents=True, exist_ok=True)
         with idx.open("a", encoding="utf-8") as f:
-            f.write(json.dumps({"research_id": report["research_id"], "symbol": report["symbol"], "rating": report["decision"]["research_rating"], "time": report["research_time"]}, ensure_ascii=False) + "\n")
+            f.write(
+                json.dumps(
+                    {
+                        "research_id": report["research_id"],
+                        "symbol": report["symbol"],
+                        "rating": (report.get("decision") or {}).get("research_rating"),
+                        "decision_status": (report.get("decision") or {}).get("decision_status"),
+                        "skip_reason": (report.get("decision") or {}).get("skip_reason"),
+                        "time": report["research_time"],
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n"
+            )

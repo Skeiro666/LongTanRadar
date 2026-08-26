@@ -27,9 +27,9 @@ from ashare.services.production_observability import (
     extract_gate_skip_cases,
 )
 from ashare.services.scheduler import (
-    SLOT_CLOSING,
     SLOT_INTRADAY,
     SLOT_OPENING,
+    SLOT_POST_CLOSE,
     SLOT_PRE_OPEN,
     health_snapshot,
     run_slot_now,
@@ -43,12 +43,14 @@ from ashare.services.scheduler import (
 def tmp_cfg(tmp_path: Path) -> dict:
     return {
         "_root": tmp_path,
+        "_force_file_claims": True,
         "scheduler": {
             "enabled": True,
             "timezone": "Asia/Shanghai",
             "run_on_trading_days": True,
             "execute_cycles": False,
             "poll_sec": 1,
+            "max_late_seconds": 900,
         },
         "agent": {"autostart": False},
     }
@@ -94,7 +96,8 @@ class TestSchedulerIdempotency:
     def test_same_slot_once(self, tmp_cfg):
         store = IdempotencyStore(tmp_cfg)
         key = idempotency_key("2026-08-26", SLOT_OPENING, SLOT_OPENING)
-        assert not store.is_done(key)
+        claim = store.claim_once(key, run_id="r1")
+        assert claim.claimed
         store.mark_done(key, run_id="r1")
         assert store.is_done(key)
         assert store.get(key)["run_id"] == "r1"
@@ -102,13 +105,12 @@ class TestSchedulerIdempotency:
     def test_run_slot_idempotent(self, tmp_cfg, monkeypatch):
         calls = []
 
-        def fake_cycle(cfg, reset_paper=False):
-            calls.append(cfg.get("_production_run_id"))
-            return {"platform_reports": [], "canonical_decisions": []}
+        def fake_dispatch(cfg, **kwargs):
+            calls.append(kwargs.get("run_id") or cfg.get("_production_run_id"))
+            return {"platform_reports": [], "canonical_decisions": [], "full_council": True}
 
-        monkeypatch.setattr("ashare.services.agent.run_cycle", fake_cycle)
+        monkeypatch.setattr("ashare.services.scheduler.dispatch_cycle", fake_dispatch)
         tmp_cfg["scheduler"]["execute_cycles"] = True
-        # force trading day via calendar that accepts any weekday
         d = date(2026, 8, 26)
         r1 = run_slot_now(tmp_cfg, cycle_type=SLOT_OPENING, slot=SLOT_OPENING, trading_date=d.isoformat())
         r2 = run_slot_now(tmp_cfg, cycle_type=SLOT_OPENING, slot=SLOT_OPENING, trading_date=d.isoformat())
@@ -424,22 +426,27 @@ class TestCoverageAudit:
 
 class TestSimulatedTradingDay:
     def test_four_cycles_one_snapshot(self, tmp_cfg, monkeypatch):
-        """Simulate opening + 2 intraday + closing without overwrite."""
+        """Simulate opening + 2 intraday + post_close without overwrite.
+
+        Only OPENING runs full council; INTRADAY live-only; POST_CLOSE summary.
+        """
         as_of = "2026-08-26"
         run_ids = []
 
-        def fake_cycle(cfg, reset_paper=False):
-            rid = cfg.get("_production_run_id")
+        def fake_dispatch(cfg, **kwargs):
+            rid = kwargs.get("run_id") or cfg.get("_production_run_id")
+            ctype = kwargs.get("cycle_type")
             run_ids.append(rid)
             payload = {
                 "as_of": as_of,
                 "run_id": rid,
+                "cycle_type": ctype,
                 "platform_reports": [],
                 "canonical_decisions": [],
+                "full_council": ctype == SLOT_OPENING,
             }
             persist_production_report(cfg, payload)
-            # one research snapshot only on opening
-            if cfg.get("_cycle_type") == SLOT_OPENING:
+            if ctype == SLOT_OPENING:
                 store = SnapshotStore(cfg)
                 snap = build_snapshot(
                     {"symbol": "600000.SH", "as_of": as_of, "candidate_score": 0.2, "leader_score": 0.2},
@@ -449,13 +456,13 @@ class TestSimulatedTradingDay:
             append_live_observation(cfg, {"symbol": "600000.SH", "as_of": as_of, "price": 10.0})
             return payload
 
-        monkeypatch.setattr("ashare.services.agent.run_cycle", fake_cycle)
+        monkeypatch.setattr("ashare.services.scheduler.dispatch_cycle", fake_dispatch)
         tmp_cfg["scheduler"]["execute_cycles"] = True
         slots = [
             (SLOT_OPENING, SLOT_OPENING),
             (SLOT_INTRADAY, "INTRADAY_0_10:00"),
             (SLOT_INTRADAY, "INTRADAY_1_10:30"),
-            (SLOT_CLOSING, SLOT_CLOSING),
+            (SLOT_POST_CLOSE, SLOT_POST_CLOSE),
         ]
         for ctype, slot in slots:
             run_slot_now(tmp_cfg, cycle_type=ctype, slot=slot, trading_date=as_of)
@@ -463,11 +470,13 @@ class TestSimulatedTradingDay:
         assert len(set(run_ids)) == 4
         day_dir = Path(tmp_cfg["_root"]) / "data" / "reports" / as_of
         assert len([p for p in day_dir.glob("*.json") if not p.name.startswith("_")]) == 4
-        # formal snapshot pointer exists once (latest)
         formal = list((Path(tmp_cfg["_root"]) / "data" / "research_snapshots").glob("_formal_*.json"))
         assert len(formal) == 1
         live = Path(tmp_cfg["_root"]) / "data" / "live_observations" / f"{as_of}.jsonl"
         assert len([ln for ln in live.read_text(encoding="utf-8").splitlines() if ln.strip()]) == 4
+        # restart safety
+        out2 = run_slot_now(tmp_cfg, cycle_type=SLOT_OPENING, slot=SLOT_OPENING, trading_date=as_of)
+        assert out2.get("reason") == "IDEMPOTENT" or out2.get("skipped") is True
 
 
 class TestProductionSignalContract:

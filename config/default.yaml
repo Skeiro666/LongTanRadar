@@ -249,6 +249,8 @@ scheduler:
     - "14:00"
   closing: "15:05"
   execute_cycles: true
+  max_late_seconds: 900
+  claim_lease_sec: 3600
 
 optimizer:
   auto_apply: false  # V5: proposals go to experiments; never direct prod by default

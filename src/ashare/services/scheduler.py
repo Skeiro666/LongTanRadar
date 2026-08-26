@@ -37,7 +37,7 @@ SLOT_OPENING = "OPENING"
 SLOT_INTRADAY = "INTRADAY"
 SLOT_CLOSING = "CLOSING"
 
-_lock = threading.Lock()
+_lock = threading.RLock()
 _thread: threading.Thread | None = None
 _stop = threading.Event()
 _health: dict[str, Any] = {

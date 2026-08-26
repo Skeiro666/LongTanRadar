@@ -450,7 +450,7 @@ function LeaderCard({ row, highlight }: { row: LeaderRow; highlight?: boolean })
             </div>
           ) : (
             <div className="live-quote-block">
-              {hasLivePx && statusUp !== "STALE" ? (
+              {hasLivePx ? (
                 <>
                   <div className="live-quote-price">
                     <span className="live-px mono">¥{Number(row.live_price).toFixed(2)}</span>
@@ -470,8 +470,6 @@ function LeaderCard({ row, highlight }: { row: LeaderRow; highlight?: boolean })
                     {sessionHigh != null ? ` · 今高 ¥${Number(sessionHigh).toFixed(2)}` : ""}
                   </div>
                 </>
-              ) : hasLivePx && statusUp === "STALE" ? (
-                <p className="muted small">暂不展示可能过期的价格数字</p>
               ) : null}
               <div className="live-status-row">
                 <LiveStatusLabel status={row.live_status} />
@@ -479,9 +477,12 @@ function LeaderCard({ row, highlight }: { row: LeaderRow; highlight?: boolean })
               {statusUp === "BREAK_LIMIT" ? (
                 <p className="muted small">炸板持续：{formatDuration(breakDur)}</p>
               ) : null}
-              <p className="muted small">实时更新：{formatLiveTime(row.live_updated_at)}</p>
+              <p className="muted small">
+                {statusUp === "STALE" ? "最后更新：" : "实时更新："}
+                {formatLiveTime(row.live_updated_at)}
+              </p>
               {row.live_session_open === false ? (
-                <p className="muted small">当前非连续竞价时段（展示缓存/收盘附近行情）</p>
+                <p className="muted small">当前午休/收盘等非连续竞价时段，展示最近一次行情（非故障）</p>
               ) : null}
             </div>
           )}

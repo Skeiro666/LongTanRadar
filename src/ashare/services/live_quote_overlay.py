@@ -73,11 +73,15 @@ def classify_live_status(
     now: datetime | None = None,
     stale_seconds: int = 90,
     weak_pct: float = -3.0,
+    session_open: bool | None = None,
 ) -> str:
     now = now or _now_cn()
     if price is None or price <= 0:
         return "UNKNOWN"
-    if updated_at is not None:
+    # Age-based STALE only during continuous auction. Lunch / after-close gaps are expected
+    # and must not wipe last known quotes as "行情延迟".
+    in_session = is_a_share_session(now) if session_open is None else bool(session_open)
+    if in_session and updated_at is not None:
         ts = updated_at if updated_at.tzinfo else updated_at.replace(tzinfo=_TZ)
         age = (now.astimezone(_TZ) - ts.astimezone(_TZ)).total_seconds()
         if age > stale_seconds:
@@ -145,6 +149,7 @@ def build_live_fields(
     live_is_lu = bool(lim_up > 0 and price + 1e-9 >= lim_up - 0.01)
     live_is_ld = bool(lim_dn > 0 and price - 1e-9 <= lim_dn + 0.01)
 
+    session_open = is_a_share_session(now)
     status = classify_live_status(
         price=price,
         limit_up_price=lim_up or None,
@@ -154,8 +159,10 @@ def build_live_fields(
         updated_at=updated_at,
         now=now,
         stale_seconds=stale_seconds,
+        session_open=session_open,
     )
-    if force_stale and status not in ("UNKNOWN",):
+    # force_stale is for in-session fetch failures only; never apply off-session.
+    if force_stale and session_open and status not in ("UNKNOWN",):
         status = "STALE"
 
     # Never emit bogus zeros when stale without a real quote timestamp path —
@@ -185,7 +192,7 @@ def build_live_fields(
         "live_status": status,
         "live_updated_at": updated_iso,
         "live_quote_age_seconds": age,
-        "live_session_open": is_a_share_session(now),
+        "live_session_open": session_open,
     }
 
 
@@ -234,16 +241,10 @@ def attach_live_quote_overlay(
             quotes = {s: _CACHE[s] for s in symbols if s in _CACHE}
             force_stale = bool(quotes)
     else:
-        # Non-session: avoid repeated Sina hammering — reuse cache; one cold fetch if empty.
+        # Non-session (午休 / 收盘)：复用缓存，不因超过 90s 误标 STALE。
         quotes = {s: _CACHE[s] for s in symbols if s in _CACHE}
-        if quotes:
-            # Age-based STALE handled in classify; force only when clearly leftover cache.
-            if fetched_at is not None:
-                age = (now - fetched_at.astimezone(_TZ)).total_seconds()
-                force_stale = age > stale_sec
-            else:
-                force_stale = True
-        elif fetch and symbols and not session_open:
+        force_stale = False
+        if not quotes and fetch and symbols:
             try:
                 from ashare.data.akshare_source import fetch_spot_quotes
 
@@ -253,7 +254,6 @@ def attach_live_quote_overlay(
                     _CACHE_FETCHED_AT = now
                     fetched_at = now
                     quotes = {s: _CACHE[s] for s in symbols if s in _CACHE}
-                    force_stale = False
             except Exception as exc:  # noqa: BLE001
                 logger.warning("Off-hours live quote fetch failed: %s", exc)
 

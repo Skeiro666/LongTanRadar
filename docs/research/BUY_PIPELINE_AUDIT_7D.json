@@ -1,0 +1,847 @@
+{
+  "audit_version": "buy_pipeline_audit_v7d",
+  "window": {
+    "start": "2026-08-19",
+    "end": "2026-08-25",
+    "days": 7
+  },
+  "data_coverage": {
+    "dated_reports": [
+      "2026-08-21",
+      "2026-08-24",
+      "2026-08-25"
+    ],
+    "n_reports": 3,
+    "n_snapshots": 176,
+    "n_sessions": 176,
+    "n_production_cycles_deduped": 11,
+    "note": "Audit uses persisted reports/snapshots only; does not re-run research."
+  },
+  "config": {
+    "trading.mode": "backtest",
+    "broker.mode": "paper",
+    "agent.autostart": false,
+    "research.enabled": true,
+    "ai.enabled": true,
+    "ai.roundtable": true,
+    "ai.roundtable_mode": "sampled",
+    "ai.roundtable_sample_every": 10,
+    "ai.roundtable_max_per_day": 1,
+    "decision.canonical_source": "platform_council",
+    "decision.roundtable_controls_trading": false,
+    "paper.initial_balance": 3000,
+    "trading.lot_size": 100,
+    "universe.screen.max_price": 28.0,
+    "research_gate": {
+      "enabled": true,
+      "always_pass_top_n": 3,
+      "deep_threshold": 0.22,
+      "light_threshold": 0.12,
+      "max_deep": 10,
+      "max_light": 8,
+      "max_llm_calls": 30,
+      "min_candidate_score": 0.12,
+      "min_leader_score": 0.1,
+      "min_ml_prediction": 0.003,
+      "min_profit_score": 0.15,
+      "min_event_score": 0.08,
+      "min_news_score": 0.12,
+      "boost_sources": [
+        "news",
+        "profit",
+        "event"
+      ],
+      "boost_score_floor": 0.08
+    }
+  },
+  "layer_counts": {
+    "Universe_raw_sum": 7031,
+    "Screen_filtered_sum": 2358,
+    "Pool_sum": 120,
+    "Candidate_union_sum": 60,
+    "Research_universe_sum": 60,
+    "Gate_rejected_sum": 208,
+    "Council_entered": 55,
+    "Council_completed": 55,
+    "Canonical_decisions": 55,
+    "research_rating": {
+      "WATCH": 23,
+      "GATE_SKIP": 29,
+      "AVOID": 2,
+      "NEUTRAL": 1
+    },
+    "trading_action": {
+      "WAIT_FOR_CONFIRMATION": 22,
+      "NO_ACTION": 33
+    },
+    "RiskFilter_status": {
+      "blocked": 19,
+      "pass": 7,
+      "skipped": 29
+    },
+    "RiskFilter_flags": {
+      "limit_up": 19,
+      "DEEP_BUDGET": 23,
+      "LLM_BUDGET": 6
+    },
+    "committee_approve": {
+      "true": 0,
+      "false": 55
+    },
+    "Final_BUY": 0,
+    "BUY_READY_signals": {
+      "buy_ready_alerts": 0
+    },
+    "trade_timing_action": {
+      "WAIT": 19,
+      "PASS": 1
+    }
+  },
+  "funnel_table": [
+    {
+      "stage": "Universe raw (screen input)",
+      "input": 7031,
+      "passed": 2358,
+      "rejected": 4673,
+      "reject_rate_pct": 66.46
+    },
+    {
+      "stage": "Screen → Pool",
+      "input": 2358,
+      "passed": 120,
+      "rejected": 2238,
+      "reject_rate_pct": 94.91
+    },
+    {
+      "stage": "Pool → Candidate union",
+      "input": 120,
+      "passed": 60,
+      "rejected": 60,
+      "reject_rate_pct": 50.0
+    },
+    {
+      "stage": "Candidate → Council entered",
+      "input": 60,
+      "passed": 55,
+      "rejected": 5,
+      "reject_rate_pct": 8.33
+    },
+    {
+      "stage": "Council completed",
+      "input": 55,
+      "passed": 55,
+      "rejected": 0,
+      "reject_rate_pct": 0.0
+    },
+    {
+      "stage": "Council → BUY/STRONG_BUY",
+      "input": 55,
+      "passed": 0,
+      "rejected": 55,
+      "reject_rate_pct": 100.0
+    },
+    {
+      "stage": "BUY rating → SMALL_POSITION",
+      "input": 0,
+      "passed": 0,
+      "rejected": 0,
+      "reject_rate_pct": 0.0
+    },
+    {
+      "stage": "RiskFilter PASS (all canonical)",
+      "input": 55,
+      "passed": 7,
+      "rejected": 48,
+      "reject_rate_pct": 87.27
+    },
+    {
+      "stage": "committee_approve true",
+      "input": 0,
+      "passed": 0,
+      "rejected": 0,
+      "reject_rate_pct": 0.0
+    }
+  ],
+  "research_gate": {
+    "config": {
+      "enabled": true,
+      "always_pass_top_n": 3,
+      "deep_threshold": 0.22,
+      "light_threshold": 0.12,
+      "max_deep": 10,
+      "max_light": 8,
+      "max_llm_calls": 30,
+      "min_candidate_score": 0.12,
+      "min_leader_score": 0.1,
+      "min_ml_prediction": 0.003,
+      "min_profit_score": 0.15,
+      "min_event_score": 0.08,
+      "min_news_score": 0.12,
+      "boost_sources": [
+        "news",
+        "profit",
+        "event"
+      ],
+      "boost_score_floor": 0.08
+    },
+    "reject_reasons": {
+      "union_rejected:NOT_ENOUGH_EVIDENCE": 78,
+      "union_rejected:RANKING_CUTOFF": 118,
+      "DEEP_BUDGET": 23,
+      "union_rejected:INFERRED_DISCOVERY": 3,
+      "union_rejected:INDUSTRY_MAP_UNAVAILABLE": 2,
+      "union_rejected:NOT_LIMIT_UP_NEWS_ONLY": 7
+    },
+    "threshold_independent_fail_rates": {
+      "min_candidate_score": {
+        "threshold": 0.12,
+        "fail_sum": 0,
+        "obs_sum": 60,
+        "fail_rate_pct": 0.0,
+        "missing_sum": 0
+      },
+      "min_leader_score": {
+        "threshold": 0.1,
+        "fail_sum": 42,
+        "obs_sum": 60,
+        "fail_rate_pct": 70.0,
+        "missing_sum": 40
+      },
+      "min_ml_prediction": {
+        "threshold": 0.003,
+        "fail_sum": 60,
+        "obs_sum": 60,
+        "fail_rate_pct": 100.0,
+        "missing_sum": 60
+      },
+      "min_profit_score": {
+        "threshold": 0.15,
+        "fail_sum": 60,
+        "obs_sum": 60,
+        "fail_rate_pct": 100.0,
+        "missing_sum": 60
+      },
+      "min_event_score": {
+        "threshold": 0.08,
+        "fail_sum": 60,
+        "obs_sum": 60,
+        "fail_rate_pct": 100.0,
+        "missing_sum": 60
+      },
+      "min_news_score": {
+        "threshold": 0.12,
+        "fail_sum": 60,
+        "obs_sum": 60,
+        "fail_rate_pct": 100.0,
+        "missing_sum": 60
+      }
+    }
+  },
+  "candidate_score_distributions": {
+    "candidate_score": {
+      "n": 60,
+      "min": 0.16717,
+      "p25": 0.406536,
+      "p50": 0.488933,
+      "p75": 0.681095,
+      "p90": 0.827913,
+      "p95": 0.87512,
+      "max": 1.08975,
+      "mean": 0.52102
+    },
+    "leader_score": {
+      "n": 20,
+      "min": 0.087223,
+      "p25": 0.300169,
+      "p50": 0.455138,
+      "p75": 0.916847,
+      "p90": 1.197638,
+      "p95": 1.686958,
+      "max": 1.835139,
+      "mean": 0.628926
+    },
+    "ml_prediction": {
+      "n": 0
+    },
+    "profit_score": {
+      "n": 0
+    },
+    "event_score": {
+      "n": 0
+    },
+    "news_score": {
+      "n": 0
+    }
+  },
+  "council_role_stats": {
+    "snapshots_with_council": 176,
+    "stance_counts": {
+      "event:neutral": 108,
+      "valuation:neutral": 174,
+      "quant:bull": 121,
+      "bear:bear": 176,
+      "fundamental:neutral": 111,
+      "fundamental:bull": 54,
+      "event:bull": 64,
+      "quant:neutral": 55,
+      "event:bear": 1,
+      "event:unknown": 3,
+      "valuation:bull": 1,
+      "valuation:bear": 1,
+      "fundamental:bear": 11
+    },
+    "score_distributions": {
+      "event": {
+        "n": 173,
+        "min": -0.2,
+        "p25": 0.0,
+        "p50": 0.0,
+        "p75": 0.3,
+        "p90": 0.5,
+        "p95": 0.6,
+        "max": 0.759342,
+        "mean": 0.162094
+      },
+      "valuation": {
+        "n": 176,
+        "min": -0.3,
+        "p25": 0.0,
+        "p50": 0.0,
+        "p75": 0.0,
+        "p90": 0.0,
+        "p95": 0.0,
+        "max": 0.1,
+        "mean": -0.001136
+      },
+      "quant": {
+        "n": 176,
+        "min": -0.15,
+        "p25": 0.35,
+        "p50": 0.42,
+        "p75": 0.62,
+        "p90": 0.68,
+        "p95": 0.72,
+        "max": 0.834375,
+        "mean": 0.45308
+      },
+      "bear": {
+        "n": 176,
+        "min": -0.85,
+        "p25": -0.75,
+        "p50": -0.75,
+        "p75": -0.72,
+        "p90": -0.65,
+        "p95": -0.55,
+        "max": -0.3,
+        "mean": -0.730511
+      },
+      "fundamental": {
+        "n": 176,
+        "min": -0.8,
+        "p25": 0.0,
+        "p50": 0.25,
+        "p75": 0.35,
+        "p90": 0.45,
+        "p95": 0.605,
+        "max": 0.945479,
+        "mean": 0.173257
+      }
+    },
+    "bear_negative_count": 176,
+    "valuation_unavailable_count": 174,
+    "snapshot_ratings": {
+      "WATCH": 139,
+      "AVOID": 19,
+      "NEUTRAL": 13,
+      "BUY": 5
+    },
+    "snapshot_actions": {
+      "WAIT_FOR_CONFIRMATION": 128,
+      "NO_ACTION": 27,
+      "WATCH": 17,
+      "SMALL_POSITION": 4
+    },
+    "session_index_ratings": {
+      "BUY": 5,
+      "NEUTRAL": 13,
+      "WATCH": 139,
+      "AVOID": 19
+    },
+    "historical_BUY_STRONG_BUY_share_pct": 2.84
+  },
+  "buy_rated_but_not_bought": [
+    {
+      "symbol": "002412.SZ",
+      "name": "汉森制药",
+      "research_date": "2026-08-22",
+      "research_id": "R2026082218798E",
+      "leader_score": 1.296864661628067,
+      "candidate_score": 0.9850176691612015,
+      "ml_prediction": 0.006338423998002785,
+      "profit_score": 1.0,
+      "event_score": 0.2571428571428571,
+      "news_score": null,
+      "research_rating": "BUY",
+      "rating_confidence": 0.6,
+      "trading_action": "SMALL_POSITION",
+      "role_scores": {
+        "bear": {
+          "score": -0.3,
+          "stance": "bear",
+          "status": "failed"
+        },
+        "valuation": {
+          "score": 0,
+          "stance": "neutral",
+          "status": "unavailable"
+        },
+        "event": {
+          "score": 0.5,
+          "stance": "bull",
+          "status": "ok"
+        },
+        "fundamental": {
+          "score": 0.35,
+          "stance": "neutral",
+          "status": "ok"
+        },
+        "quant": {
+          "score": 0.82,
+          "stance": "bull",
+          "status": "ok"
+        }
+      },
+      "valuation_unavailable": true,
+      "risk_status": "unknown_no_canonical_row",
+      "risk_flags": [],
+      "committee_approve": true,
+      "canonical_joined": false,
+      "direct_reason": "APPROVED"
+    },
+    {
+      "symbol": "603958.SH",
+      "name": "哈森股份",
+      "research_date": "2026-08-22",
+      "research_id": "R20260822666BF7",
+      "leader_score": 0.8830283330148724,
+      "candidate_score": 0.798791321285264,
+      "ml_prediction": 0.006338423998002785,
+      "profit_score": 1.0,
+      "event_score": 0.2571428571428571,
+      "news_score": null,
+      "research_rating": "BUY",
+      "rating_confidence": 0.65,
+      "trading_action": "SMALL_POSITION",
+      "role_scores": {
+        "bear": {
+          "score": -0.3,
+          "stance": "bear",
+          "status": "failed"
+        },
+        "valuation": {
+          "score": 0,
+          "stance": "neutral",
+          "status": "unavailable"
+        },
+        "event": {
+          "score": 0.24285714285714285,
+          "stance": "bull",
+          "status": "ok"
+        },
+        "fundamental": {
+          "score": 0.25,
+          "stance": "neutral",
+          "status": "ok"
+        },
+        "quant": {
+          "score": 0.62,
+          "stance": "bull",
+          "status": "ok"
+        }
+      },
+      "valuation_unavailable": true,
+      "risk_status": "unknown_no_canonical_row",
+      "risk_flags": [],
+      "committee_approve": true,
+      "canonical_joined": false,
+      "direct_reason": "APPROVED"
+    },
+    {
+      "symbol": "603958.SH",
+      "name": "哈森股份",
+      "research_date": "2026-08-22",
+      "research_id": "R20260822798879",
+      "leader_score": 1.0023716622312622,
+      "candidate_score": 0.6352980656496925,
+      "ml_prediction": 0.006338423998002785,
+      "profit_score": 1.0,
+      "event_score": 0.2571428571428571,
+      "news_score": -0.02735629801785265,
+      "research_rating": "BUY",
+      "rating_confidence": 0.45,
+      "trading_action": "WAIT_FOR_CONFIRMATION",
+      "role_scores": {
+        "quant": {
+          "score": 0.532877951105645,
+          "stance": "bull",
+          "status": "failed"
+        },
+        "bear": {
+          "score": -0.3,
+          "stance": "bear",
+          "status": "failed"
+        },
+        "event": {
+          "score": 0.532877951105645,
+          "stance": "bull",
+          "status": "failed"
+        },
+        "fundamental": {
+          "score": 0.532877951105645,
+          "stance": "bull",
+          "status": "failed"
+        },
+        "valuation": {
+          "score": 0.0,
+          "stance": "neutral",
+          "status": "unavailable"
+        }
+      },
+      "valuation_unavailable": true,
+      "risk_status": "unknown_no_canonical_row",
+      "risk_flags": [],
+      "committee_approve": false,
+      "canonical_joined": false,
+      "direct_reason": "ACTION_NOT_SMALL_POSITION:WAIT_FOR_CONFIRMATION"
+    },
+    {
+      "symbol": "002412.SZ",
+      "name": "汉森制药",
+      "research_date": "2026-08-22",
+      "research_id": "R20260822C7FDA1",
+      "leader_score": 1.1650451970623106,
+      "candidate_score": 0.9256989101066111,
+      "ml_prediction": 0.006338423998002785,
+      "profit_score": 1.0,
+      "event_score": 0.2571428571428571,
+      "news_score": null,
+      "research_rating": "BUY",
+      "rating_confidence": 0.65,
+      "trading_action": "SMALL_POSITION",
+      "role_scores": {
+        "bear": {
+          "score": -0.3,
+          "stance": "bear",
+          "status": "failed"
+        },
+        "valuation": {
+          "score": 0,
+          "stance": "neutral",
+          "status": "unavailable"
+        },
+        "event": {
+          "score": 0.6,
+          "stance": "bull",
+          "status": "ok"
+        },
+        "fundamental": {
+          "score": 0.35,
+          "stance": "neutral",
+          "status": "ok"
+        },
+        "quant": {
+          "score": 0.78,
+          "stance": "bull",
+          "status": "ok"
+        }
+      },
+      "valuation_unavailable": true,
+      "risk_status": "unknown_no_canonical_row",
+      "risk_flags": [],
+      "committee_approve": true,
+      "canonical_joined": false,
+      "direct_reason": "APPROVED"
+    },
+    {
+      "symbol": "603958.SH",
+      "name": "哈森股份",
+      "research_date": "2026-08-22",
+      "research_id": "R20260822FCFF47",
+      "leader_score": 1.0023716622312622,
+      "candidate_score": 0.8524958194326393,
+      "ml_prediction": 0.006338423998002785,
+      "profit_score": 1.0,
+      "event_score": 0.2571428571428571,
+      "news_score": null,
+      "research_rating": "BUY",
+      "rating_confidence": 0.65,
+      "trading_action": "SMALL_POSITION",
+      "role_scores": {
+        "bear": {
+          "score": -0.3,
+          "stance": "bear",
+          "status": "failed"
+        },
+        "valuation": {
+          "score": 0,
+          "stance": "neutral",
+          "status": "unavailable"
+        },
+        "event": {
+          "score": 0.5,
+          "stance": "bull",
+          "status": "ok"
+        },
+        "fundamental": {
+          "score": 0.25,
+          "stance": "neutral",
+          "status": "ok"
+        },
+        "quant": {
+          "score": 0.72,
+          "stance": "bull",
+          "status": "ok"
+        }
+      },
+      "valuation_unavailable": true,
+      "risk_status": "unknown_no_canonical_row",
+      "risk_flags": [],
+      "committee_approve": true,
+      "canonical_joined": false,
+      "direct_reason": "APPROVED"
+    }
+  ],
+  "roundtable": {
+    "runs_in_window_reports": 3,
+    "details": [
+      {
+        "as_of": "2026-08-21",
+        "source": "disabled",
+        "controls_trading": false,
+        "benchmark_only": true,
+        "schedule_reason": "sampled_skip_run_1_every_10",
+        "n_roles": 0
+      },
+      {
+        "as_of": "2026-08-24",
+        "source": "disabled",
+        "controls_trading": false,
+        "benchmark_only": true,
+        "schedule_reason": "sampled_skip_run_12_every_10",
+        "n_roles": 0
+      },
+      {
+        "as_of": "2026-08-25",
+        "source": "disabled",
+        "controls_trading": false,
+        "benchmark_only": true,
+        "schedule_reason": "sampled_skip_run_22_every_10",
+        "n_roles": 0
+      }
+    ],
+    "note": "Legacy roundtable is benchmark-only when controls_trading=false; canonical_source=platform_council."
+  },
+  "production_cycles": [
+    {
+      "as_of": "2026-08-21",
+      "cycle_id": "research_20260822_173908",
+      "candidate_count": 60,
+      "research_count": 20,
+      "buy_count": 0,
+      "paper_fill_count": 0
+    },
+    {
+      "as_of": "2026-08-24",
+      "cycle_id": "research_20260824_094859",
+      "candidate_count": 61,
+      "research_count": 20,
+      "buy_count": 0,
+      "paper_fill_count": 0
+    },
+    {
+      "as_of": "2026-08-24",
+      "cycle_id": "research_20260824_173241",
+      "candidate_count": 64,
+      "research_count": 20,
+      "buy_count": 0,
+      "paper_fill_count": 0
+    },
+    {
+      "as_of": "2026-08-24",
+      "cycle_id": "research_20260824_203849",
+      "candidate_count": 62,
+      "research_count": 20,
+      "buy_count": 0,
+      "paper_fill_count": 0
+    },
+    {
+      "as_of": "2026-08-24",
+      "cycle_id": "research_20260824_234902",
+      "candidate_count": 60,
+      "research_count": 20,
+      "buy_count": 0,
+      "paper_fill_count": 0
+    },
+    {
+      "as_of": "2026-08-24",
+      "cycle_id": "research_20260825_033805",
+      "candidate_count": 60,
+      "research_count": 20,
+      "buy_count": 0,
+      "paper_fill_count": 0
+    },
+    {
+      "as_of": "2026-08-24",
+      "cycle_id": "research_20260825_065322",
+      "candidate_count": 60,
+      "research_count": 20,
+      "buy_count": 0,
+      "paper_fill_count": 0
+    },
+    {
+      "as_of": "2026-08-25",
+      "cycle_id": "research_20260825_095032",
+      "candidate_count": null,
+      "research_count": 0,
+      "buy_count": 0,
+      "paper_fill_count": 0
+    },
+    {
+      "as_of": "2026-08-25",
+      "cycle_id": "research_20260825_100511",
+      "candidate_count": null,
+      "research_count": 0,
+      "buy_count": 0,
+      "paper_fill_count": 0
+    },
+    {
+      "as_of": "2026-08-25",
+      "cycle_id": "research_20260825_153253",
+      "candidate_count": 60,
+      "research_count": 20,
+      "buy_count": 0,
+      "paper_fill_count": 0
+    },
+    {
+      "as_of": "2026-08-25",
+      "cycle_id": "research_20260826_090009",
+      "candidate_count": 60,
+      "research_count": 20,
+      "buy_count": 0,
+      "paper_fill_count": 0
+    }
+  ],
+  "live_reconciliation": {
+    "note": "Live reconciliation is advisory; not a BUY gate.",
+    "pending_reassessments": 0,
+    "trigger_counts": {},
+    "state_counts_from_snapshot_meta": {}
+  },
+  "paper_account": {
+    "cash": null,
+    "equity": null,
+    "positions": 0,
+    "keys": [
+      "state",
+      "trades",
+      "updated_at"
+    ]
+  },
+  "keyword_counts": {
+    "BUY_READY": 0,
+    "BUY_rating_canonical": 0,
+    "STRONG_BUY_rating_canonical": 0,
+    "BUY_rating_snapshots": 5,
+    "STRONG_BUY_rating_snapshots": 0,
+    "SMALL_POSITION_canonical": 0,
+    "SMALL_POSITION_snapshots": 4,
+    "committee_approve_true": 0
+  },
+  "bottlenecks": [
+    {
+      "id": "COUNCIL_NO_BUY_RATING",
+      "severity": "P0",
+      "title": "Canonical path: Council/Chairman produced 0 BUY/STRONG_BUY",
+      "evidence": "Council entered=55, BUY+STRONG_BUY=0, ratings={'WATCH': 23, 'GATE_SKIP': 29, 'AVOID': 2, 'NEUTRAL': 1}",
+      "rank": "P0"
+    },
+    {
+      "id": "RISK_LIMIT_UP",
+      "severity": "P1",
+      "title": "RiskFilter systematically blocks limit-up opens",
+      "evidence": "limit_up flags=19, risk_status={'blocked': 19, 'pass': 7, 'skipped': 29}",
+      "rank": "P1"
+    },
+    {
+      "id": "RESEARCH_GATE_BUDGET",
+      "severity": "P1",
+      "title": "Research gate budget skips many names before full council",
+      "evidence": "gate reasons={'union_rejected:NOT_ENOUGH_EVIDENCE': 78, 'union_rejected:RANKING_CUTOFF': 118, 'DEEP_BUDGET': 23, 'union_rejected:INFERRED_DISCOVERY': 3, 'union_rejected:INDUSTRY_MAP_UNAVAILABLE': 2, 'union_rejected:NOT_LIMIT_UP_NEWS_ONLY': 7}",
+      "rank": "P2"
+    },
+    {
+      "id": "SNAPSHOT_BUY_NOT_IN_CANONICAL",
+      "severity": "P1",
+      "title": "Snapshots contain BUY ratings but dated report canonical_decisions do not",
+      "evidence": "snapshot BUY/STRONG_BUY=5, snapshot SMALL_POSITION=4, canonical BUY=0"
+    },
+    {
+      "id": "BUY_RATED_CASE_REASONS",
+      "severity": "P1",
+      "title": "Per-name reasons BUY-rated names did not become Final BUY",
+      "evidence": {
+        "APPROVED": 4,
+        "ACTION_NOT_SMALL_POSITION:WAIT_FOR_CONFIRMATION": 1
+      }
+    },
+    {
+      "id": "ML_HARD_THRESHOLD",
+      "severity": "P2",
+      "title": "ML prediction fails research_gate threshold on majority of candidates",
+      "evidence": "min_ml_prediction fail_rate=100.0%, ml_dist={'n': 0}"
+    }
+  ],
+  "answers": {
+    "why_no_buy": {
+      "id": "COUNCIL_NO_BUY_RATING",
+      "severity": "P0",
+      "title": "Canonical path: Council/Chairman produced 0 BUY/STRONG_BUY",
+      "evidence": "Council entered=55, BUY+STRONG_BUY=0, ratings={'WATCH': 23, 'GATE_SKIP': 29, 'AVOID': 2, 'NEUTRAL': 1}",
+      "rank": "P0"
+    },
+    "too_few_candidates": false,
+    "research_gate_too_strict": true,
+    "ml_too_strict": true,
+    "council_too_conservative": true,
+    "chairman_too_conservative": true,
+    "no_small_position": true,
+    "riskfilter_all_reject": false,
+    "committee_approve_issue": false,
+    "paper_cash_lot_issue": true,
+    "live_recon_mis_kill": false,
+    "buy_ready_without_approve": false,
+    "roundtable_vs_council": {
+      "canonical_source": "platform_council",
+      "roundtable_controls_trading": false
+    },
+    "ml_dist": {
+      "n": 0
+    },
+    "candidate_dist": {
+      "n": 60,
+      "min": 0.16717,
+      "p25": 0.406536,
+      "p50": 0.488933,
+      "p75": 0.681095,
+      "p90": 0.827913,
+      "p95": 0.87512,
+      "max": 1.08975,
+      "mean": 0.52102
+    },
+    "n_buy_rated_cases_explained": 5,
+    "live_recon_summary": {
+      "pending": 0,
+      "states": {}
+    }
+  }
+}

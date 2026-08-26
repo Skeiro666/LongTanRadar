@@ -225,6 +225,12 @@ def build_parser() -> argparse.ArgumentParser:
     serve = sub.add_parser("serve", parents=[common], help="Start FastAPI for the React UI")
     serve.add_argument("--host", default="127.0.0.1")
     serve.add_argument("--port", type=int, default=8000)
+    audit = sub.add_parser(
+        "audit-buy-pipeline",
+        parents=[common],
+        help="Read-only 7-day BUY funnel audit (no threshold/prompt changes)",
+    )
+    audit.add_argument("--days", type=int, default=7, help="Lookback calendar days ending at latest report as_of")
     return p
 
 
@@ -265,6 +271,25 @@ def main(argv: list[str] | None = None) -> None:
         raise SystemExit(0)
     if args.command == "serve":
         raise SystemExit(cmd_serve(cfg, host=args.host, port=args.port))
+    if args.command == "audit-buy-pipeline":
+        from ashare.services.buy_pipeline_audit import run_buy_pipeline_audit, write_audit_outputs
+
+        result = run_buy_pipeline_audit(cfg, days=int(args.days))
+        paths = write_audit_outputs(cfg, result)
+        summary = {
+            "window": result.get("window"),
+            "Final_BUY": (result.get("layer_counts") or {}).get("Final_BUY"),
+            "research_rating": (result.get("layer_counts") or {}).get("research_rating"),
+            "trading_action": (result.get("layer_counts") or {}).get("trading_action"),
+            "committee_approve": (result.get("layer_counts") or {}).get("committee_approve"),
+            "bottlenecks": [
+                {"rank": b.get("rank"), "title": b.get("title"), "evidence": b.get("evidence")}
+                for b in (result.get("bottlenecks") or [])[:3]
+            ],
+            "outputs": paths,
+        }
+        print(json.dumps(summary, indent=2, ensure_ascii=False, default=str))
+        raise SystemExit(0)
     parser.error(f"Unknown command: {args.command}")
 
 

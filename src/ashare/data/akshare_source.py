@@ -230,48 +230,77 @@ def fetch_daily(symbol: str, start: str, end: str, st_codes: set[str] | None = N
     return pd.DataFrame()
 
 
-def fetch_spot_prices(symbols: list[str]) -> dict[str, float]:
-    """Latest trade price via Sina HQ (batch)."""
+def fetch_spot_quotes(symbols: list[str]) -> dict[str, dict[str, Any]]:
+    """Batch Sina HQ quotes: price / prev_close / open / high / low / name.
+
+    Does not mutate research or daily caches — live overlay only.
+    """
     codes = [to_symbol(s) for s in symbols]
     if not codes:
         return {}
-    url = "https://hq.sinajs.cn/list=" + ",".join(_sina_code(s) for s in codes)
-    try:
-        resp = requests.get(
-            url,
-            headers={"Referer": "https://finance.sina.com.cn", "User-Agent": "Mozilla/5.0"},
-            timeout=10,
-        )
-        resp.encoding = "gbk"
-        text = resp.text
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("Sina spot fetch failed: %s", exc)
-        return {}
-
-    out: dict[str, float] = {}
-    for line in text.splitlines():
-        # var hq_str_sh601166="兴业银行,open,...,price,..."
-        if "hq_str_" not in line or "=" not in line:
-            continue
-        left, _, right = line.partition("=")
-        key = left.split("_")[-1].strip()
-        payload = right.strip().strip(";").strip('"')
-        if not payload:
-            continue
-        parts = payload.split(",")
-        if len(parts) < 4:
-            continue
+    # Sina list URL length is finite; chunk to stay safe with large Focus sets.
+    chunk_size = 80
+    out: dict[str, dict[str, Any]] = {}
+    headers = {"Referer": "https://finance.sina.com.cn", "User-Agent": "Mozilla/5.0"}
+    for i in range(0, len(codes), chunk_size):
+        batch = codes[i : i + chunk_size]
+        url = "https://hq.sinajs.cn/list=" + ",".join(_sina_code(s) for s in batch)
         try:
-            px = float(parts[3])
-        except ValueError:
+            resp = requests.get(url, headers=headers, timeout=10)
+            resp.encoding = "gbk"
+            text = resp.text
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Sina spot fetch failed: %s", exc)
             continue
-        if px <= 0:
-            continue
-        # key like sh601166
-        if len(key) >= 8:
+
+        for line in text.splitlines():
+            # var hq_str_sh601166="兴业银行,open,prev_close,price,high,low,..."
+            if "hq_str_" not in line or "=" not in line:
+                continue
+            left, _, right = line.partition("=")
+            key = left.split("_")[-1].strip()
+            payload = right.strip().strip(";").strip('"')
+            if not payload:
+                continue
+            parts = payload.split(",")
+            if len(parts) < 4:
+                continue
+            try:
+                open_px = float(parts[1]) if parts[1] else 0.0
+                prev_close = float(parts[2]) if parts[2] else 0.0
+                px = float(parts[3])
+                high = float(parts[4]) if len(parts) > 4 and parts[4] else 0.0
+                low = float(parts[5]) if len(parts) > 5 and parts[5] else 0.0
+            except ValueError:
+                continue
+            if px <= 0:
+                continue
+            if len(key) < 8:
+                continue
             ex, num = key[:2].upper(), key[2:]
-            out[f"{num}.{ex}"] = px
+            sym = f"{num}.{ex}"
+            name = str(parts[0] or "").strip()
+            change_pct = None
+            if prev_close > 0:
+                change_pct = ((px / prev_close) - 1.0) * 100.0
+            out[sym] = {
+                "symbol": sym,
+                "name": name,
+                "price": px,
+                "prev_close": prev_close,
+                "open": open_px,
+                "high": high,
+                "low": low,
+                "change_pct": change_pct,
+                "is_st": ("ST" in name.upper()) if name else False,
+            }
     return out
+
+
+def fetch_spot_prices(symbols: list[str]) -> dict[str, float]:
+    """Latest trade price via Sina HQ (batch). Compatible wrapper over fetch_spot_quotes."""
+    quotes = fetch_spot_quotes(symbols)
+    return {sym: float(q["price"]) for sym, q in quotes.items() if float(q.get("price") or 0) > 0}
 
 
 CSI300_INDEX_SYMBOL = "IDX.CSI300"

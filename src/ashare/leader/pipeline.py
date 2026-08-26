@@ -190,21 +190,59 @@ class LeaderPipeline:
         }
 
     def _timeline(self, row: dict[str, Any]) -> list[dict[str, Any]]:
+        stage_zh = {
+            "EARLY": "早期",
+            "TREND": "趋势",
+            "ACCELERATION": "加速",
+            "EXTREME": "极端",
+            "DISTRIBUTION": "派发",
+            "BREAKDOWN": "破位",
+        }
+        phase_zh = {
+            "NONE": "无",
+            "WAIT": "等待",
+            "PULLBACK_WATCH": "回踩观察",
+            "DIVERGENCE": "分歧",
+            "STABILIZATION": "企稳",
+            "REACCELERATION": "再加速",
+            "BUY_CANDIDATE": "买点候选",
+        }
+        timing_zh = {
+            "BUY_READY": "可买入",
+            "BUY_CANDIDATE": "买点候选",
+            "WAIT": "等待",
+            "PASS": "放弃",
+        }
         steps: list[dict[str, Any]] = []
         board = int(row.get("board_count") or 0)
         if board:
-            steps.append({"event": f"{board}板", "detail": f"leader={row.get('leader_score')}"})
+            steps.append({"event": f"{board}板", "detail": f"龙头分={row.get('leader_score')}"})
         st = str(row.get("stage") or "")
         if st:
-            steps.append({"event": st, "detail": f"chase={row.get('chase_score')}"})
+            steps.append(
+                {
+                    "event": stage_zh.get(st, st),
+                    "detail": f"追涨风险={row.get('chase_score')}",
+                }
+            )
         if st == "EXTREME":
-            steps.append({"event": "WAIT", "detail": "extreme_not_chase"})
+            steps.append({"event": "等待", "detail": "极端阶段，不追高"})
         phase = str(row.get("reentry_phase") or "NONE")
         if phase and phase not in {"NONE", "WAIT"}:
-            steps.append({"event": phase, "detail": f"reentry={row.get('reentry_score')}"})
+            steps.append(
+                {
+                    "event": phase_zh.get(phase, phase),
+                    "detail": f"再入场分={row.get('reentry_score')}",
+                }
+            )
         ta = str(row.get("trade_timing_action") or "")
         if ta:
-            steps.append({"event": ta, "detail": row.get("status_reason") or row.get("timing_reason")})
+            steps.append(
+                {
+                    "event": timing_zh.get(ta, ta),
+                    "detail": row.get("status_reason") or row.get("timing_reason"),
+                }
+            )
         return steps
 
     def should_skip_news_llm(self, row: dict[str, Any], *, payload_hash: str | None = None) -> bool:

@@ -203,6 +203,8 @@ data:
   refresh_lag_days: 5
   screen_hist_days: 420
   history_expand_batch: 900
+  # LeaderMonitor Live Quote Overlay: mark quotes STALE after this age
+  live_quote_stale_seconds: 90
 
 monitor:
   log_dir: logs

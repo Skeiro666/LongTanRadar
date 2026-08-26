@@ -50,6 +50,23 @@ def board_limit_pct(symbol: str, is_st: bool = False, as_of: str | None = None) 
     return 10.0
 
 
+def limit_bound_prices(
+    prev_close: float,
+    symbol: str,
+    *,
+    is_st: bool = False,
+    as_of: str | None = None,
+) -> tuple[float, float]:
+    """Return (limit_up_price, limit_down_price) using board_limit_pct + 2dp round."""
+    px = float(prev_close)
+    if px <= 0:
+        return 0.0, 0.0
+    lim = board_limit_pct(symbol, is_st=is_st, as_of=as_of)
+    up = round(px * (1.0 + lim / 100.0), 2)
+    down = round(px * (1.0 - lim / 100.0), 2)
+    return up, down
+
+
 def round_lot(shares: int, lot_size: int = 100) -> int:
     if shares <= 0:
         return 0

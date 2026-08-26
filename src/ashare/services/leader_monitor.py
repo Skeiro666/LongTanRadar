@@ -147,6 +147,24 @@ def build_leader_monitor(cfg: dict[str, Any], report: dict[str, Any] | None = No
 
     buy_ready = buckets["BUY_READY"]
     dashboard = focus.get("dashboard") or {}
+    research_date = report.get("as_of")
+    # Live Quote Overlay: attach live_* only; never rewrite research fields.
+    try:
+        from ashare.services.live_quote_overlay import attach_live_quote_overlay
+
+        for bucket_rows in buckets.values():
+            for row in bucket_rows:
+                if research_date and not row.get("research_date"):
+                    row["research_date"] = research_date
+            attach_live_quote_overlay(bucket_rows, cfg=cfg, research_date=research_date)
+    except Exception:
+        # Overlay failure must not break monitor / research payload.
+        for bucket_rows in buckets.values():
+            for row in bucket_rows:
+                if research_date and not row.get("research_date"):
+                    row["research_date"] = research_date
+                row.setdefault("live_status", "UNKNOWN")
+
     return {
         "enabled": bool(lc.get("enabled", True)),
         "research_only": bool(lc.get("research_only", True)),
@@ -157,12 +175,13 @@ def build_leader_monitor(cfg: dict[str, Any], report: dict[str, Any] | None = No
         "message": (
             "当前没有满足交易条件的龙头"
             if not buy_ready
-            else f"有 {len(buy_ready)} 只龙头进入 BUY_READY"
+            else f"有 {len(buy_ready)} 只龙头进入「可买入」"
         ),
         "buckets": buckets,
         "focus_watchlist": list(watch.values()),
         "stage_performance": dashboard.get("stage_performance") or {},
         "board_performance": dashboard.get("board_performance") or {},
         "focus_stats": focus.get("focus_stats") or {},
-        "as_of": report.get("as_of"),
+        "as_of": research_date,
+        "research_date": research_date,
     }

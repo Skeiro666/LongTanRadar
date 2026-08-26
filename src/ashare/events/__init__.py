@@ -115,7 +115,15 @@ class EventEngine:
             score = self.score(evs)
             item = dict(r)
             item["events"] = [e.to_dict() for e in evs]
-            item["event"] = {"score": score, "events": item["events"]}
+            # No detected events → valid ZERO (not UNAVAILABLE). Engine failure sets status elsewhere.
+            item["event"] = {
+                "score": score,
+                "events": item["events"],
+                "available": True,
+                "status": "ZERO" if abs(score) < 1e-15 else "VALID",
+            }
             item["event_score"] = score
+            item["event_status"] = "ZERO" if abs(score) < 1e-15 else "VALID"
+            item["event_score_available"] = True
             out.append(item)
         return out

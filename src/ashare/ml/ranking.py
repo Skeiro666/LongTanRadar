@@ -141,25 +141,38 @@ class MLRankingEngine:
 
         model = self.model or load_model(self.cfg)
         if model is None:
+            out_none = []
             for r in rows:
-                r = dict(r)
-                r["ml_prediction"] = None
-                r["ml_status"] = "no_model"
-            return rows
+                item = dict(r)
+                item["ml_prediction"] = None
+                item["ml_status"] = "no_model"
+                item["ml_prediction_available"] = False
+                out_none.append(item)
+            logger.info("ML_UNAVAILABLE reason=no_model n=%d", len(out_none))
+            return out_none
         feats = self.feature_cols or list(getattr(model, "feature_name_", []) or [])
         if not feats:
             feats = self.factor_engine.catalog.available_names()
         out = []
+        n_ok = n_fail = 0
         for r in rows:
             fdict = r.get("factors") or {}
             x = np.array([[float(fdict.get(c) or 0.0) for c in feats]], dtype=float)
             x = np.nan_to_num(x, nan=0.0, posinf=0.0, neginf=0.0)
+            item = dict(r)
             try:
                 pred = float(model.predict(x)[0])
-            except Exception:  # noqa: BLE001
-                pred = 0.0
-            item = dict(r)
-            item["ml_prediction"] = pred
-            item["ml_status"] = "ok"
+                item["ml_prediction"] = pred
+                item["ml_status"] = "ok"
+                item["ml_prediction_available"] = True
+                n_ok += 1
+            except Exception as exc:  # noqa: BLE001
+                # Never coerce ML failure to 0 — that masquerades as a real weak signal.
+                logger.warning("ML_FAILED symbol=%s err=%s", item.get("symbol"), exc)
+                item["ml_prediction"] = None
+                item["ml_status"] = "failed"
+                item["ml_prediction_available"] = False
+                n_fail += 1
             out.append(item)
+        logger.info("ML_AVAILABLE n_ok=%d n_fail=%d", n_ok, n_fail)
         return out

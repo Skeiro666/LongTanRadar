@@ -91,25 +91,65 @@ class PortfolioEngine:
 
 
 class RiskFilterEngine:
-    """Pre-trade filters beyond RiskGuard caps."""
+    """Pre-trade filters beyond RiskGuard caps. status: PASS | BLOCK | UNKNOWN."""
 
     def __init__(self, cfg: dict[str, Any] | None = None) -> None:
         self.cfg = cfg or {}
 
-    def allow_open(self, bar_like: dict[str, Any]) -> tuple[bool, str]:
-        if bar_like.get("is_st"):
-            return False, "st"
-        if bar_like.get("is_halt"):
-            return False, "halt"
-        if bar_like.get("limit_up"):
-            return False, "limit_up"
-        amt = float(bar_like.get("amount") or 0)
-        if amt and amt < float((self.cfg.get("pool") or {}).get("min_amount") or 0):
-            return False, "liquidity"
+    def evaluate(self, bar_like: dict[str, Any] | None) -> dict[str, Any]:
+        """Structured risk result — never confuse UNKNOWN with BLOCK."""
+        if bar_like is None:
+            return {
+                "status": "UNKNOWN",
+                "allow": False,
+                "reasons": ["BAR_DATA_UNKNOWN"],
+                "reason": "BAR_DATA_UNKNOWN",
+            }
+        reasons: list[str] = []
+        if bar_like.get("is_st") is True:
+            reasons.append("ST_BLOCK")
+        if bar_like.get("is_halt") is True:
+            reasons.append("HALT_BLOCK")
+        if bar_like.get("limit_up") is True:
+            # Strategy does not chase sealed limit-up; this is NO_ENTRY today, not permanent reject.
+            reasons.append("LIMIT_UP_NO_ENTRY")
+        amt = bar_like.get("amount")
+        min_amt = float((self.cfg.get("pool") or {}).get("min_amount") or 0)
+        if amt is None and min_amt > 0:
+            # liquidity unknown — do not auto-BLOCK unless other hard flags
+            if not reasons:
+                return {
+                    "status": "UNKNOWN",
+                    "allow": False,
+                    "reasons": ["LIQUIDITY_UNKNOWN"],
+                    "reason": "LIQUIDITY_UNKNOWN",
+                }
+        else:
+            try:
+                amt_f = float(amt or 0)
+            except Exception:  # noqa: BLE001
+                amt_f = 0.0
+            if amt_f and min_amt and amt_f < min_amt:
+                reasons.append("LIQUIDITY_LOW")
         vol = float((bar_like.get("factors") or {}).get("volatility_20d") or 0)
         if vol > 0.12:
-            return False, "extreme_vol"
-        return True, "ok"
+            reasons.append("EXTREME_VOL")
+        if reasons:
+            # Backward-compatible primary reason code
+            primary = reasons[0]
+            legacy = {
+                "ST_BLOCK": "st",
+                "HALT_BLOCK": "halt",
+                "LIMIT_UP_NO_ENTRY": "limit_up",
+                "LIQUIDITY_LOW": "liquidity",
+                "EXTREME_VOL": "extreme_vol",
+            }.get(primary, primary)
+            return {"status": "BLOCK", "allow": False, "reasons": reasons, "reason": legacy}
+        return {"status": "PASS", "allow": True, "reasons": [], "reason": "ok"}
+
+    def allow_open(self, bar_like: dict[str, Any]) -> tuple[bool, str]:
+        ev = self.evaluate(bar_like)
+        return bool(ev["allow"]), str(ev["reason"])
 
 
 def market_regime(index_closes: list[float] | None = None, panel_mom20: list[float] | None = None) -> str:

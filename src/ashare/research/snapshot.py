@@ -66,13 +66,29 @@ def build_snapshot(candidate: dict[str, Any], cfg: dict[str, Any] | None = None)
     research_cfg = load_yaml_config(cfg, "research")
     snap_cfg = dict(research_cfg.get("snapshot") or {})
     rid = f"R{datetime.now(timezone.utc).strftime('%Y%m%d')}" + uuid4().hex[:6].upper()
+    as_of = (
+        candidate.get("as_of")
+        or candidate.get("research_date")
+        or (candidate.get("versions") or {}).get("as_of")
+        or datetime.now(timezone.utc).date().isoformat()
+    )
+    if hasattr(as_of, "isoformat"):
+        as_of = as_of.isoformat()
+    as_of = str(as_of)[:10]
+    from ashare.research.signal_contract import attach_signal_contract, serialize_signal_fields
+
+    attach_signal_contract(candidate)
+    sig_fields = serialize_signal_fields(candidate)
     snap = {
         "research_id": rid,
         "symbol": candidate.get("symbol"),
         "name": candidate.get("name"),
         "research_time": datetime.now(timezone.utc).isoformat(),
         "snapshot_time": datetime.now(timezone.utc).isoformat(),
+        "research_date": as_of,
+        "as_of": as_of,
         "versions": {
+            "as_of": as_of,
             "factor_version": snap_cfg.get("factor_version") or candidate.get("factor_version") or "factor_v1",
             "news_version": ((candidate.get("news_package") or {}).get("versions") or {}).get("news_data_version")
             or snap_cfg.get("news_version")
@@ -89,6 +105,8 @@ def build_snapshot(candidate: dict[str, Any], cfg: dict[str, Any] | None = None)
             "factor_score": candidate.get("candidate_score"),
             "leader_score": candidate.get("leader_score"),
             "ml_prediction": candidate.get("ml_prediction"),
+            "ml_status": candidate.get("ml_status"),
+            "ml_prediction_available": candidate.get("ml_prediction_available"),
             "momentum_score": candidate.get("score_momentum"),
             "relative_strength_score": candidate.get("score_relative_strength"),
             "value_score": candidate.get("score_value"),
@@ -96,6 +114,30 @@ def build_snapshot(candidate: dict[str, Any], cfg: dict[str, Any] | None = None)
             "liquidity_score": candidate.get("score_liquidity"),
             "breakout_score": candidate.get("score_breakout"),
             "factors": candidate.get("factors") or {},
+            "board_count": candidate.get("board_count"),
+            "chase_score": candidate.get("chase_score"),
+        },
+        "signals": candidate.get("signals") or sig_fields.get("signals") or {},
+        "data_quality": candidate.get("data_quality") or sig_fields.get("data_quality"),
+        "profit_score": sig_fields.get("profit_score", candidate.get("profit_score")),
+        "profit_status": candidate.get("profit_status") or sig_fields.get("profit_score_status"),
+        "event_score": sig_fields.get("event_score", candidate.get("event_score")),
+        "event_status": candidate.get("event_status") or sig_fields.get("event_score_status"),
+        "news_score": sig_fields.get("news_score", candidate.get("news_score")),
+        "news_status": candidate.get("news_status") or sig_fields.get("news_score_status"),
+        # serialize_signal_fields uses {name}_status; keep both for consumers
+        "ml_prediction_status": sig_fields.get("ml_prediction_status"),
+        "profit_score_status": sig_fields.get("profit_score_status"),
+        "event_score_status": sig_fields.get("event_score_status"),
+        "news_score_status": sig_fields.get("news_score_status"),
+        "trade_timing_action": candidate.get("trade_timing_action"),
+        "leader": {
+            "lifecycle": candidate.get("lifecycle"),
+            "stage": candidate.get("stage"),
+            "chase_score": candidate.get("chase_score"),
+            "trade_timing_score": candidate.get("trade_timing_score"),
+            "trade_timing_action": candidate.get("trade_timing_action"),
+            "board_count": candidate.get("board_count"),
         },
         "profit_inflection": candidate.get("profit_inflection") or {},
         "event": candidate.get("event") or {"score": candidate.get("event_score"), "events": candidate.get("events") or []},

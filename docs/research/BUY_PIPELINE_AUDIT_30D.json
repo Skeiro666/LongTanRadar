@@ -1,9 +1,9 @@
 {
-  "audit_version": "buy_pipeline_audit_v7d",
+  "audit_version": "buy_pipeline_audit_v30d",
   "window": {
-    "start": "2026-08-19",
+    "start": "2026-07-27",
     "end": "2026-08-25",
-    "days": 7
+    "days": 30
   },
   "data_coverage": {
     "dated_reports": [

@@ -12,6 +12,7 @@ from ashare.db.pg import database_url_from_env, get_engine
 from ashare.db.redis_client import cache_get, cache_set, redis_url_from_env
 from ashare.factors.score import score_candidates
 from ashare.pool.builder import build_leader_pool
+from ashare.research.signal_contract import serialize_signal_fields
 from ashare.symbols import to_symbol
 
 logger = logging.getLogger("ashare.services.research")
@@ -266,6 +267,8 @@ def run_research(cfg: dict[str, Any], top_n: int | None = None) -> dict[str, Any
             )
             for r in uni.get("research_universe") or []:
                 r["market_regime"] = regime
+                r["as_of"] = as_of.isoformat()
+                r["research_date"] = as_of.isoformat()
             session = ResearchSessionEngine(cfg)
             with progress.step("council", "Council 多角色研究", note="串行逐股 · 角色内并行"):
                 platform_reports = session.run_pool(uni.get("research_universe") or [], panel=panel)
@@ -460,6 +463,8 @@ def run_research(cfg: dict[str, Any], top_n: int | None = None) -> dict[str, Any
                     "gate": r.get("gate"),
                     "trigger": r.get("trigger"),
                     "research_hypotheses": r.get("research_hypotheses") or [],
+                    "data_quality": r.get("data_quality"),
+                    **serialize_signal_fields(r),
                 }
                 for r in (uni.get("research_universe") or [])
             ],

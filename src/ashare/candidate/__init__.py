@@ -117,7 +117,9 @@ class CandidateEngine:
                 **r,
                 **{k: v for k, v in f.items() if k != "symbol"},
                 "candidate_sources": _pool_discovery_sources(r),
-                "news_score": 0.0,
+                "news_score": None,
+                "news_status": "MISSING",
+                "news_score_available": False,
                 "candidate_score": 0.45 * leader + 0.35 * pi_score + 0.20 * ev_score,
                 "trigger": self._trigger(r, leader, pi_score, ev_score),
                 "in_council": bool(r.get("in_council")),
@@ -168,7 +170,9 @@ class CandidateEngine:
                 item["candidate_sources"] = sorted(srcs)
                 item["news_discovery"] = nc
                 item["price_in_risk"] = nc.get("price_in_risk") or "UNKNOWN"
-                item["news_score"] = max(float(item.get("news_score") or 0), news_proxy)
+                item["news_score"] = max(float(item.get("news_score") or 0), news_proxy) if item.get("news_score") is not None else news_proxy
+                item["news_status"] = "ZERO" if abs(float(item["news_score"])) < 1e-15 else "VALID"
+                item["news_score_available"] = True
                 item["research_hypotheses"] = hyps
             else:
                 f = by_f.get(sym) or {}
@@ -184,8 +188,13 @@ class CandidateEngine:
                     "price_in_risk": nc.get("price_in_risk") or "UNKNOWN",
                     "research_hypotheses": hyps,
                     "news_score": news_proxy,
+                    "news_status": "ZERO" if abs(news_proxy) < 1e-15 else "VALID",
+                    "news_score_available": True,
                     "event_score": abs(news_proxy),
-                    "profit_inflection": {"score": 0.0, "quality": "unavailable", "available": False},
+                    "profit_inflection": {"score": None, "quality": "unavailable", "available": False},
+                    "profit_score": None,
+                    "profit_status": "UNAVAILABLE",
+                    "profit_score_available": False,
                     **{k: v for k, v in f.items() if k != "symbol"},
                     "leader_score": leader,
                     "trigger": {
@@ -302,16 +311,25 @@ class CandidateEngine:
             if (tier == "rules_only" and not r.get("merged_from_focus")) or (
                 skip_llm and not r.get("news_trigger")
             ):
+                prior_news = r.get("news_score")
                 pkg = {
                     "news_data_incomplete": True,
-                    "net_event_score": float(r.get("news_score") or 0),
+                    "net_event_score": prior_news if prior_news is not None else None,
                     "legacy_headlines": [],
                     "news_tier": tier,
                     "skipped_llm": True,
+                    "status": "UNAVAILABLE" if prior_news is None else "SKIPPED_LLM",
                 }
                 r["news_package"] = pkg
                 r["news_data_incomplete"] = True
                 r["compact_news"] = None
+                if prior_news is None:
+                    r["news_status"] = "UNAVAILABLE"
+                    r["news_score_available"] = False
+                    r["news_score"] = None
+                else:
+                    r["news_status"] = "ZERO" if abs(float(prior_news)) < 1e-15 else "VALID"
+                    r["news_score_available"] = True
                 continue
             try:
                 pkg = news_eng.collect_stock(
@@ -321,19 +339,39 @@ class CandidateEngine:
                     persist=True,
                 )
             except Exception:  # noqa: BLE001
-                pkg = {"news_data_incomplete": True, "net_event_score": 0.0, "legacy_headlines": []}
+                pkg = {
+                    "news_data_incomplete": True,
+                    "net_event_score": None,
+                    "legacy_headlines": [],
+                    "status": "UNAVAILABLE",
+                    "failed": True,
+                }
             r["news_package"] = pkg
             r["news_data_incomplete"] = bool(pkg.get("news_data_incomplete"))
             r["compact_news"] = pkg.get("compact_news_package")
             r["quant_top_n_at_signal"] = r["symbol"] in quant_top_n
+            if pkg.get("failed"):
+                r["news_status"] = "UNAVAILABLE"
+                r["news_score_available"] = False
+                r["news_score"] = None
             intel0 = (pkg.get("news_intelligence") or [None])[0] if pkg.get("news_intelligence") else None
             if intel0:
                 r["news_intelligence"] = intel0
                 r["news_intelligence_score"] = float(intel0.get("news_intelligence_score") or 0)
                 r["evidence_direction"] = str(intel0.get("direction") or "unknown")
-            net = float(pkg.get("net_event_score") or 0)
-            if net:
+            if pkg.get("net_event_score") is not None and not pkg.get("failed"):
+                net = float(pkg.get("net_event_score") or 0)
                 r["news_score"] = net
+                r["news_status"] = "ZERO" if abs(net) < 1e-15 else "VALID"
+                r["news_score_available"] = True
+            elif not r.get("news_status"):
+                if r.get("news_score") is not None:
+                    r["news_status"] = "ZERO" if abs(float(r.get("news_score") or 0)) < 1e-15 else "VALID"
+                    r["news_score_available"] = True
+                else:
+                    r["news_status"] = "UNAVAILABLE"
+                    r["news_score_available"] = False
+                    r["news_score"] = None
             from ashare.news.conflict import compute_news_conflict
 
             conflict = compute_news_conflict(
@@ -350,7 +388,11 @@ class CandidateEngine:
             r["candidate_score"] = compute_candidate_score(r, cw, ml_weight=ml_weight)
             tier = str(r.get("council_tier") or ("full" if r.get("in_council") else "scan"))
             r["in_council"] = tier == "full"
-        research.sort(key=lambda x: x["candidate_score"], reverse=True)
+        from ashare.research.signal_contract import attach_signal_contract
+
+        for r in research:
+            attach_signal_contract(r)
+        research.sort(key=lambda x: float(x.get("candidate_score") or 0), reverse=True)
         return {
             "pool_size": len(pool.get("candidates") or []),
             "after_events": len(rows),

@@ -114,12 +114,21 @@ class ProfitInflectionEngine:
             pi = self.score_from_forecast_meta(r)
             item = dict(r)
             item["profit_inflection"] = {
-                "score": pi.score,
+                "score": pi.score if pi.available else None,
                 "quality": pi.quality,
                 "reason": pi.reason,
                 "components": pi.components,
                 "available": pi.available,
             }
+            # Explicit contract: unavailable ≠ 0
+            if pi.available:
+                item["profit_score"] = float(pi.score)
+                item["profit_status"] = "VALID" if abs(float(pi.score)) > 1e-15 else "ZERO"
+                item["profit_score_available"] = True
+            else:
+                item["profit_score"] = None
+                item["profit_status"] = "UNAVAILABLE"
+                item["profit_score_available"] = False
             item["profit_inflection_priority"] = 0 if pi.quality == "D" else (1 if pi.available else 0)
             out.append(item)
         return out

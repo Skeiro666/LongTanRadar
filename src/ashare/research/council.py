@@ -133,21 +133,24 @@ class AICouncilEngine:
 
     def _heuristic(self, role_id: str, snapshot: dict[str, Any], ver: str, status: str) -> dict[str, Any]:
         q = float((snapshot.get("quant") or {}).get("leader_score") or 0)
-        ml = float((snapshot.get("quant") or {}).get("ml_prediction") or 0)
+        ml_raw = (snapshot.get("quant") or {}).get("ml_prediction")
+        ml = float(ml_raw) if ml_raw is not None else None
         if role_id == "bear":
-            score = -0.3 if q > 0.5 else 0.0
-            stance = "bear"
-        elif role_id == "valuation" and not snapshot.get("value_available", False):
+            return self._bear_heuristic(snapshot, q, ml, ver, status)
+        if role_id == "valuation" and not snapshot.get("value_available", False):
             return {
                 "role": role_id,
-                "score": 0.0,
+                "score": None,
                 "stance": "neutral",
-                "points": ["估值数据不可用"],
+                "points": ["估值数据不可用 — 非看空证据"],
                 "status": "unavailable",
                 "prompt_version": ver,
                 "source": "heuristic",
+                "data_quality": "FAILED",
+                "evidence_count": 0,
+                "confidence": 0.0,
             }
-        elif role_id == "event":
+        if role_id == "event":
             hyps = (snapshot.get("research_intelligence") or {}).get("research_hypotheses") or snapshot.get(
                 "research_hypotheses"
             ) or []
@@ -162,19 +165,90 @@ class AICouncilEngine:
                 "status": status,
                 "prompt_version": ver,
                 "source": "heuristic",
+                "evidence_count": len(hyps),
+                "confidence": 0.35 if hyps else 0.15,
             }
-        else:
-            score = max(-1.0, min(1.0, 0.5 * q + 5 * ml))
-            stance = "bull" if score > 0.15 else ("bear" if score < -0.15 else "neutral")
+        ml_term = 5.0 * ml if ml is not None else 0.0
+        score = max(-1.0, min(1.0, 0.5 * q + ml_term))
+        stance = "bull" if score > 0.15 else ("bear" if score < -0.15 else "neutral")
         return {
             "role": role_id,
             "score": score,
             "stance": stance,
             "points": [f"heuristic {role_id}"],
-            "top_risks": ["数据不全", "启发式降级"] if role_id == "bear" else [],
+            "top_risks": [],
             "status": status,
             "prompt_version": ver,
             "source": "heuristic",
+            "evidence_count": 1 if q or ml is not None else 0,
+            "confidence": 0.4,
+        }
+
+    def _bear_heuristic(
+        self,
+        snapshot: dict[str, Any],
+        q: float,
+        ml: float | None,
+        ver: str,
+        status: str,
+    ) -> dict[str, Any]:
+        """
+        Bear must find concrete risks. Missing valuation / missing ML ≠ bearish.
+        No evidence → neutral 0 (never force -0.75).
+        """
+        risks: list[str] = []
+        evidence = 0
+        score = 0.0
+        news = snapshot.get("news_package") or {}
+        net = news.get("net_event_score")
+        if net is not None and float(net) < -0.2:
+            risks.append("负面新闻/事件得分")
+            score -= 0.25
+            evidence += 1
+        chase = float(snapshot.get("chase_score") or (snapshot.get("quant") or {}).get("chase_score") or 0)
+        if chase >= 0.7:
+            risks.append("追高/拥挤风险")
+            score -= 0.2
+            evidence += 1
+        board = int(snapshot.get("board_count") or (snapshot.get("quant") or {}).get("board_count") or 0)
+        if board >= 3:
+            risks.append("高位连板见顶风险")
+            score -= 0.15
+            evidence += 1
+        pir = str(snapshot.get("price_in_risk") or "UNKNOWN").upper()
+        if pir in {"HIGH", "EXTREME"}:
+            risks.append(f"price_in_risk={pir}")
+            score -= 0.2
+            evidence += 1
+        # Crowding proxy: very high leader without supporting event/news
+        event_sc = (snapshot.get("event") or {}).get("score")
+        if q > 0.75 and (event_sc is None or float(event_sc or 0) < 0.1):
+            risks.append("高leader缺乏事件支撑")
+            score -= 0.1
+            evidence += 1
+        if snapshot.get("value_available") is False:
+            # Explicit: unavailable valuation is NOT bearish evidence
+            pass
+        score = max(-1.0, min(1.0, score))
+        if evidence == 0:
+            stance = "neutral"
+            score = 0.0
+            points = ["无明显空头证据 — 保持中性"]
+        else:
+            stance = "bear" if score < -0.05 else "neutral"
+            points = [f"heuristic bear · evidence={evidence}"]
+        return {
+            "role": "bear",
+            "score": score,
+            "stance": stance,
+            "points": points,
+            "top_risks": risks,
+            "status": status,
+            "prompt_version": ver,
+            "source": "heuristic",
+            "evidence_count": evidence,
+            "confidence": min(0.7, 0.2 + 0.1 * evidence),
+            "data_quality": "PARTIAL" if evidence else "DEGRADED",
         }
 
     def run_parallel(
@@ -293,7 +367,7 @@ class ChairmanEngine:
 
                 ok, budget_reason = budget_allows_llm_call(get_cost_tracker(self.cfg).cycle_summary(), self.cfg)
                 if not ok:
-                    return self._heuristic(opinions, missing, ver)
+                    return self._heuristic(opinions, missing, ver, snapshot=snapshot)
             except Exception:  # noqa: BLE001
                 pass
             factor_version = str((load_yaml_config(self.cfg, "research").get("snapshot") or {}).get("factor_version") or "factor_v1")
@@ -344,37 +418,81 @@ class ChairmanEngine:
                 return data
             except Exception as exc:  # noqa: BLE001
                 logger.warning("chairman failed: %s", exc)
-        return self._heuristic(opinions, missing, ver)
+        return self._heuristic(opinions, missing, ver, snapshot=snapshot)
 
-    def _heuristic(self, opinions: dict[str, Any], missing: list[str], ver: str) -> dict[str, Any]:
-        scores = [
-            float(v.get("score") or 0)
-            for k, v in opinions.items()
-            if k != "bear" and v.get("status") not in {"unavailable", "skipped", "failed"}
-        ]
-        bear = float((opinions.get("bear") or {}).get("score") or 0)
+    def _heuristic(
+        self,
+        opinions: dict[str, Any],
+        missing: list[str],
+        ver: str,
+        *,
+        snapshot: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        scores = []
+        for k, v in opinions.items():
+            if not isinstance(v, dict) or str(k).startswith("_"):
+                continue
+            if k == "bear":
+                continue
+            if v.get("status") in {"unavailable", "skipped", "failed"}:
+                continue
+            if v.get("score") is None:
+                continue
+            scores.append(float(v.get("score") or 0))
+        bear_op = opinions.get("bear") or {}
+        bear = float(bear_op.get("score") or 0) if bear_op.get("score") is not None else 0.0
+        if bear_op.get("status") in {"unavailable", "failed"} or int(bear_op.get("evidence_count") or 0) == 0:
+            bear = 0.0
         avg = float(sum(scores) / len(scores)) if scores else 0.0
+
+        snap = snapshot or {}
+        timing = str(
+            snap.get("trade_timing_action")
+            or (snap.get("leader") or {}).get("trade_timing_action")
+            or ""
+        ).upper()
+        recon = str((snap.get("reconciliation") or {}).get("state") or "").upper()
+
         if avg > 0.4 and bear > -0.5:
-            rating, action = "BUY", "WAIT_FOR_CONFIRMATION"
+            rating = "BUY"
         elif avg > 0.15:
-            rating, action = "WATCH", "WATCH"
+            rating = "WATCH"
         elif avg < -0.3 or bear < -0.6:
-            rating, action = "AVOID", "NO_ACTION"
+            rating = "AVOID"
         else:
-            rating, action = "NEUTRAL", "WATCH"
+            rating = "NEUTRAL"
+
+        if recon == "INVALIDATED":
+            entry_setup = "INVALIDATED"
+            action = "NO_ACTION"
+        elif rating in {"BUY", "STRONG_BUY"} and timing == "BUY_READY":
+            entry_setup = "READY"
+            action = "SMALL_POSITION"
+        elif rating in {"BUY", "STRONG_BUY"}:
+            entry_setup = "CONFIRMATION_REQUIRED"
+            action = "WAIT_FOR_CONFIRMATION"
+        elif rating == "WATCH":
+            entry_setup = "WATCH"
+            action = "WATCH"
+        else:
+            entry_setup = "NO_SETUP"
+            action = "NO_ACTION" if rating == "AVOID" else "WATCH"
+
         return {
             "rating": rating,
             "confidence": 0.45,
             "bull_case": "启发式综合多头角色",
-            "base_case": "观望确认",
-            "bear_case": "空头角色提示风险",
+            "base_case": "观望确认" if action != "SMALL_POSITION" else "择机轻仓",
+            "bear_case": "空头角色提示风险" if bear < -0.05 else "无明显空头证据",
             "catalysts": [],
-            "risks": (opinions.get("bear") or {}).get("top_risks") or ["启发式"],
+            "risks": (opinions.get("bear") or {}).get("top_risks") or [],
             "invalidation_conditions": ["跌破关键均线", "催化证伪"],
             "monitoring_indicators": ["成交额", "相对强度", "事件兑现"],
             "time_horizon": "5-20D",
             "trading_action": action,
-            "position_suggestion": 0.0,
+            "entry_setup": entry_setup,
+            "market_state": recon or "UNKNOWN",
+            "position_suggestion": 0.05 if action == "SMALL_POSITION" else 0.0,
             "missing_roles": missing,
             "prompt_version": ver,
             "source": "heuristic",

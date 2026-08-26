@@ -237,20 +237,40 @@ def _threshold_rejects(
         thr_f = float(thr)
         fail = 0
         missing = 0
+        below = 0
+        zero = 0
         for row in rows:
+            # Prefer explicit availability contract when present
+            status = None
+            for fk in field_keys:
+                status = row.get(f"{fk}_status")
+                if status:
+                    break
+            avail = None
+            for fk in field_keys:
+                if f"{fk}_available" in row:
+                    avail = row.get(f"{fk}_available")
+                    break
             v = _signal_float(row, *field_keys)
-            if v is None:
+            if status in {"MISSING", "UNAVAILABLE", "FAILED"} or avail is False or v is None:
                 missing += 1
-                fail += 1
+                # Soft fields: missing ≠ threshold fail for audit clarity
                 continue
+            if abs(float(v)) < 1e-15:
+                zero += 1
             if v < thr_f:
+                below += 1
                 fail += 1
         out[cfg_key] = {
             "threshold": thr_f,
+            "fail_below_threshold": below,
             "fail": fail,
-            "pass": n - fail,
-            "missing_counted_as_fail": missing,
-            "fail_rate_pct": _pct(fail, n),
+            "pass": n - fail - missing,
+            "missing_or_unavailable": missing,
+            "zero_valid": zero,
+            "missing_counted_as_fail": 0,
+            "fail_rate_pct": _pct(fail, max(n - missing, 1)),
+            "missing_rate_pct": _pct(missing, n),
         }
     return out
 
@@ -258,9 +278,11 @@ def _threshold_rejects(
 def _direct_block_reason(d: dict[str, Any]) -> str:
     rating = str(d.get("research_rating") or "").upper()
     action = str(d.get("trading_action") or "").upper()
-    risk = str(d.get("risk_status") or "").lower()
-    flags = list(d.get("risk_flags") or [])
+    risk = str(d.get("risk_status") or "").upper()
+    flags = list(d.get("risk_flags") or d.get("risk_reasons") or [])
     approve = bool(d.get("committee_approve"))
+    if d.get("no_buy_reason"):
+        return str(d.get("no_buy_reason"))
     if approve:
         return "APPROVED"
     if rating in {"GATE_SKIP", "SKIP"} or d.get("gate_passed") is False:
@@ -268,9 +290,11 @@ def _direct_block_reason(d: dict[str, Any]) -> str:
     if rating not in {"BUY", "STRONG_BUY"}:
         return f"RATING_NOT_BUY:{rating or 'EMPTY'}"
     if action != "SMALL_POSITION":
-        return f"ACTION_NOT_SMALL_POSITION:{action or 'EMPTY'}"
-    if risk in {"blocked", "fail"} or (flags and risk != "pass"):
-        return f"RISK_BLOCK:{','.join(flags) or risk}"
+        return f"NO_VALID_ENTRY_SETUP:{action or 'EMPTY'}"
+    if risk in {"BLOCK", "BLOCKED", "FAIL"} or (flags and risk not in {"PASS", "OK", ""}):
+        return f"RISK_BLOCK:{','.join(str(x) for x in flags) or risk}"
+    if risk == "UNKNOWN":
+        return "RISK_UNKNOWN"
     return "UNKNOWN_COMPOUND_GATE"
 
 
@@ -633,13 +657,15 @@ def run_buy_pipeline_audit(cfg: dict[str, Any], *, days: int = 7) -> dict[str, A
     threshold_summary = {}
     for k, rows in threshold_agg.items():
         fails = sum(int(r.get("fail") or 0) for r in rows)
+        missing = sum(int(r.get("missing_or_unavailable") or r.get("missing_counted_as_fail") or 0) for r in rows)
         total = sum(int(r.get("fail") or 0) + int(r.get("pass") or 0) for r in rows)
         threshold_summary[k] = {
             "threshold": rows[0].get("threshold") if rows else None,
             "fail_sum": fails,
             "obs_sum": total,
             "fail_rate_pct": _pct(fails, total),
-            "missing_sum": sum(int(r.get("missing_counted_as_fail") or 0) for r in rows),
+            "missing_sum": missing,
+            "missing_rate_pct": _pct(missing, total + missing),
         }
 
     # Funnel table (report-based)
@@ -647,7 +673,12 @@ def run_buy_pipeline_audit(cfg: dict[str, Any], *, days: int = 7) -> dict[str, A
     n_reports = max(1, len(reports))
     buy_rating_n = rating_c.get("BUY", 0) + rating_c.get("STRONG_BUY", 0)
     small_pos_n = action_c.get("SMALL_POSITION", 0)
-    risk_pass_n = risk_status_c.get("pass", 0) + risk_status_c.get("ok", 0)
+    risk_pass_n = (
+        risk_status_c.get("pass", 0)
+        + risk_status_c.get("ok", 0)
+        + risk_status_c.get("PASS", 0)
+        + risk_status_c.get("OK", 0)
+    )
     approve_true = approve_c.get(True, 0)
     approve_false = approve_c.get(False, 0)
     final_buy = approve_true
@@ -804,6 +835,59 @@ def run_buy_pipeline_audit(cfg: dict[str, Any], *, days: int = 7) -> dict[str, A
             _score_dist(candidate_scores),
         ),
     }
+    # TODAY / window summary: why no BUY
+    no_buy_c = Counter()
+    for d in canonical_rows:
+        if d.get("committee_approve"):
+            continue
+        no_buy_c[_direct_block_reason(d)] += 1
+    latest_day = end.isoformat()
+    day_reports = [r for r in reports if str(r.get("_as_of_date") or r.get("as_of") or "")[:10] == latest_day]
+    day_canon = [d for d in canonical_rows if str(d.get("_as_of") or d.get("as_of") or "")[:10] == latest_day]
+    result["today_buy_pipeline"] = {
+        "as_of": latest_day,
+        "n_reports": len(day_reports),
+        "Candidates": sum(int(((r.get("candidate_union") or {}).get("n_union") or 0)) for r in day_reports),
+        "Research": sum(int(((r.get("candidate_union") or {}).get("n_research") or 0)) for r in day_reports),
+        "Council": sum(len(r.get("platform_reports") or []) for r in day_reports),
+        "BUY_rating": sum(1 for d in day_canon if str(d.get("research_rating") or "").upper() == "BUY"),
+        "STRONG_BUY": sum(1 for d in day_canon if str(d.get("research_rating") or "").upper() == "STRONG_BUY"),
+        "READY_entry_setup": sum(
+            1 for d in day_canon if str(d.get("entry_setup") or "").upper() == "READY" or str(d.get("trading_action") or "").upper() == "SMALL_POSITION"
+        ),
+        "Risk_PASS": sum(1 for d in day_canon if str(d.get("risk_status") or "").upper() in {"PASS", "OK"}),
+        "Committee_approve": sum(1 for d in day_canon if d.get("committee_approve")),
+        "Final_BUY": sum(1 for d in day_canon if d.get("committee_approve")),
+        "top_rejection_reasons": dict(Counter(_direct_block_reason(d) for d in day_canon if not d.get("committee_approve")).most_common(8)),
+        "NO_BUY_REASON": (
+            Counter(_direct_block_reason(d) for d in day_canon if not d.get("committee_approve")).most_common(1)[0][0]
+            if day_canon and not any(d.get("committee_approve") for d in day_canon)
+            else ("HAS_BUY" if any(d.get("committee_approve") for d in day_canon) else "NO_CANONICAL_DECISIONS")
+        ),
+    }
+    result["no_buy_reason_distribution"] = dict(no_buy_c)
+    result["audit_version"] = f"buy_pipeline_audit_v{days}d"
+    # Signal availability (missing vs zero) from universe rows when statuses present
+    avail_stats: dict[str, Counter] = {
+        k: Counter() for k in ("ml_prediction", "profit_score", "event_score", "news_score")
+    }
+    for r in reports:
+        for row in ((r.get("candidate_union") or {}).get("universe") or []):
+            if not isinstance(row, dict):
+                continue
+            for k in avail_stats:
+                st = str(row.get(f"{k}_status") or "").upper()
+                if st:
+                    avail_stats[k][st] += 1
+                elif row.get(f"{k}_available") is False:
+                    avail_stats[k]["UNAVAILABLE"] += 1
+                elif row.get(k) is None:
+                    avail_stats[k]["MISSING"] += 1
+                elif abs(float(row.get(k) or 0)) < 1e-15:
+                    avail_stats[k]["ZERO"] += 1
+                else:
+                    avail_stats[k]["VALID"] += 1
+    result["signal_availability"] = {k: dict(v) for k, v in avail_stats.items()}
     return result
 
 
@@ -820,7 +904,12 @@ def _build_funnel_table(
 ) -> list[dict[str, Any]]:
     buy_n = rating_c.get("BUY", 0) + rating_c.get("STRONG_BUY", 0)
     small = action_c.get("SMALL_POSITION", 0)
-    risk_pass = risk_status_c.get("pass", 0) + risk_status_c.get("ok", 0)
+    risk_pass = (
+        risk_status_c.get("pass", 0)
+        + risk_status_c.get("ok", 0)
+        + risk_status_c.get("PASS", 0)
+        + risk_status_c.get("OK", 0)
+    )
     approve_true = approve_c.get(True, 0)
     # Approximate sequential funnel using totals (multi-day summed).
     rows = [
@@ -1099,6 +1188,26 @@ def render_markdown(result: dict[str, Any]) -> str:
     lines.append(f"- BUY_READY signals: `{lc.get('BUY_READY_signals')}`")
     lines.append("")
 
+    today = result.get("today_buy_pipeline") or {}
+    lines.append("## TODAY BUY PIPELINE")
+    lines.append("")
+    lines.append(f"- as_of: **{today.get('as_of')}**")
+    lines.append(f"- Candidates: **{today.get('Candidates')}**")
+    lines.append(f"- Research: **{today.get('Research')}**")
+    lines.append(f"- Council: **{today.get('Council')}**")
+    lines.append(f"- BUY rating: **{today.get('BUY_rating')}**")
+    lines.append(f"- STRONG_BUY: **{today.get('STRONG_BUY')}**")
+    lines.append(f"- READY entry setup: **{today.get('READY_entry_setup')}**")
+    lines.append(f"- Risk PASS: **{today.get('Risk_PASS')}**")
+    lines.append(f"- Committee approve: **{today.get('Committee_approve')}**")
+    lines.append(f"- Final BUY: **{today.get('Final_BUY')}**")
+    lines.append(f"- NO_BUY_REASON: **{today.get('NO_BUY_REASON')}**")
+    lines.append(f"- Top rejection reasons: `{today.get('top_rejection_reasons')}`")
+    lines.append("")
+    lines.append(f"- Window no_buy_reason_distribution: `{result.get('no_buy_reason_distribution')}`")
+    lines.append(f"- Signal availability (missing≠zero): `{result.get('signal_availability')}`")
+    lines.append("")
+
     lines.append("## Funnel table")
     lines.append("")
     lines.append("| Stage | Input | Passed | Rejected | Reject Rate |")
@@ -1229,8 +1338,10 @@ def write_audit_outputs(cfg: dict[str, Any], result: dict[str, Any]) -> dict[str
     root = _root(cfg)
     out_dir = root / "docs" / "research"
     out_dir.mkdir(parents=True, exist_ok=True)
-    md_path = out_dir / "BUY_PIPELINE_AUDIT_7D.md"
-    json_path = out_dir / "BUY_PIPELINE_AUDIT_7D.json"
+    days = int(((result.get("window") or {}).get("days")) or 7)
+    stem = f"BUY_PIPELINE_AUDIT_{days}D"
+    md_path = out_dir / f"{stem}.md"
+    json_path = out_dir / f"{stem}.json"
     md_path.write_text(render_markdown(result), encoding="utf-8")
     json_path.write_text(json.dumps(result, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
     return {"markdown": str(md_path), "json": str(json_path)}

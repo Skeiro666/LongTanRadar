@@ -1,12 +1,17 @@
+"""Canonical trading decision — Platform Council is the sole trading SSOT."""
+
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any
+from uuid import uuid4
 
 from ashare.symbols import to_symbol
 
 DECISION_SOURCE_PLATFORM = "platform_council"
 DECISION_SOURCE_ROUNDTABLE = "roundtable_benchmark"
 DECISION_SOURCE_NONE = "none"
+DECISION_VERSION = "canonical_v2"
 
 
 def _versions_from_report(rep: dict[str, Any]) -> dict[str, str]:
@@ -28,11 +33,76 @@ def _versions_from_report(rep: dict[str, Any]) -> dict[str, str]:
     }
 
 
-def _risk_fields(allow: bool, reason: str) -> tuple[str, list[str]]:
+def _risk_from_eval(ev: dict[str, Any] | None, allow: bool, reason: str) -> tuple[str, list[str]]:
+    if ev:
+        status = str(ev.get("status") or "UNKNOWN").upper()
+        reasons = list(ev.get("reasons") or [])
+        if not reasons and reason and reason != "ok":
+            reasons = [reason]
+        return status, reasons
     if allow:
-        return "pass", []
+        return "PASS", []
     flags = [reason] if reason and reason != "ok" else ["risk_blocked"]
-    return "blocked", flags
+    return "BLOCK", flags
+
+
+def build_decision_explanation(
+    *,
+    rating: str,
+    action: str,
+    approve: bool,
+    gate_passed: bool,
+    risk_status: str,
+    risk_flags: list[str],
+    chairman: dict[str, Any],
+    missing_data: list[str],
+    entry_setup: str,
+) -> dict[str, Any]:
+    positive: list[str] = []
+    negative: list[str] = []
+    rejected_by: list[str] = []
+    if rating in {"BUY", "STRONG_BUY"}:
+        positive.append(f"research_rating={rating}")
+    if action == "SMALL_POSITION":
+        positive.append("entry_setup_ready")
+    if chairman.get("bull_case"):
+        positive.append(str(chairman.get("bull_case"))[:120])
+    for r in chairman.get("risks") or []:
+        negative.append(str(r)[:120])
+    if not gate_passed:
+        rejected_by.append("ResearchGate")
+    if risk_status == "BLOCK":
+        rejected_by.append("RiskFilter")
+        negative.extend(risk_flags)
+    if risk_status == "UNKNOWN":
+        rejected_by.append("RiskFilter_UNKNOWN")
+    if rating in {"BUY", "STRONG_BUY"} and action != "SMALL_POSITION":
+        rejected_by.append("EntrySetup")
+        negative.append(f"entry_setup={entry_setup or 'CONFIRMATION_REQUIRED'}")
+    if approve:
+        final_reason = "COMMITTEE_APPROVED"
+    elif not gate_passed:
+        final_reason = "GATE_REJECT"
+    elif risk_status == "BLOCK":
+        final_reason = risk_flags[0] if risk_flags else "RISK_BLOCK"
+    elif risk_status == "UNKNOWN":
+        final_reason = "RISK_UNKNOWN"
+    elif rating not in {"BUY", "STRONG_BUY"}:
+        final_reason = f"NO_BUY_RATING_{rating}"
+    elif action != "SMALL_POSITION":
+        final_reason = f"NO_VALID_ENTRY_SETUP_{entry_setup or action}"
+    else:
+        final_reason = "NO_BUY"
+    return {
+        "positive_factors": positive[:12],
+        "negative_factors": negative[:12],
+        "missing_data": missing_data[:12],
+        "risk_factors": list(risk_flags)[:12],
+        "market_state": [str(chairman.get("market_state") or "UNKNOWN")],
+        "entry_setup": [entry_setup or action],
+        "rejected_by": rejected_by,
+        "final_reason": final_reason,
+    }
 
 
 def build_canonical_decision(
@@ -43,6 +113,7 @@ def build_canonical_decision(
     bar_like: dict[str, Any] | None,
     risk_allow_fn,
     decision_source: str = DECISION_SOURCE_PLATFORM,
+    risk_evaluate_fn=None,
 ) -> dict[str, Any]:
     """Build one Canonical Decision from a platform council report."""
     sym = to_symbol(rep["symbol"])
@@ -50,6 +121,17 @@ def build_canonical_decision(
     chairman = dict(rep.get("chairman") or {})
     rating = str(decision.get("research_rating") or chairman.get("rating") or "WATCH").upper()
     action = str(decision.get("action") or chairman.get("trading_action") or "WATCH").upper()
+    entry_setup = str(chairman.get("entry_setup") or decision.get("entry_setup") or "").upper()
+    if not entry_setup:
+        if action == "SMALL_POSITION":
+            entry_setup = "READY"
+        elif action == "WAIT_FOR_CONFIRMATION":
+            entry_setup = "CONFIRMATION_REQUIRED"
+        elif action in {"NO_ACTION", "AVOID"}:
+            entry_setup = "NO_SETUP"
+        else:
+            entry_setup = "WATCH"
+
     conflict = dict(rep.get("news_conflict") or {})
     if float(conflict.get("conflict_score") or 0) >= 0.65 and str(conflict.get("reason") or "") in {
         "news_weak_quant_strong",
@@ -59,22 +141,39 @@ def build_canonical_decision(
             rating = "WATCH"
         if action in {"SMALL_POSITION", "BUY"}:
             action = "WAIT_FOR_CONFIRMATION"
+            entry_setup = "CONFIRMATION_REQUIRED"
+
     gate = dict(rep.get("gate") or {})
     gate_passed = bool(gate.get("passed", True)) and rating not in {"GATE_SKIP", "SKIP"}
 
     allow, risk_reason = (True, "ok")
+    risk_ev: dict[str, Any] | None = None
     if bar_like is not None and gate_passed:
-        allow, risk_reason = risk_allow_fn(bar_like)
+        if risk_evaluate_fn is not None:
+            risk_ev = risk_evaluate_fn(bar_like)
+            allow = bool(risk_ev.get("allow"))
+            risk_reason = str(risk_ev.get("reason") or "ok")
+        else:
+            allow, risk_reason = risk_allow_fn(bar_like)
+
+    # Fence: only platform_council may approve trades; quant_routing_skip cannot.
+    chair_source = str(chairman.get("source") or "")
+    routing_skip = chair_source in {"quant_routing_skip", "leader_scan", "research_gate"}
+    if routing_skip and action == "SMALL_POSITION":
+        action = "WAIT_FOR_CONFIRMATION"
+        entry_setup = "CONFIRMATION_REQUIRED"
 
     approve = (
         gate_passed
         and allow
         and action == "SMALL_POSITION"
         and rating in {"BUY", "STRONG_BUY"}
+        and decision_source == DECISION_SOURCE_PLATFORM
+        and not routing_skip
     )
-    risk_status, risk_flags = _risk_fields(allow, risk_reason)
+    risk_status, risk_flags = _risk_from_eval(risk_ev, allow, risk_reason)
     if not gate_passed:
-        risk_status = "skipped"
+        risk_status = "SKIPPED"
         risk_flags = [str(gate.get("reason") or "GATE_REJECT")]
 
     uni = universe_row or {}
@@ -83,16 +182,52 @@ def build_canonical_decision(
     versions = _versions_from_report(rep)
     verdict = "buy" if approve else ("watch" if rating in {"BUY", "WATCH", "STRONG_BUY"} else "pass")
 
+    missing_data: list[str] = []
+    for k in ("ml_prediction", "profit_score", "event_score", "news_score"):
+        st = uni.get(f"{k}_status") or (rep.get("quant") or {}).get(f"{k}_status")
+        if st in {"MISSING", "UNAVAILABLE", "FAILED"} or uni.get(f"{k}_available") is False:
+            missing_data.append(k)
+    if not (rep.get("snapshot") or {}).get("value_available", rep.get("value_available", True)):
+        missing_data.append("valuation")
+
+    created_at = datetime.now(timezone.utc).isoformat()
+    decision_id = f"D{as_of.replace('-', '')}{uuid4().hex[:8].upper()}"
+    context_id = str(rep.get("research_id") or decision_id)
+    explanation = build_decision_explanation(
+        rating=rating,
+        action=action,
+        approve=approve,
+        gate_passed=gate_passed,
+        risk_status=risk_status,
+        risk_flags=risk_flags,
+        chairman=chairman,
+        missing_data=missing_data,
+        entry_setup=entry_setup,
+    )
+    final_action = "BUY" if approve else "NO_ACTION"
+
     return {
         "symbol": sym,
         "name": rep.get("name"),
         "as_of": as_of,
+        "research_date": as_of,
+        "decision_id": decision_id,
+        "context_id": context_id,
+        "created_at": created_at,
+        "decision_version": DECISION_VERSION,
         "research_rating": rating,
+        "rating_confidence": chairman.get("confidence"),
         "trading_action": action,
+        "entry_setup": entry_setup,
+        "market_state": chairman.get("market_state") or "UNKNOWN",
+        "reconciliation_state": (rep.get("market_state_context_meta") or {}).get("reconciliation_state"),
         "committee_approve": approve,
         "committee_verdict": verdict,
+        "committee_reasons": [explanation["final_reason"]],
         "risk_status": risk_status,
         "risk_flags": risk_flags,
+        "risk_reasons": risk_flags,
+        "final_action": final_action,
         "confidence": chairman.get("confidence"),
         "decision_source": decision_source,
         "research_session_id": rep.get("research_id"),
@@ -111,6 +246,8 @@ def build_canonical_decision(
         "research_id": rep.get("research_id"),
         "gate_passed": gate_passed,
         "weight": 0.0,
+        "explanation": explanation,
+        "no_buy_reason": None if approve else explanation["final_reason"],
         "leader_timing": {
             "lifecycle": uni.get("lifecycle"),
             "stage": uni.get("stage"),
@@ -136,6 +273,7 @@ def build_canonical_decisions(
     decision_source: str = DECISION_SOURCE_PLATFORM,
 ) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
+    evaluate = getattr(risk_engine, "evaluate", None)
     for rep in platform_reports:
         sym = to_symbol(rep.get("symbol") or "")
         if not sym:
@@ -161,9 +299,16 @@ def build_canonical_decisions(
                 bar_like=bar_like,
                 risk_allow_fn=_allow,
                 decision_source=decision_source,
+                risk_evaluate_fn=evaluate,
             )
         )
-    return out
+    # Prefer newest decision_id per symbol (created_at desc) — never let stale BUY overwrite WAIT
+    by_sym: dict[str, dict[str, Any]] = {}
+    for d in out:
+        prev = by_sym.get(d["symbol"])
+        if prev is None or str(d.get("created_at") or "") >= str(prev.get("created_at") or ""):
+            by_sym[d["symbol"]] = d
+    return list(by_sym.values())
 
 
 def canonical_to_picks(decisions: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -183,13 +328,18 @@ def canonical_to_picks(decisions: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "committee_horizon": d.get("committee_horizon"),
                 "research_rating": d.get("research_rating"),
                 "trading_action": d.get("trading_action"),
+                "entry_setup": d.get("entry_setup"),
+                "final_action": d.get("final_action"),
                 "research_id": d.get("research_session_id"),
+                "decision_id": d.get("decision_id"),
                 "reason": d.get("decision_source"),
                 "decision_source": d.get("decision_source"),
                 "candidate_sources": d.get("candidate_sources") or [],
                 "candidate_score": d.get("candidate_score"),
                 "risk_status": d.get("risk_status"),
                 "risk_flags": d.get("risk_flags"),
+                "no_buy_reason": d.get("no_buy_reason"),
+                "explanation": d.get("explanation"),
                 "weight": float(d.get("weight") or 0.0),
             }
         )
@@ -216,7 +366,13 @@ def extract_trading_decisions(payload: dict[str, Any]) -> list[dict[str, Any]]:
     """Decisions approved for paper trading — canonical only."""
     canonical = list(payload.get("canonical_decisions") or [])
     if canonical:
-        return [d for d in canonical if d.get("committee_approve")]
+        return [
+            d
+            for d in canonical
+            if d.get("committee_approve")
+            and str(d.get("decision_source") or "") == DECISION_SOURCE_PLATFORM
+            and str(d.get("final_action") or "").upper() in {"BUY", ""}
+        ]
     # Legacy payloads without canonical_decisions: only trust platform-tagged picks
     picks = list(payload.get("picks") or [])
     return [

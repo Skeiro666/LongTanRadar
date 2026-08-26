@@ -59,9 +59,16 @@ def apply_ml_rank_scores(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
 def compute_candidate_score(item: dict[str, Any], cw: dict[str, Any], ml_weight: float | None = None) -> float:
     """Unified candidate_score using optional ml_rank_score (preferred) or raw ml_prediction."""
     leader = float(item.get("leader_score") or 0)
-    pi_score = float((item.get("profit_inflection") or {}).get("score") or 0)
+    pi = item.get("profit_inflection") or {}
+    if pi.get("available") is False or item.get("profit_score_available") is False:
+        pi_score = 0.0  # neutral contribution when unavailable — not a bearish zero signal
+    else:
+        raw_pi = item.get("profit_score")
+        if raw_pi is None:
+            raw_pi = pi.get("score")
+        pi_score = float(raw_pi or 0)
     ev_score = float(item.get("event_score") or 0)
-    news = float(item.get("news_score") or 0)
+    news = float(item.get("news_score") or 0) if item.get("news_score_available", True) is not False else 0.0
     w_ml = float(ml_weight if ml_weight is not None else cw.get("ml", 0.10))
     if item.get("ml_rank_score") is not None:
         ml_term = float(item["ml_rank_score"])
@@ -69,6 +76,7 @@ def compute_candidate_score(item: dict[str, Any], cw: dict[str, Any], ml_weight:
         ml_term = float(item["ml_prediction"]) * 10.0
     else:
         ml_term = 0.0
+        w_ml = 0.0  # missing ML → drop weight; do not treat as weak ML=0
     # Renormalize non-ML weights when ML weight is applied
     base_w = {
         "leader": float(cw.get("leader", 0.35)),
@@ -76,6 +84,10 @@ def compute_candidate_score(item: dict[str, Any], cw: dict[str, Any], ml_weight:
         "event": float(cw.get("event", 0.15)),
         "news": float(cw.get("news", 0.15)),
     }
+    if item.get("news_score_available") is False:
+        base_w["news"] = 0.0
+    if pi.get("available") is False or item.get("profit_score_available") is False:
+        base_w["profit_inflection"] = 0.0
     base_sum = sum(base_w.values()) or 1.0
     scale = (1.0 - w_ml) / base_sum if w_ml < 1.0 else 0.0
     return (

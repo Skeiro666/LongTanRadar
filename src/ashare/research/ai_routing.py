@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from ashare.config_loaders import load_yaml_config
-from ashare.research.gate import _signal_values
+from ashare.research.signal_contract import extract_candidate_signals, numeric_or_none
 
 
 def routing_cfg(cfg: dict[str, Any] | None) -> dict[str, Any]:
@@ -30,7 +30,10 @@ def routing_cfg(cfg: dict[str, Any] | None) -> dict[str, Any]:
     }
 
 
-def _direction(score: float, *, bullish_at: float = 0.35, bearish_at: float = 0.12) -> int:
+def _direction(score: float | None, *, bullish_at: float = 0.35, bearish_at: float = 0.12) -> int:
+    """Missing score → inactive (0), never treat as bearish."""
+    if score is None:
+        return 0
     if score >= bullish_at:
         return 1
     if score <= bearish_at:
@@ -39,16 +42,18 @@ def _direction(score: float, *, bullish_at: float = 0.35, bearish_at: float = 0.
 
 
 def compute_conflict_score(candidate: dict[str, Any], cfg: dict[str, Any] | None = None) -> dict[str, Any]:
-    """0~1 conflict from directional disagreement across core signals. No LLM."""
-    sig = _signal_values(candidate)
-    pi = candidate.get("profit_inflection") or {}
-    profit_score = float(pi.get("score") or 0) if pi.get("available", True) else 0.0
+    """0~1 conflict from directional disagreement across *available* core signals. No LLM."""
+    bundle = extract_candidate_signals(candidate)
     dirs = {
-        "quant": _direction(float(sig.get("leader_score") or sig.get("candidate_score") or 0)),
-        "event": _direction(float(sig.get("event_score") or 0)),
-        "profit": _direction(profit_score),
-        "news": _direction(float(sig.get("news_score") or 0)),
-        "ml": _direction(float(sig.get("ml_prediction") or 0), bullish_at=0.004, bearish_at=0.0),
+        "quant": _direction(numeric_or_none(bundle.get("leader_score") or {}) or numeric_or_none(bundle.get("candidate_score") or {})),
+        "event": _direction(numeric_or_none(bundle.get("event_score") or {})),
+        "profit": _direction(numeric_or_none(bundle.get("profit_score") or {})),
+        "news": _direction(numeric_or_none(bundle.get("news_score") or {})),
+        "ml": _direction(
+            numeric_or_none(bundle.get("ml_prediction") or {}),
+            bullish_at=0.004,
+            bearish_at=-0.001,
+        ),
     }
     active = [d for d in dirs.values() if d != 0]
     if len(active) < 2:
@@ -57,7 +62,8 @@ def compute_conflict_score(candidate: dict[str, Any], cfg: dict[str, Any] | None
         pos = sum(1 for d in active if d > 0)
         neg = sum(1 for d in active if d < 0)
         conflict = min(1.0, (min(pos, neg) * 2) / max(len(active), 1))
-    return {"conflict_score": round(conflict, 4), "directions": dirs, "signals": sig}
+    sig_view = {k: numeric_or_none(v) for k, v in bundle.items()}
+    return {"conflict_score": round(conflict, 4), "directions": dirs, "signals": sig_view}
 
 
 def compute_ai_routing(candidate: dict[str, Any], cfg: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -131,19 +137,28 @@ def compute_ai_routing(candidate: dict[str, Any], cfg: dict[str, Any] | None = N
 
 
 def quant_only_decision(candidate: dict[str, Any]) -> dict[str, Any]:
-    """Heuristic chairman output when council skipped — 0 LLM."""
+    """
+    Heuristic chairman when council skipped — 0 LLM.
+
+    SSOT fence: may emit research_rating BUY for display, but MUST NOT emit
+    SMALL_POSITION / committee-tradable actions. Full council owns trading SSOT.
+    """
     cs = float(candidate.get("candidate_score") or 0)
     if cs >= 0.55:
-        rating, action = "BUY", "SMALL_POSITION"
+        rating, action = "BUY", "WAIT_FOR_CONFIRMATION"
+        entry = "CONFIRMATION_REQUIRED"
     elif cs >= 0.35:
         rating, action = "WATCH", "WATCH"
+        entry = "WATCH"
     else:
         rating, action = "PASS", "NO_ACTION"
+        entry = "NO_SETUP"
     return {
         "source": "quant_routing_skip",
         "rating": rating,
         "trading_action": action,
+        "entry_setup": entry,
         "confidence": min(0.75, max(0.35, cs)),
-        "rationale": "Adaptive routing LOW — quant-only decision, no council LLM",
+        "rationale": "Adaptive routing LOW — research hint only; trading requires Platform Council",
         "status": "ok",
     }

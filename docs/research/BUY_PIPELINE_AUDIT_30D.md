@@ -1,6 +1,6 @@
 # LongTanRadar 7-Day BUY Pipeline Audit
 
-**Window:** 2026-08-19 → 2026-08-25 (7 days)
+**Window:** 2026-07-27 → 2026-08-25 (30 days)
 **Data:** reports=3 ['2026-08-21', '2026-08-24', '2026-08-25']; snapshots=176; sessions=176; cycles=11
 
 > Read-only audit. No BUY gates / RiskFilter / prompts / thresholds were modified.

@@ -348,10 +348,35 @@ def build_chairman_context(
     cfg: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Slim chairman payload: opinions carry role scores; avoid duplicate fat quant/news."""
+    from ashare.research.council_context import build_council_context, serialize_council_context_for_prompt
+
     cc = _compression_cfg(cfg)
     intel = snapshot.get("research_intelligence") or build_research_intelligence(snapshot)
+    council_ctx = build_council_context(
+        research=snapshot,
+        candidate={
+            "symbol": snapshot.get("symbol"),
+            "candidate_score": (snapshot.get("quant") or {}).get("factor_score"),
+            "signals": snapshot.get("signals"),
+            "data_quality": snapshot.get("data_quality"),
+            "candidate_sources": snapshot.get("candidate_sources"),
+            "trade_timing_action": snapshot.get("trade_timing_action"),
+            "ml_prediction": (snapshot.get("quant") or {}).get("ml_prediction"),
+            "ml_status": (snapshot.get("quant") or {}).get("ml_status"),
+            "profit_score": snapshot.get("profit_score"),
+            "profit_status": snapshot.get("profit_status"),
+            "event_score": snapshot.get("event_score"),
+            "news_score": snapshot.get("news_score"),
+            "profit_inflection": snapshot.get("profit_inflection"),
+            "news_package": snapshot.get("news_package"),
+        },
+        live=snapshot.get("live_state") if isinstance(snapshot.get("live_state"), dict) else None,
+        reconciliation=snapshot.get("reconciliation") if isinstance(snapshot.get("reconciliation"), dict) else None,
+    )
+    council_ctx_prompt = serialize_council_context_for_prompt(council_ctx)
     if not cc.get("enabled", True):
         raw = {
+            "council_context": council_ctx_prompt,
             "research_intelligence": {
                 "candidate_sources": intel.get("candidate_sources"),
                 "research_hypotheses": intel.get("research_hypotheses"),
@@ -379,6 +404,7 @@ def build_chairman_context(
         }
 
     out = {
+        "council_context": council_ctx_prompt,
         "role_reports": slim_opinions,
         "evidence_ids": intel.get("evidence_ids") or [],
         "candidate_sources": intel.get("candidate_sources"),

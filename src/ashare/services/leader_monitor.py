@@ -148,15 +148,18 @@ def build_leader_monitor(cfg: dict[str, Any], report: dict[str, Any] | None = No
     buy_ready = buckets["BUY_READY"]
     dashboard = focus.get("dashboard") or {}
     research_date = report.get("as_of")
-    # Live Quote Overlay: attach live_* only; never rewrite research fields.
+    # Live Quote Overlay + State Reconciliation: attach live_*/reconciliation only.
+    # Never rewrite research snapshot fields (board_count, leader_score, stage, …).
     try:
         from ashare.services.live_quote_overlay import attach_live_quote_overlay
+        from ashare.services.state_reconciliation import attach_reconciliation_overlay
 
         for bucket_rows in buckets.values():
             for row in bucket_rows:
                 if research_date and not row.get("research_date"):
                     row["research_date"] = research_date
             attach_live_quote_overlay(bucket_rows, cfg=cfg, research_date=research_date)
+            attach_reconciliation_overlay(bucket_rows, cfg=cfg)
     except Exception:
         # Overlay failure must not break monitor / research payload.
         for bucket_rows in buckets.values():
@@ -164,6 +167,7 @@ def build_leader_monitor(cfg: dict[str, Any], report: dict[str, Any] | None = No
                 if research_date and not row.get("research_date"):
                     row["research_date"] = research_date
                 row.setdefault("live_status", "UNKNOWN")
+                row.setdefault("reconciliation_state", "UNKNOWN")
 
     return {
         "enabled": bool(lc.get("enabled", True)),

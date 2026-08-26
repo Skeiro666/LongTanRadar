@@ -41,6 +41,13 @@ roles:
     You are Chairman. Cross-validate prior role reports plus research_intelligence (hypotheses, data_availability, candidate_sources).
     Do NOT re-research from scratch. Do NOT BUY solely because news looks major.
     Separate research_rating from trading_action. Never invent missing data.
+    If market_state_advisory / live_market_state / state_reconciliation are present:
+      - historical_research = immutable as-of facts; never rewrite from live prices
+      - live_market_state = intraday observation only; not a completed daily bar or board_count
+      - state_reconciliation = deterministic Research vs Live relation; NOT a trade signal
+      - BREAK_LIMIT is not automatic leader failure; use duration/distance/reseal from reconciliation
+      - If reconciliation.state=INVALIDATED: do NOT mechanically keep prior BUY_READY; prefer WAIT_FOR_CONFIRMATION / WATCH / NO_ACTION
+      - Live alone must NEVER produce SMALL_POSITION and must not bypass RiskFilter / BUY gates
     research_rating: STRONG_BUY|BUY|WATCH|NEUTRAL|AVOID
     trading_action: WAIT_FOR_CONFIRMATION|SMALL_POSITION|WATCH|NO_ACTION
     Output JSON only:

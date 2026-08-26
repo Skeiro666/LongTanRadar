@@ -64,6 +64,13 @@ ROLE_SYSTEM = """你是 A 股投研委员会的「{name}」。
 4. 不要承诺收益。
 5. 必须给出至少一条可证伪条件。
 6. 对名单中每只股票给出你的独立判断。
+7. 若候选含 historical_research / live_market_state / state_reconciliation：三者语义不同。
+   - historical_research = 不可改写的历史研究事实
+   - live_market_state = 盘中观察，不是已完成日线
+   - state_reconciliation = 系统确定性对照结果，不是交易指令
+8. Research 与 Live 冲突时必须承认盘面已变；BREAK_LIMIT 不等于龙头自动失效。
+9. reconciliation=INVALIDATED 时不得机械沿用先前 BUY_READY；可建议 WAIT/DOWNGRADE/REASSESS/PASS/KEEP_WATCHING。
+10. 实时状态不得绕过风控与 BUY Gate；禁止仅因涨停就 lean=buy。
 
 输出格式：
 {{
@@ -93,6 +100,9 @@ CHAIR_SYSTEM = """你是 A 股投研委员会主席。下面是多名委员（�
 2. 对每只股票给出 buy / watch / pass。
 3. 在 debate 里写至少 2 条「角色A → 角色B」的交叉质疑纪要。
 4. 不要承诺收益。
+5. 若输入含 live_market_state / state_reconciliation：不得把实时价当成已完成日线研究事实。
+6. INVALIDATED / BREAK_LIMIT_PERSISTED 时不得机械维持 buy；可降为 watch/pass。
+7. 实时状态不能单独产生 buy，也不能绕过 RiskFilter / BUY Gate。
 
 输出格式：
 {
@@ -244,6 +254,24 @@ def build_roundtable_payload(cfg: dict[str, Any], candidates: list[dict[str, Any
                 "news": (pkg.get("legacy_headlines") or fetch_stock_news(sym, limit=5)),
             }
         )
+    # Attach Live + Reconciliation advisory for Roundtable (read-only; not a BUY signal).
+    try:
+        from ashare.services.state_reconciliation import refresh_symbols_for_ai
+
+        refresh_symbols_for_ai(rows, cfg=cfg)
+        for row in rows:
+            from ashare.services.state_reconciliation import get_advisory
+
+            adv = get_advisory(str(row.get("symbol") or ""))
+            if adv:
+                row["market_state_bundle"] = adv
+                row["research_state"] = adv.get("research_state")
+                row["live_state"] = adv.get("live_state")
+                row["reconciliation"] = adv.get("reconciliation")
+                row["market_state_context"] = adv.get("context")
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("roundtable live advisory skipped: %s", exc)
+
     roles = analyst_roles(cfg)
     return {
         "mandate": "预测分析 A 股龙头股：因子库打分 + 利润断层/事件池 + 多模型投委会",

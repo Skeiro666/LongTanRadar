@@ -29,6 +29,47 @@ class ResearchSessionEngine:
     def run_session(self, candidate: dict[str, Any]) -> dict[str, Any]:
         prior = self.store.load_latest_for_symbol(str(candidate.get("symbol") or ""))
         snap = build_snapshot(candidate, self.cfg)
+        # Refresh live+reconciliation registry for AI context only (not written as research facts).
+        try:
+            from ashare.services.state_reconciliation import refresh_symbols_for_ai
+
+            advisory_row = {
+                "symbol": snap.get("symbol"),
+                "name": snap.get("name"),
+                "board_count": candidate.get("board_count") or (snap.get("quant") or {}).get("board_count"),
+                "leader_score": candidate.get("leader_score"),
+                "stage": candidate.get("stage"),
+                "reentry_phase": candidate.get("reentry_phase"),
+                "trade_timing_action": candidate.get("trade_timing_action")
+                or (candidate.get("chairman") or {}).get("trading_action"),
+                "status_reason": candidate.get("status_reason"),
+                "research_date": (snap.get("versions") or {}).get("as_of") or snap.get("research_time"),
+                "research_limit_up": candidate.get("research_limit_up")
+                or candidate.get("limit_up")
+                or bool(candidate.get("board_count")),
+                "close": (snap.get("quant") or {}).get("close") or candidate.get("close"),
+                "quant": snap.get("quant"),
+            }
+            refresh_symbols_for_ai(
+                [advisory_row],
+                cfg=self.cfg,
+                research_date=str(advisory_row.get("research_date") or "")[:10] or None,
+            )
+            # Ephemeral keys for prompt builders; stripped before persist below.
+            from ashare.services.state_reconciliation import get_advisory
+
+            bundle = get_advisory(str(snap.get("symbol") or ""))
+            if bundle:
+                snap["_market_state_bundle"] = bundle
+                # Also expose via candidate-shaped keys for advisory_for_prompt(row=snap)
+                snap["market_state_bundle"] = bundle
+                snap["research_state"] = bundle.get("research_state")
+                snap["live_state"] = bundle.get("live_state")
+                snap["reconciliation"] = bundle.get("reconciliation")
+                snap["market_state_context"] = bundle.get("context")
+        except Exception:  # noqa: BLE001
+            pass
+
         opinions = self.council.run_parallel(
             snap,
             prior_snapshot=prior,
@@ -90,6 +131,31 @@ class ResearchSessionEngine:
         full = {**snap, "council": opinions, "debate": debate, "chairman": chairman, "report": report}
         full["cloud_escalation"] = candidate.get("cloud_escalation")
         full["news_conflict"] = candidate.get("news_conflict")
+        # Capture tiny audit pointer before stripping ephemeral live advisory.
+        ctx_meta = snap.get("market_state_context") or {}
+        recon_meta = snap.get("reconciliation") or {}
+        if ctx_meta or recon_meta:
+            full["market_state_context_meta"] = {
+                "context_generated_at": ctx_meta.get("context_generated_at"),
+                "research_date": ctx_meta.get("research_date"),
+                "live_observed_at": ctx_meta.get("live_observed_at"),
+                "reconciliation_version": ctx_meta.get("reconciliation_version"),
+                "reconciliation_state": recon_meta.get("state"),
+                "trigger_codes": list(recon_meta.get("trigger_codes") or [])[:8],
+            }
+        # Strip ephemeral live advisory so Research Snapshot remains historical-only.
+        for k in (
+            "market_state_bundle",
+            "_market_state_bundle",
+            "research_state",
+            "live_state",
+            "reconciliation",
+            "market_state_context",
+            "live_price",
+            "live_status",
+            "live_change_pct",
+        ):
+            full.pop(k, None)
         self.store.save(full)
         self._append_index(report)
         return report

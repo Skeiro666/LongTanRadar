@@ -117,12 +117,16 @@ def build_live_fields(
             "research_limit_up": research_lu,
             "live_price": None,
             "live_change_pct": None,
+            "live_open": None,
+            "live_high": None,
+            "live_low": None,
             "live_limit_up_price": None,
             "live_limit_down_price": None,
             "live_is_limit_up": False,
             "live_is_limit_down": False,
             "live_status": "UNKNOWN",
             "live_updated_at": None,
+            "live_quote_age_seconds": None,
             "live_session_open": is_a_share_session(now),
         }
 
@@ -161,17 +165,26 @@ def build_live_fields(
         ts = updated_at if updated_at.tzinfo else updated_at.replace(tzinfo=_TZ)
         updated_iso = ts.astimezone(_TZ).isoformat(timespec="seconds")
 
+    age = None
+    if updated_at is not None:
+        ts = updated_at if updated_at.tzinfo else updated_at.replace(tzinfo=_TZ)
+        age = max(0.0, (now.astimezone(_TZ) - ts.astimezone(_TZ)).total_seconds())
+
     return {
         "research_date": row.get("research_date"),
         "research_limit_up": research_lu,
         "live_price": round(price, 4),
         "live_change_pct": round(float(change_pct), 4) if change_pct is not None else None,
+        "live_open": round(float(quote.get("open") or 0), 4) or None,
+        "live_high": round(float(quote.get("high") or 0), 4) or None,
+        "live_low": round(float(quote.get("low") or 0), 4) or None,
         "live_limit_up_price": lim_up or None,
         "live_limit_down_price": lim_dn or None,
         "live_is_limit_up": live_is_lu,
         "live_is_limit_down": live_is_ld,
         "live_status": status,
         "live_updated_at": updated_iso,
+        "live_quote_age_seconds": age,
         "live_session_open": is_a_share_session(now),
     }
 

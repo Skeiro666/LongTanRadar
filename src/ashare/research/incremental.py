@@ -15,6 +15,7 @@ CHANGE_REASONS = (
     "PROMPT_CHANGE",
     "MODEL_CHANGE",
     "MANUAL_REFRESH",
+    "LIVE_STATE_DIVERGENCE",
     "NO_CHANGE",
 )
 
@@ -77,6 +78,13 @@ def detect_change_reasons(
         reasons.append("RISK_CHANGE")
     if cur_meta["model_version"] != prev_meta["model_version"]:
         reasons.append("MODEL_CHANGE")
+    try:
+        from ashare.services.state_reconciliation import has_pending_live_divergence
+
+        if has_pending_live_divergence(str(snapshot.get("symbol") or ""), cfg):
+            reasons.append("LIVE_STATE_DIVERGENCE")
+    except Exception:  # noqa: BLE001
+        pass
     active = select_council_roles(snapshot, cfg)
     for rid in active:
         if role_context_hash(snapshot, rid, cfg) != role_context_hash(prior_snapshot, rid, cfg):
@@ -99,6 +107,9 @@ def roles_to_refresh(
     reasons = detect_change_reasons(snapshot, prior_snapshot, cfg)
     if reasons == ["NO_CHANGE"]:
         return ()
+    # Live divergence must force a fresh council pass (advisory context may change mid-session).
+    if "LIVE_STATE_DIVERGENCE" in reasons:
+        return tuple(rid for rid in active if not (rid == "valuation" and not snapshot.get("value_available", False)))
 
     refresh: list[str] = []
     for rid in active:

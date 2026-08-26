@@ -191,8 +191,31 @@ def build_research_intelligence(snapshot: dict[str, Any], *, role_id: str | None
             "available=false fields must not be invented",
             "price_in_risk is a warning only, not auto PASS/SELL",
             "candidate_score is cross-sectional rank — NOT probability or expected return",
+            "live_market_state is intraday observation only — never rewrite historical research",
+            "state_reconciliation is deterministic context — not a BUY signal and must not bypass RiskFilter",
         ],
     }
+
+
+def _attach_market_advisory(base: dict[str, Any], snapshot_or_row: dict[str, Any]) -> dict[str, Any]:
+    """Inject Research+Live+Reconciliation advisory without mutating stored research facts."""
+    try:
+        from ashare.services.state_reconciliation import advisory_for_prompt
+
+        adv = advisory_for_prompt(
+            str(snapshot_or_row.get("symbol") or base.get("symbol") or "") or None,
+            snapshot_or_row,
+        )
+        if adv:
+            base["market_state_advisory"] = adv
+            # Explicit top-level mirrors for prompt clarity
+            base["historical_research"] = adv.get("historical_research")
+            base["live_market_state"] = adv.get("live_market_state")
+            base["state_reconciliation"] = adv.get("state_reconciliation")
+            base["market_state_context"] = adv.get("context")
+    except Exception:  # noqa: BLE001
+        pass
+    return base
 
 
 def build_role_context(
@@ -207,7 +230,8 @@ def build_role_context(
     """
     cc = _compression_cfg(cfg)
     if not cc.get("enabled", True):
-        return build_research_intelligence(snapshot, role_id=role_id)
+        full = build_research_intelligence(snapshot, role_id=role_id)
+        return _attach_market_advisory(full, snapshot)
 
     full = build_research_intelligence(snapshot, role_id=role_id)
     max_news = int(cc["max_news_headlines"])
@@ -238,7 +262,7 @@ def build_role_context(
                 },
             }
         )
-        return base
+        return _attach_market_advisory(base, snapshot)
 
     if role_id == "fundamental":
         base.update(
@@ -254,7 +278,7 @@ def build_role_context(
                 "risk_context": {"market_regime": (full.get("risk_context") or {}).get("market_regime")},
             }
         )
-        return base
+        return _attach_market_advisory(base, snapshot)
 
     if role_id == "event":
         last_7d = news_ctx.get("last_7d")
@@ -279,7 +303,7 @@ def build_role_context(
                 "price_reaction": full.get("price_reaction"),
             }
         )
-        return base
+        return _attach_market_advisory(base, snapshot)
 
     if role_id == "valuation":
         base.update(
@@ -288,7 +312,7 @@ def build_role_context(
                 "profit_context": _slim_profit(full.get("profit_context")),
             }
         )
-        return base
+        return _attach_market_advisory(base, snapshot)
 
     if role_id == "bear":
         base.update(
@@ -305,7 +329,7 @@ def build_role_context(
                 },
             }
         )
-        return base
+        return _attach_market_advisory(base, snapshot)
 
     # unknown role — return full package capped
     full["research_hypotheses"] = hyps
@@ -313,7 +337,7 @@ def build_role_context(
     nc["timeline"] = _compact_news_list(nc.get("timeline"), max_tl)
     nc["last_7d"] = _compact_news_list(nc.get("last_7d") if isinstance(nc.get("last_7d"), list) else None, max_news)
     full["news_context"] = nc
-    return full
+    return _attach_market_advisory(full, snapshot)
 
 
 def build_chairman_context(
@@ -327,7 +351,7 @@ def build_chairman_context(
     cc = _compression_cfg(cfg)
     intel = snapshot.get("research_intelligence") or build_research_intelligence(snapshot)
     if not cc.get("enabled", True):
-        return {
+        raw = {
             "research_intelligence": {
                 "candidate_sources": intel.get("candidate_sources"),
                 "research_hypotheses": intel.get("research_hypotheses"),
@@ -342,6 +366,7 @@ def build_chairman_context(
             "debate": debate,
             "missing_roles": [k for k, v in opinions.items() if v.get("status") in {"failed", "unavailable"}],
         }
+        return _attach_market_advisory(raw, snapshot)
 
     slim_opinions = {}
     for rid, op in opinions.items():
@@ -353,7 +378,7 @@ def build_chairman_context(
             if op.get(k) is not None
         }
 
-    return {
+    out = {
         "role_reports": slim_opinions,
         "evidence_ids": intel.get("evidence_ids") or [],
         "candidate_sources": intel.get("candidate_sources"),
@@ -362,6 +387,7 @@ def build_chairman_context(
         "missing_roles": [k for k, v in opinions.items() if v.get("status") in {"failed", "unavailable"}],
         "debate": debate,
     }
+    return _attach_market_advisory(out, snapshot)
 
 
 def slim_roundtable_candidate(candidate: dict[str, Any], role_id: str, *, cfg: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -371,7 +397,7 @@ def slim_roundtable_candidate(candidate: dict[str, Any], role_id: str, *, cfg: d
     name = candidate.get("name") or ""
     quant = dict(candidate.get("quant") or {})
     if not cc.get("enabled", True):
-        return candidate
+        return _attach_market_advisory(dict(candidate), candidate)
 
     pkg = candidate.get("news_package") or {}
     headlines = _compact_news_list(candidate.get("news") or pkg.get("legacy_headlines"), int(cc["max_news_headlines"]))
@@ -394,7 +420,7 @@ def slim_roundtable_candidate(candidate: dict[str, Any], role_id: str, *, cfg: d
                 "news": headlines[:3],
             }
         )
-        return base
+        return _attach_market_advisory(base, candidate)
 
     if role_id == "event":
         base.update(
@@ -408,7 +434,7 @@ def slim_roundtable_candidate(candidate: dict[str, Any], role_id: str, *, cfg: d
                 "news": headlines,
             }
         )
-        return base
+        return _attach_market_advisory(base, candidate)
 
     if role_id == "risk":
         kline = candidate.get("kline") or {}
@@ -424,7 +450,7 @@ def slim_roundtable_candidate(candidate: dict[str, Any], role_id: str, *, cfg: d
                 "news": headlines,
             }
         )
-        return base
+        return _attach_market_advisory(base, candidate)
 
     # chair / default
     base.update(
@@ -439,5 +465,4 @@ def slim_roundtable_candidate(candidate: dict[str, Any], role_id: str, *, cfg: d
             "news": headlines,
         }
     )
-    return base
-
+    return _attach_market_advisory(base, candidate)

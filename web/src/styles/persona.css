@@ -1486,6 +1486,16 @@ a {
   margin-top: 0.15rem;
 }
 
+.recon-block {
+  margin-top: 0.75rem;
+  padding-top: 0.55rem;
+  border-top: 1px dashed rgba(255, 255, 255, 0.12);
+}
+
+.recon-block h4 {
+  margin: 0 0 0.35rem;
+}
+
 .mono {
   font-variant-numeric: tabular-nums;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;

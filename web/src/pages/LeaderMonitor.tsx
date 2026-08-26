@@ -38,6 +38,24 @@ type LeaderRow = {
   live_status?: string;
   live_updated_at?: string | null;
   live_session_open?: boolean;
+  live_high?: number | null;
+  live_open?: number | null;
+  live_low?: number | null;
+  reconciliation_state?: string;
+  reconciliation_severity?: string;
+  reconciliation_reason?: string;
+  reconciliation_triggers?: string[];
+  reassessment?: string;
+  break_limit_duration_seconds?: number | null;
+  reconciliation?: {
+    state?: string;
+    severity?: string;
+    reason?: string;
+    trigger_codes?: string[];
+    reassessment?: string;
+    break_limit_duration_seconds?: number | null;
+    distance_from_limit_up_pct?: number | null;
+  };
 };
 
 type LeaderMonitorPayload = {
@@ -154,6 +172,20 @@ const LIVE_STATUS_ZH: Record<string, string> = {
   NORMAL: "正常",
   STALE: "行情数据延迟",
   UNKNOWN: "暂无实时行情",
+};
+
+const RECON_STATE_ZH: Record<string, string> = {
+  CONSISTENT: "研究与盘面一致",
+  DEGRADED: "研究状态与当前盘面发生偏离",
+  INVALIDATED: "原研究假设已明显失效",
+  UNKNOWN: "无法对照（行情不足）",
+};
+
+const REASSESS_ZH: Record<string, string> = {
+  NONE: "无需重新研讨",
+  CANDIDATE: "可考虑重新研讨",
+  REQUIRED: "需要重新研讨",
+  RECOVERED: "已回封，状态恢复",
 };
 
 const REASON_TOKEN_ZH: Record<string, string> = {
@@ -295,6 +327,23 @@ function Timeline({ steps }: { steps?: TimelineStep[] }) {
   );
 }
 
+function formatDuration(sec?: number | null): string {
+  if (sec == null || Number.isNaN(Number(sec))) return "—";
+  const s = Math.max(0, Math.floor(Number(sec)));
+  const m = Math.floor(s / 60);
+  const r = s % 60;
+  if (m <= 0) return `${r} 秒`;
+  return `${m} 分 ${r} 秒`;
+}
+
+function reconTone(state?: string): "ok" | "warn" | "down" | "muted" {
+  const s = String(state || "").toUpperCase();
+  if (s === "CONSISTENT") return "ok";
+  if (s === "DEGRADED") return "warn";
+  if (s === "INVALIDATED") return "down";
+  return "muted";
+}
+
 function LiveStatusLabel({ status }: { status?: string }) {
   const s = String(status || "UNKNOWN").toUpperCase();
   const text = LIVE_STATUS_ZH[s] || s;
@@ -311,6 +360,11 @@ function LeaderCard({ row, highlight }: { row: LeaderRow; highlight?: boolean })
   const hasLivePx = row.live_price != null && Number(row.live_price) > 0;
   const statusUp = String(row.live_status || "").toUpperCase();
   const staleOrUnknown = statusUp === "STALE" || statusUp === "UNKNOWN";
+  const reconState = row.reconciliation_state || row.reconciliation?.state || "UNKNOWN";
+  const reassessment = row.reassessment || row.reconciliation?.reassessment || "NONE";
+  const breakDur =
+    row.break_limit_duration_seconds ?? row.reconciliation?.break_limit_duration_seconds ?? null;
+  const sessionHigh = row.live_high;
 
   return (
     <article className={`leader-monitor-card${highlight ? " is-buy-ready" : ""}`}>
@@ -413,6 +467,7 @@ function LeaderCard({ row, highlight }: { row: LeaderRow; highlight?: boolean })
                     {row.live_limit_up_price != null
                       ? `¥${Number(row.live_limit_up_price).toFixed(2)}`
                       : "—"}
+                    {sessionHigh != null ? ` · 今高 ¥${Number(sessionHigh).toFixed(2)}` : ""}
                   </div>
                 </>
               ) : hasLivePx && statusUp === "STALE" ? (
@@ -421,12 +476,24 @@ function LeaderCard({ row, highlight }: { row: LeaderRow; highlight?: boolean })
               <div className="live-status-row">
                 <LiveStatusLabel status={row.live_status} />
               </div>
+              {statusUp === "BREAK_LIMIT" ? (
+                <p className="muted small">炸板持续：{formatDuration(breakDur)}</p>
+              ) : null}
               <p className="muted small">实时更新：{formatLiveTime(row.live_updated_at)}</p>
               {row.live_session_open === false ? (
                 <p className="muted small">当前非连续竞价时段（展示缓存/收盘附近行情）</p>
               ) : null}
             </div>
           )}
+
+          <div className="recon-block">
+            <h4>状态对照</h4>
+            <Tone text={zhMap(RECON_STATE_ZH, reconState)} tone={reconTone(reconState)} />
+            <p className="muted small">建议：{zhMap(REASSESS_ZH, reassessment)}</p>
+            {row.reconciliation_triggers?.length ? (
+              <p className="muted small mono">{row.reconciliation_triggers.join(" · ")}</p>
+            ) : null}
+          </div>
         </section>
       </div>
     </article>
@@ -551,6 +618,9 @@ export default function LeaderMonitor() {
             </li>
             <li>
               <strong>今日实时</strong>来自新浪行情批量叠加，约 15 秒刷新；炸板 ≠ 研究连板失效。
+            </li>
+            <li>
+              <strong>状态对照</strong>为确定性规则（非 LLM），偏离时可提示重新研讨，不会直接改 BUY Gate。
             </li>
             <li>阶段「极端」默认等待，不直接追涨停；「可买入」门槛未降低。</li>
           </ul>

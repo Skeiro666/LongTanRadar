@@ -84,6 +84,14 @@ council:
   full_tiers: [FOCUS, BUY_CANDIDATE, BUY_READY]
   skip_tiers: [NEW_LIMIT_UP, LEADER_CANDIDATE, DROPPED]
 
+# Optional overrides for data.live (LeaderMonitor / Roundtable advisory)
+live:
+  break_limit_reassess_seconds: 300
+  break_limit_invalidation_seconds: 900
+  break_limit_rebound_seconds: 180
+  price_divergence_pct: 3.0
+  enable_roundtable_reassessment: true
+
 notification:
   buy_ready_alert: true
   require_risk_pass: true

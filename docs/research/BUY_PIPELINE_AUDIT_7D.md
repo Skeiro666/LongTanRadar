@@ -1,9 +1,132 @@
-# LongTanRadar 7-Day BUY Pipeline Audit
+# LongTanRadar BUY Pipeline Audit
 
 **Window:** 2026-08-19 → 2026-08-25 (7 days)
-**Data:** reports=3 ['2026-08-21', '2026-08-24', '2026-08-25']; snapshots=176; sessions=176; cycles=11
+**Data:** reports=3 ['2026-08-21', '2026-08-24', '2026-08-25']; snapshots=176; sessions=176; cycles_deduped=11; cycles_raw=20
+**Coverage:** calendar_days=7 active_days=3 missing_days=4 coverage_pct=42.86% day_status={'NOT_RUN': 4, 'HAS_REPORT_OVERWRITTEN': 3}
 
 > Read-only audit. No BUY gates / RiskFilter / prompts / thresholds were modified.
+
+## P0 Answers (A–I)
+
+- **A_daily_run:** No — coverage_pct=42.86% (3/7 days with dated reports). status_counts={'NOT_RUN': 4, 'HAS_REPORT_OVERWRITTEN': 3}
+- **B_gate_skip:** GATE_SKIP n=29; categories={'DEEP_BUDGET': 23, 'LLM_BUDGET': 6}. These are budget/gate rejects persisted as rating=GATE_SKIP, not full AI council decisions.
+- **C_ml_profit_event_news_zero:** Dated report candidate_union.universe historically omitted ml/profit/event/news fields (serialization strip). Snapshots often still carry ml_prediction. Audit MISSING on reports ≠ runtime always computed 0. Post-36ffb97 serialize_signal_fields persists statuses on new reports.
+- **D_30d_three_reports:** Only 3 active report days because (1) agent not daily-scheduled, (2) same as_of overwrites dated JSON, (3) missing_days=4. See coverage.per_day.
+- **E_autostart:** Production does NOT auto-run daily with agent.autostart=false. Observed report days require manual /api/agent/start, CLI, or a prior autostart session.
+- **F_full_council:** full_ai_council=26 / platform_reports=55; gate_skip=29 (deep=23, llm=6)
+- **G_deep_budget_leaders:** 22/23 DEEP_BUDGET names look like material candidates (score/leader/board heuristics) blocked solely by max_deep=10 budget — not by weak signals. This is capacity throttling, not a BUY-threshold reject.
+- **H_limit_up:** All sampled limit_up blocks mean 'current bar is limit-up → no open' (不追涨停). Suggested audit reason_code=LIMIT_UP_NO_ENTRY. Trading logic unchanged in this audit.
+- **I_today_zero_buy:** {'focus_date': '2026-08-25', 'classification': 'AI_DID_NOT_RATE_BUY+BUDGET_GATE_SKIP+AUDIT_FIELD_STRIPPED+SPARSE_CALENDAR_COVERAGE', 'NO_BUY_REASON': 'GATE_SKIP', 'TOP_BLOCKERS': {'GATE_SKIP': 7, 'RATING_NOT_BUY:WATCH': 6, 'RATING_NOT_BUY:AVOID': 1, 'RATING_NOT_BUY:NEUTRAL': 1}, 'DATA_COVERAGE': {'report_persisted': True, 'day_status': 'HAS_REPORT_OVERWRITTEN', 'data_quality': 'LEGACY_STRIPPED_FIELDS', 'window_coverage_pct': 42.86}}
+
+## Execution chain (agent.autostart)
+
+- verdict: Production does NOT auto-run daily with agent.autostart=false. Observed report days require manual /api/agent/start, CLI, or a prior autostart session.
+- `serve_lifespan_autostart` active=False — src/ashare/api/app.py lifespan → start_agent(run_now=True) (Only when agent.autostart=true)
+- `api_agent_start` active=manual — POST /api/agent/start (Starts daemon loop; UI or operator triggers)
+- `api_agent_cycle` active=manual — POST /api/agent/cycle (One-shot cycle)
+- `cli_agent` active=manual — python -m ashare.main agent (One-shot run_cycle)
+- `cli_research` active=manual — python -m ashare.main research (Research/report only)
+- `os_cron` active=False — None (No in-repo cron/Task Scheduler wiring)
+
+## Calendar coverage
+
+- explanation: Dated reports are keyed by as_of and overwrite same-day files. Multiple production_cycles on one as_of collapse to one report day. Days with status=NOT_RUN had no agent/research cycle recorded.
+- status_counts: `{'NOT_RUN': 4, 'HAS_REPORT_OVERWRITTEN': 3}`
+
+| Date | Status | Cycles | Report | Note |
+|---|---|---:|---|---|
+| 2026-08-19 | NOT_RUN | 0 | False | no production_cycles and no dated report |
+| 2026-08-20 | NOT_RUN | 0 | False | no production_cycles and no dated report |
+| 2026-08-21 | HAS_REPORT_OVERWRITTEN | 2 | True | 2 cycles same as_of; latest report kept |
+| 2026-08-22 | NOT_RUN | 0 | False | no production_cycles and no dated report |
+| 2026-08-23 | NOT_RUN | 0 | False | no production_cycles and no dated report |
+| 2026-08-24 | HAS_REPORT_OVERWRITTEN | 12 | True | 12 cycles same as_of; latest report kept |
+| 2026-08-25 | HAS_REPORT_OVERWRITTEN | 6 | True | 6 cycles same as_of; latest report kept |
+
+## GATE_SKIP detail
+
+- n=29 categories=`{'DEEP_BUDGET': 23, 'LLM_BUDGET': 6}`
+- note: GATE_SKIP is a platform_reports rating for budget/gate rejects — not a full AI Council decision.
+
+| Symbol | Date | reason_code | reason_detail | candidate_score | leader_score |
+|---|---|---|---|---:|---:|
+| 600397.SH | 2026-08-21 | DEEP_BUDGET | DEEP_BUDGET | 0.5645661608328318 | 0.4851013116527023 |
+| 600110.SH | 2026-08-21 | DEEP_BUDGET | DEEP_BUDGET | 0.5540513880856606 | 0.38458454982498264 |
+| 603709.SH | 2026-08-21 | DEEP_BUDGET | DEEP_BUDGET | 0.5038257747087851 | 0.25854983250129054 |
+| 600123.SH | 2026-08-21 | DEEP_BUDGET | DEEP_BUDGET | 0.48359695727681423 | 0.11503892555280257 |
+| 603318.SH | 2026-08-21 | DEEP_BUDGET | DEEP_BUDGET | 0.46415716479896696 | 0.12691562376816934 |
+| 603333.SH | 2026-08-21 | DEEP_BUDGET | DEEP_BUDGET | 0.4622144531755433 | 0.5651705464879467 |
+| 600691.SH | 2026-08-21 | DEEP_BUDGET | DEEP_BUDGET | 0.4459714246618571 | 0.09325168951006754 |
+| 605151.SH | 2026-08-21 | DEEP_BUDGET | DEEP_BUDGET | 0.4385094949022522 | 0.0933604616254824 |
+| 603536.SH | 2026-08-21 | DEEP_BUDGET | DEEP_BUDGET | 0.4309186972671203 | 0.07167246838224836 |
+| 600257.SH | 2026-08-21 | DEEP_BUDGET | DEEP_BUDGET | 0.35778825077122656 | 0.03415690696540903 |
+| 600397.SH | 2026-08-24 | LLM_BUDGET | LLM_BUDGET | 0.6114145250774883 | 0.4802319764118713 |
+| 002491.SZ | 2026-08-24 | LLM_BUDGET | LLM_BUDGET | 0.6049240858478618 | 0.5194837015854105 |
+| 600971.SH | 2026-08-24 | DEEP_BUDGET | DEEP_BUDGET | 0.5513301158374891 | 0.3085622357261596 |
+| 003032.SZ | 2026-08-24 | DEEP_BUDGET | DEEP_BUDGET | 0.5426320000214332 | 0.6628363783544524 |
+| 600123.SH | 2026-08-24 | DEEP_BUDGET | DEEP_BUDGET | 0.5115250914367003 | 0.21626216600961978 |
+| 600257.SH | 2026-08-24 | DEEP_BUDGET | DEEP_BUDGET | 0.48170889392232297 | 0.13023680786772968 |
+| 603318.SH | 2026-08-24 | DEEP_BUDGET | DEEP_BUDGET | 0.47186287514131847 | 0.07570634070433341 |
+| 603333.SH | 2026-08-24 | DEEP_BUDGET | DEEP_BUDGET | 0.4530608826466127 | 0.5206501408950838 |
+| 603980.SH | 2026-08-24 | DEEP_BUDGET | DEEP_BUDGET | 0.45055760404519934 | 0.04206934489104559 |
+| 603709.SH | 2026-08-24 | DEEP_BUDGET | DEEP_BUDGET | 0.4428914048848009 | 0.08445163300419287 |
+| 600691.SH | 2026-08-24 | DEEP_BUDGET | DEEP_BUDGET | 0.44279936060026726 | -0.0015256363801889883 |
+| 603536.SH | 2026-08-24 | DEEP_BUDGET | DEEP_BUDGET | 0.42922107914588414 | 0.044283217288598825 |
+| 002963.SZ | 2026-08-25 | LLM_BUDGET | LLM_BUDGET | 0.2548154252631497 | 0.4970916912280468 |
+| 600371.SH | 2026-08-25 | LLM_BUDGET | LLM_BUDGET | 0.24889343767629582 | 0.4694574409798928 |
+| 003018.SZ | 2026-08-25 | LLM_BUDGET | LLM_BUDGET | 0.2124328873360516 | 0.08722321551797046 |
+| 002686.SZ | 2026-08-25 | LLM_BUDGET | LLM_BUDGET | 0.20214961059381817 | 0.33590364931567085 |
+| 002081.SZ | 2026-08-25 | DEEP_BUDGET | DEEP_BUDGET | 0.23886986915336186 | 0.44081867377151 |
+| 603318.SH | 2026-08-25 | DEEP_BUDGET | DEEP_BUDGET | 0.23675453085734682 | 0.09957076843595682 |
+| 002949.SZ | 2026-08-25 | DEEP_BUDGET | DEEP_BUDGET | 0.22178609801535099 | 0.40272218480576466 |
+
+## DEEP_BUDGET
+
+- max_deep=10 n=23 high_quality_blocked=22
+- verdict: 22/23 DEEP_BUDGET names look like material candidates (score/leader/board heuristics) blocked solely by max_deep=10 budget — not by weak signals. This is capacity throttling, not a BUY-threshold reject.
+- score_summary: `{'n': 23, 'min': 0.221786, 'max': 0.564566, 'mean': 0.442635}`
+
+## Council breakdown (full AI vs GATE_SKIP)
+
+- platform_reports: **55**
+- full_ai_council: **26**
+- GATE_SKIP: **29** (DEEP_BUDGET=23, LLM_BUDGET=6)
+- WATCH=23 AVOID=2 NEUTRAL=1 BUY=0
+- chairman llm vs heuristic/cache among full AI: llm=0 heuristic_or_cache=0
+
+## Signal provenance (ML / Profit / Event / News / Valuation)
+
+- why audit showed 0: Dated report candidate_union.universe historically omitted ml/profit/event/news fields (serialization strip). Snapshots often still carry ml_prediction. Audit MISSING on reports ≠ runtime always computed 0. Post-36ffb97 serialize_signal_fields persists statuses on new reports.
+- dated_report_universe: `{'ml': {'REPORT_FIELD_ABSENT': 60}, 'profit': {'REPORT_FIELD_ABSENT': 60}, 'event': {'REPORT_FIELD_ABSENT': 60}, 'news': {'REPORT_FIELD_ABSENT': 60}}`
+- research_snapshots: `{'ml': {'VALID': 176}, 'profit': {'VALID': 175, 'UNAVAILABLE': 1}, 'event': {'VALID': 176}, 'news': {'VALID': 133, 'MISSING': 6, 'ZERO': 37}, 'valuation': {'UNAVAILABLE': 176}, 'n_snapshots': 176}`
+
+## RiskFilter limit_up (display mapping only)
+
+- n_limit_up_blocks=19 suggested=`LIMIT_UP_NO_ENTRY`
+- All sampled limit_up blocks mean 'current bar is limit-up → no open' (不追涨停). Suggested audit reason_code=LIMIT_UP_NO_ENTRY. Trading logic unchanged in this audit.
+- trading_logic_unchanged=True
+
+## Production Health Table
+
+| Date | scheduler | candidates | research | council | full_ai | gate_skip | buy | final_buy | data_quality | report |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---|---|
+| 2026-08-19 | False | None | None | 0 | 0 | 0 | 0 | 0 | NO_RUN | False |
+| 2026-08-20 | False | None | None | 0 | 0 | 0 | 0 | 0 | NO_RUN | False |
+| 2026-08-21 | True | 60 | 20 | 20 | 10 | 10 | 0 | 0 | LEGACY_STRIPPED_FIELDS | True |
+| 2026-08-22 | False | None | None | 0 | 0 | 0 | 0 | 0 | NO_RUN | False |
+| 2026-08-23 | False | None | None | 0 | 0 | 0 | 0 | 0 | NO_RUN | False |
+| 2026-08-24 | True | 60 | 20 | 20 | 8 | 12 | 0 | 0 | LEGACY_STRIPPED_FIELDS | True |
+| 2026-08-25 | True | 60 | 20 | 15 | 8 | 7 | 0 | 0 | LEGACY_STRIPPED_FIELDS | True |
+
+## NO_BUY_REASON_DETAIL (per day)
+
+- **2026-08-19** NO_BUY_REASON=`SYSTEM_NOT_RUN` blockers=`{'NOT_RUN': 1}` coverage=`{'report_persisted': False, 'day_status': 'NOT_RUN', 'data_quality': 'NO_RUN', 'window_coverage_pct': 42.86}`
+- **2026-08-20** NO_BUY_REASON=`SYSTEM_NOT_RUN` blockers=`{'NOT_RUN': 1}` coverage=`{'report_persisted': False, 'day_status': 'NOT_RUN', 'data_quality': 'NO_RUN', 'window_coverage_pct': 42.86}`
+- **2026-08-21** NO_BUY_REASON=`RATING_NOT_BUY:WATCH` blockers=`{'RATING_NOT_BUY:WATCH': 10, 'GATE_SKIP': 10}` coverage=`{'report_persisted': True, 'day_status': 'HAS_REPORT_OVERWRITTEN', 'data_quality': 'LEGACY_STRIPPED_FIELDS', 'window_coverage_pct': 42.86}`
+- **2026-08-22** NO_BUY_REASON=`SYSTEM_NOT_RUN` blockers=`{'NOT_RUN': 1}` coverage=`{'report_persisted': False, 'day_status': 'NOT_RUN', 'data_quality': 'NO_RUN', 'window_coverage_pct': 42.86}`
+- **2026-08-23** NO_BUY_REASON=`SYSTEM_NOT_RUN` blockers=`{'NOT_RUN': 1}` coverage=`{'report_persisted': False, 'day_status': 'NOT_RUN', 'data_quality': 'NO_RUN', 'window_coverage_pct': 42.86}`
+- **2026-08-24** NO_BUY_REASON=`GATE_SKIP` blockers=`{'GATE_SKIP': 12, 'RATING_NOT_BUY:WATCH': 7, 'RATING_NOT_BUY:AVOID': 1}` coverage=`{'report_persisted': True, 'day_status': 'HAS_REPORT_OVERWRITTEN', 'data_quality': 'LEGACY_STRIPPED_FIELDS', 'window_coverage_pct': 42.86}`
+- **2026-08-25** NO_BUY_REASON=`GATE_SKIP` blockers=`{'GATE_SKIP': 7, 'RATING_NOT_BUY:WATCH': 6, 'RATING_NOT_BUY:AVOID': 1, 'RATING_NOT_BUY:NEUTRAL': 1}` coverage=`{'report_persisted': True, 'day_status': 'HAS_REPORT_OVERWRITTEN', 'data_quality': 'LEGACY_STRIPPED_FIELDS', 'window_coverage_pct': 42.86}`
 
 ## Config snapshot (execution path)
 
@@ -170,7 +293,7 @@ Note: independent fail rates treat missing values as fail — useful to spot har
 
 ## Live reconciliation (advisory only)
 
-`{'note': 'Live reconciliation is advisory; not a BUY gate.', 'pending_reassessments': 0, 'trigger_counts': {}, 'state_counts_from_snapshot_meta': {}}`
+`{'note': 'Live reconciliation is advisory; not a BUY gate.', 'pending_reassessments': 10, 'trigger_counts': {'BREAK_LIMIT': 10, 'REASSESSMENT_CANDIDATE': 10, 'BREAK_LIMIT_PERSISTED': 10, 'ROUND_TABLE_REASSESS_REQUIRED': 10, 'RESEARCH_LIVE_DIVERGENCE': 8, 'PRICE_WEAKENING': 8, 'primary:RESEARCH_LIVE_DIVERGENCE': 8, 'primary:BREAK_LIMIT_PERSISTED': 2}, 'state_counts_from_snapshot_meta': {}}`
 
 ## Paper account
 
@@ -220,7 +343,7 @@ Note: independent fail rates treat missing values as fail — useful to spot har
 - **ml_dist:** `{'n': 0}`
 - **candidate_dist:** `{'n': 60, 'min': 0.16717, 'p25': 0.406536, 'p50': 0.488933, 'p75': 0.681095, 'p90': 0.827913, 'p95': 0.87512, 'max': 1.08975, 'mean': 0.52102}`
 - **n_buy_rated_cases_explained:** `5`
-- **live_recon_summary:** `{'pending': 0, 'states': {}}`
+- **live_recon_summary:** `{'pending': 10, 'states': {}}`
 
 ---
 Audit complete. No strategy parameters were changed.

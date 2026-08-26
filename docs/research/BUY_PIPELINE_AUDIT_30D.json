@@ -1,5 +1,5 @@
 {
-  "audit_version": "buy_pipeline_audit_v30d",
+  "audit_version": "buy_pipeline_audit_p0_v30d",
   "window": {
     "start": "2026-07-27",
     "end": "2026-08-25",
@@ -15,7 +15,16 @@
     "n_snapshots": 176,
     "n_sessions": 176,
     "n_production_cycles_deduped": 11,
-    "note": "Audit uses persisted reports/snapshots only; does not re-run research."
+    "note": "Audit uses persisted reports/snapshots only; does not re-run research.",
+    "calendar_days": 30,
+    "active_days": 3,
+    "missing_days": 27,
+    "coverage_pct": 10.0,
+    "day_status_counts": {
+      "NOT_RUN": 27,
+      "HAS_REPORT_OVERWRITTEN": 3
+    },
+    "n_production_cycles_raw_in_window": 20
   },
   "config": {
     "trading.mode": "backtest",
@@ -739,8 +748,17 @@
   ],
   "live_reconciliation": {
     "note": "Live reconciliation is advisory; not a BUY gate.",
-    "pending_reassessments": 0,
-    "trigger_counts": {},
+    "pending_reassessments": 10,
+    "trigger_counts": {
+      "BREAK_LIMIT": 10,
+      "REASSESSMENT_CANDIDATE": 10,
+      "BREAK_LIMIT_PERSISTED": 10,
+      "ROUND_TABLE_REASSESS_REQUIRED": 10,
+      "RESEARCH_LIVE_DIVERGENCE": 8,
+      "PRICE_WEAKENING": 8,
+      "primary:RESEARCH_LIVE_DIVERGENCE": 8,
+      "primary:BREAK_LIMIT_PERSISTED": 2
+    },
     "state_counts_from_snapshot_meta": {}
   },
   "paper_account": {
@@ -840,7 +858,7 @@
     },
     "n_buy_rated_cases_explained": 5,
     "live_recon_summary": {
-      "pending": 0,
+      "pending": 10,
       "states": {}
     }
   },
@@ -884,6 +902,3254 @@
     },
     "news_score": {
       "MISSING": 60
+    }
+  },
+  "p0_observability": {
+    "coverage": {
+      "calendar_days": 30,
+      "calendar_day_list": [
+        "2026-07-27",
+        "2026-07-28",
+        "2026-07-29",
+        "2026-07-30",
+        "2026-07-31",
+        "2026-08-01",
+        "2026-08-02",
+        "2026-08-03",
+        "2026-08-04",
+        "2026-08-05",
+        "2026-08-06",
+        "2026-08-07",
+        "2026-08-08",
+        "2026-08-09",
+        "2026-08-10",
+        "2026-08-11",
+        "2026-08-12",
+        "2026-08-13",
+        "2026-08-14",
+        "2026-08-15",
+        "2026-08-16",
+        "2026-08-17",
+        "2026-08-18",
+        "2026-08-19",
+        "2026-08-20",
+        "2026-08-21",
+        "2026-08-22",
+        "2026-08-23",
+        "2026-08-24",
+        "2026-08-25"
+      ],
+      "active_days": 3,
+      "active_day_list": [
+        "2026-08-21",
+        "2026-08-24",
+        "2026-08-25"
+      ],
+      "missing_days": 27,
+      "missing_day_list": [
+        "2026-07-27",
+        "2026-07-28",
+        "2026-07-29",
+        "2026-07-30",
+        "2026-07-31",
+        "2026-08-01",
+        "2026-08-02",
+        "2026-08-03",
+        "2026-08-04",
+        "2026-08-05",
+        "2026-08-06",
+        "2026-08-07",
+        "2026-08-08",
+        "2026-08-09",
+        "2026-08-10",
+        "2026-08-11",
+        "2026-08-12",
+        "2026-08-13",
+        "2026-08-14",
+        "2026-08-15",
+        "2026-08-16",
+        "2026-08-17",
+        "2026-08-18",
+        "2026-08-19",
+        "2026-08-20",
+        "2026-08-22",
+        "2026-08-23"
+      ],
+      "coverage_pct": 10.0,
+      "status_counts": {
+        "NOT_RUN": 27,
+        "HAS_REPORT_OVERWRITTEN": 3
+      },
+      "per_day": [
+        {
+          "date": "2026-07-27",
+          "status": "NOT_RUN",
+          "n_cycles": 0,
+          "n_cycles_with_candidates": 0,
+          "n_cycles_with_research": 0,
+          "has_dated_report": false,
+          "report_file": null,
+          "note": "no production_cycles and no dated report"
+        },
+        {
+          "date": "2026-07-28",
+          "status": "NOT_RUN",
+          "n_cycles": 0,
+          "n_cycles_with_candidates": 0,
+          "n_cycles_with_research": 0,
+          "has_dated_report": false,
+          "report_file": null,
+          "note": "no production_cycles and no dated report"
+        },
+        {
+          "date": "2026-07-29",
+          "status": "NOT_RUN",
+          "n_cycles": 0,
+          "n_cycles_with_candidates": 0,
+          "n_cycles_with_research": 0,
+          "has_dated_report": false,
+          "report_file": null,
+          "note": "no production_cycles and no dated report"
+        },
+        {
+          "date": "2026-07-30",
+          "status": "NOT_RUN",
+          "n_cycles": 0,
+          "n_cycles_with_candidates": 0,
+          "n_cycles_with_research": 0,
+          "has_dated_report": false,
+          "report_file": null,
+          "note": "no production_cycles and no dated report"
+        },
+        {
+          "date": "2026-07-31",
+          "status": "NOT_RUN",
+          "n_cycles": 0,
+          "n_cycles_with_candidates": 0,
+          "n_cycles_with_research": 0,
+          "has_dated_report": false,
+          "report_file": null,
+          "note": "no production_cycles and no dated report"
+        },
+        {
+          "date": "2026-08-01",
+          "status": "NOT_RUN",
+          "n_cycles": 0,
+          "n_cycles_with_candidates": 0,
+          "n_cycles_with_research": 0,
+          "has_dated_report": false,
+          "report_file": null,
+          "note": "no production_cycles and no dated report"
+        },
+        {
+          "date": "2026-08-02",
+          "status": "NOT_RUN",
+          "n_cycles": 0,
+          "n_cycles_with_candidates": 0,
+          "n_cycles_with_research": 0,
+          "has_dated_report": false,
+          "report_file": null,
+          "note": "no production_cycles and no dated report"
+        },
+        {
+          "date": "2026-08-03",
+          "status": "NOT_RUN",
+          "n_cycles": 0,
+          "n_cycles_with_candidates": 0,
+          "n_cycles_with_research": 0,
+          "has_dated_report": false,
+          "report_file": null,
+          "note": "no production_cycles and no dated report"
+        },
+        {
+          "date": "2026-08-04",
+          "status": "NOT_RUN",
+          "n_cycles": 0,
+          "n_cycles_with_candidates": 0,
+          "n_cycles_with_research": 0,
+          "has_dated_report": false,
+          "report_file": null,
+          "note": "no production_cycles and no dated report"
+        },
+        {
+          "date": "2026-08-05",
+          "status": "NOT_RUN",
+          "n_cycles": 0,
+          "n_cycles_with_candidates": 0,
+          "n_cycles_with_research": 0,
+          "has_dated_report": false,
+          "report_file": null,
+          "note": "no production_cycles and no dated report"
+        },
+        {
+          "date": "2026-08-06",
+          "status": "NOT_RUN",
+          "n_cycles": 0,
+          "n_cycles_with_candidates": 0,
+          "n_cycles_with_research": 0,
+          "has_dated_report": false,
+          "report_file": null,
+          "note": "no production_cycles and no dated report"
+        },
+        {
+          "date": "2026-08-07",
+          "status": "NOT_RUN",
+          "n_cycles": 0,
+          "n_cycles_with_candidates": 0,
+          "n_cycles_with_research": 0,
+          "has_dated_report": false,
+          "report_file": null,
+          "note": "no production_cycles and no dated report"
+        },
+        {
+          "date": "2026-08-08",
+          "status": "NOT_RUN",
+          "n_cycles": 0,
+          "n_cycles_with_candidates": 0,
+          "n_cycles_with_research": 0,
+          "has_dated_report": false,
+          "report_file": null,
+          "note": "no production_cycles and no dated report"
+        },
+        {
+          "date": "2026-08-09",
+          "status": "NOT_RUN",
+          "n_cycles": 0,
+          "n_cycles_with_candidates": 0,
+          "n_cycles_with_research": 0,
+          "has_dated_report": false,
+          "report_file": null,
+          "note": "no production_cycles and no dated report"
+        },
+        {
+          "date": "2026-08-10",
+          "status": "NOT_RUN",
+          "n_cycles": 0,
+          "n_cycles_with_candidates": 0,
+          "n_cycles_with_research": 0,
+          "has_dated_report": false,
+          "report_file": null,
+          "note": "no production_cycles and no dated report"
+        },
+        {
+          "date": "2026-08-11",
+          "status": "NOT_RUN",
+          "n_cycles": 0,
+          "n_cycles_with_candidates": 0,
+          "n_cycles_with_research": 0,
+          "has_dated_report": false,
+          "report_file": null,
+          "note": "no production_cycles and no dated report"
+        },
+        {
+          "date": "2026-08-12",
+          "status": "NOT_RUN",
+          "n_cycles": 0,
+          "n_cycles_with_candidates": 0,
+          "n_cycles_with_research": 0,
+          "has_dated_report": false,
+          "report_file": null,
+          "note": "no production_cycles and no dated report"
+        },
+        {
+          "date": "2026-08-13",
+          "status": "NOT_RUN",
+          "n_cycles": 0,
+          "n_cycles_with_candidates": 0,
+          "n_cycles_with_research": 0,
+          "has_dated_report": false,
+          "report_file": null,
+          "note": "no production_cycles and no dated report"
+        },
+        {
+          "date": "2026-08-14",
+          "status": "NOT_RUN",
+          "n_cycles": 0,
+          "n_cycles_with_candidates": 0,
+          "n_cycles_with_research": 0,
+          "has_dated_report": false,
+          "report_file": null,
+          "note": "no production_cycles and no dated report"
+        },
+        {
+          "date": "2026-08-15",
+          "status": "NOT_RUN",
+          "n_cycles": 0,
+          "n_cycles_with_candidates": 0,
+          "n_cycles_with_research": 0,
+          "has_dated_report": false,
+          "report_file": null,
+          "note": "no production_cycles and no dated report"
+        },
+        {
+          "date": "2026-08-16",
+          "status": "NOT_RUN",
+          "n_cycles": 0,
+          "n_cycles_with_candidates": 0,
+          "n_cycles_with_research": 0,
+          "has_dated_report": false,
+          "report_file": null,
+          "note": "no production_cycles and no dated report"
+        },
+        {
+          "date": "2026-08-17",
+          "status": "NOT_RUN",
+          "n_cycles": 0,
+          "n_cycles_with_candidates": 0,
+          "n_cycles_with_research": 0,
+          "has_dated_report": false,
+          "report_file": null,
+          "note": "no production_cycles and no dated report"
+        },
+        {
+          "date": "2026-08-18",
+          "status": "NOT_RUN",
+          "n_cycles": 0,
+          "n_cycles_with_candidates": 0,
+          "n_cycles_with_research": 0,
+          "has_dated_report": false,
+          "report_file": null,
+          "note": "no production_cycles and no dated report"
+        },
+        {
+          "date": "2026-08-19",
+          "status": "NOT_RUN",
+          "n_cycles": 0,
+          "n_cycles_with_candidates": 0,
+          "n_cycles_with_research": 0,
+          "has_dated_report": false,
+          "report_file": null,
+          "note": "no production_cycles and no dated report"
+        },
+        {
+          "date": "2026-08-20",
+          "status": "NOT_RUN",
+          "n_cycles": 0,
+          "n_cycles_with_candidates": 0,
+          "n_cycles_with_research": 0,
+          "has_dated_report": false,
+          "report_file": null,
+          "note": "no production_cycles and no dated report"
+        },
+        {
+          "date": "2026-08-21",
+          "status": "HAS_REPORT_OVERWRITTEN",
+          "n_cycles": 2,
+          "n_cycles_with_candidates": 2,
+          "n_cycles_with_research": 2,
+          "has_dated_report": true,
+          "report_file": "2026-08-21.json",
+          "note": "2 cycles same as_of; latest report kept"
+        },
+        {
+          "date": "2026-08-22",
+          "status": "NOT_RUN",
+          "n_cycles": 0,
+          "n_cycles_with_candidates": 0,
+          "n_cycles_with_research": 0,
+          "has_dated_report": false,
+          "report_file": null,
+          "note": "no production_cycles and no dated report"
+        },
+        {
+          "date": "2026-08-23",
+          "status": "NOT_RUN",
+          "n_cycles": 0,
+          "n_cycles_with_candidates": 0,
+          "n_cycles_with_research": 0,
+          "has_dated_report": false,
+          "report_file": null,
+          "note": "no production_cycles and no dated report"
+        },
+        {
+          "date": "2026-08-24",
+          "status": "HAS_REPORT_OVERWRITTEN",
+          "n_cycles": 12,
+          "n_cycles_with_candidates": 12,
+          "n_cycles_with_research": 12,
+          "has_dated_report": true,
+          "report_file": "2026-08-24.json",
+          "note": "12 cycles same as_of; latest report kept"
+        },
+        {
+          "date": "2026-08-25",
+          "status": "HAS_REPORT_OVERWRITTEN",
+          "n_cycles": 6,
+          "n_cycles_with_candidates": 4,
+          "n_cycles_with_research": 4,
+          "has_dated_report": true,
+          "report_file": "2026-08-25.json",
+          "note": "6 cycles same as_of; latest report kept"
+        }
+      ],
+      "explanation": "Dated reports are keyed by as_of and overwrite same-day files. Multiple production_cycles on one as_of collapse to one report day. Days with status=NOT_RUN had no agent/research cycle recorded."
+    },
+    "gate_skip": {
+      "n_gate_skip": 29,
+      "category_counts": {
+        "DEEP_BUDGET": 23,
+        "LLM_BUDGET": 6
+      },
+      "cases": [
+        {
+          "symbol": "600397.SH",
+          "name": "江钨装备",
+          "research_date": "2026-08-21",
+          "gate": {
+            "passed": false,
+            "reason": "DEEP_BUDGET",
+            "research_tier": "NO_RESEARCH",
+            "rank": 10,
+            "reject_codes": []
+          },
+          "reason_code": "DEEP_BUDGET",
+          "reason_detail": "DEEP_BUDGET",
+          "candidate_score": 0.5645661608328318,
+          "leader_score": 0.4851013116527023,
+          "board_count": null,
+          "trade_timing_action": null,
+          "in_council_flag": true,
+          "entered_full_ai_council": false
+        },
+        {
+          "symbol": "600110.SH",
+          "name": "诺德股份",
+          "research_date": "2026-08-21",
+          "gate": {
+            "passed": false,
+            "reason": "DEEP_BUDGET",
+            "research_tier": "NO_RESEARCH",
+            "rank": 11,
+            "reject_codes": []
+          },
+          "reason_code": "DEEP_BUDGET",
+          "reason_detail": "DEEP_BUDGET",
+          "candidate_score": 0.5540513880856606,
+          "leader_score": 0.38458454982498264,
+          "board_count": null,
+          "trade_timing_action": null,
+          "in_council_flag": true,
+          "entered_full_ai_council": false
+        },
+        {
+          "symbol": "603709.SH",
+          "name": "中源家居",
+          "research_date": "2026-08-21",
+          "gate": {
+            "passed": false,
+            "reason": "DEEP_BUDGET",
+            "research_tier": "NO_RESEARCH",
+            "rank": 12,
+            "reject_codes": []
+          },
+          "reason_code": "DEEP_BUDGET",
+          "reason_detail": "DEEP_BUDGET",
+          "candidate_score": 0.5038257747087851,
+          "leader_score": 0.25854983250129054,
+          "board_count": null,
+          "trade_timing_action": null,
+          "in_council_flag": true,
+          "entered_full_ai_council": false
+        },
+        {
+          "symbol": "600123.SH",
+          "name": "兰花科创",
+          "research_date": "2026-08-21",
+          "gate": {
+            "passed": false,
+            "reason": "DEEP_BUDGET",
+            "research_tier": "NO_RESEARCH",
+            "rank": 13,
+            "reject_codes": []
+          },
+          "reason_code": "DEEP_BUDGET",
+          "reason_detail": "DEEP_BUDGET",
+          "candidate_score": 0.48359695727681423,
+          "leader_score": 0.11503892555280257,
+          "board_count": null,
+          "trade_timing_action": null,
+          "in_council_flag": true,
+          "entered_full_ai_council": false
+        },
+        {
+          "symbol": "603318.SH",
+          "name": "水发燃气",
+          "research_date": "2026-08-21",
+          "gate": {
+            "passed": false,
+            "reason": "DEEP_BUDGET",
+            "research_tier": "NO_RESEARCH",
+            "rank": 14,
+            "reject_codes": []
+          },
+          "reason_code": "DEEP_BUDGET",
+          "reason_detail": "DEEP_BUDGET",
+          "candidate_score": 0.46415716479896696,
+          "leader_score": 0.12691562376816934,
+          "board_count": null,
+          "trade_timing_action": null,
+          "in_council_flag": true,
+          "entered_full_ai_council": false
+        },
+        {
+          "symbol": "603333.SH",
+          "name": "福华尚纬",
+          "research_date": "2026-08-21",
+          "gate": {
+            "passed": false,
+            "reason": "DEEP_BUDGET",
+            "research_tier": "NO_RESEARCH",
+            "rank": 15,
+            "reject_codes": []
+          },
+          "reason_code": "DEEP_BUDGET",
+          "reason_detail": "DEEP_BUDGET",
+          "candidate_score": 0.4622144531755433,
+          "leader_score": 0.5651705464879467,
+          "board_count": null,
+          "trade_timing_action": null,
+          "in_council_flag": true,
+          "entered_full_ai_council": false
+        },
+        {
+          "symbol": "600691.SH",
+          "name": "潞化科技",
+          "research_date": "2026-08-21",
+          "gate": {
+            "passed": false,
+            "reason": "DEEP_BUDGET",
+            "research_tier": "NO_RESEARCH",
+            "rank": 16,
+            "reject_codes": []
+          },
+          "reason_code": "DEEP_BUDGET",
+          "reason_detail": "DEEP_BUDGET",
+          "candidate_score": 0.4459714246618571,
+          "leader_score": 0.09325168951006754,
+          "board_count": null,
+          "trade_timing_action": null,
+          "in_council_flag": true,
+          "entered_full_ai_council": false
+        },
+        {
+          "symbol": "605151.SH",
+          "name": "西上海",
+          "research_date": "2026-08-21",
+          "gate": {
+            "passed": false,
+            "reason": "DEEP_BUDGET",
+            "research_tier": "NO_RESEARCH",
+            "rank": 17,
+            "reject_codes": []
+          },
+          "reason_code": "DEEP_BUDGET",
+          "reason_detail": "DEEP_BUDGET",
+          "candidate_score": 0.4385094949022522,
+          "leader_score": 0.0933604616254824,
+          "board_count": null,
+          "trade_timing_action": null,
+          "in_council_flag": true,
+          "entered_full_ai_council": false
+        },
+        {
+          "symbol": "603536.SH",
+          "name": "惠发食品",
+          "research_date": "2026-08-21",
+          "gate": {
+            "passed": false,
+            "reason": "DEEP_BUDGET",
+            "research_tier": "NO_RESEARCH",
+            "rank": 18,
+            "reject_codes": []
+          },
+          "reason_code": "DEEP_BUDGET",
+          "reason_detail": "DEEP_BUDGET",
+          "candidate_score": 0.4309186972671203,
+          "leader_score": 0.07167246838224836,
+          "board_count": null,
+          "trade_timing_action": null,
+          "in_council_flag": true,
+          "entered_full_ai_council": false
+        },
+        {
+          "symbol": "600257.SH",
+          "name": "大湖股份",
+          "research_date": "2026-08-21",
+          "gate": {
+            "passed": false,
+            "reason": "DEEP_BUDGET",
+            "research_tier": "NO_RESEARCH",
+            "rank": 19,
+            "reject_codes": []
+          },
+          "reason_code": "DEEP_BUDGET",
+          "reason_detail": "DEEP_BUDGET",
+          "candidate_score": 0.35778825077122656,
+          "leader_score": 0.03415690696540903,
+          "board_count": null,
+          "trade_timing_action": null,
+          "in_council_flag": true,
+          "entered_full_ai_council": false
+        },
+        {
+          "symbol": "600397.SH",
+          "name": "江钨装备",
+          "research_date": "2026-08-24",
+          "gate": {
+            "passed": true,
+            "reason": "LLM_BUDGET",
+            "research_tier": "DEEP_RESEARCH",
+            "rank": 8,
+            "reject_codes": []
+          },
+          "reason_code": "LLM_BUDGET",
+          "reason_detail": "LLM_BUDGET",
+          "candidate_score": 0.6114145250774883,
+          "leader_score": 0.4802319764118713,
+          "board_count": null,
+          "trade_timing_action": null,
+          "in_council_flag": true,
+          "entered_full_ai_council": false
+        },
+        {
+          "symbol": "002491.SZ",
+          "name": "通鼎互联",
+          "research_date": "2026-08-24",
+          "gate": {
+            "passed": true,
+            "reason": "LLM_BUDGET",
+            "research_tier": "DEEP_RESEARCH",
+            "rank": 9,
+            "reject_codes": []
+          },
+          "reason_code": "LLM_BUDGET",
+          "reason_detail": "LLM_BUDGET",
+          "candidate_score": 0.6049240858478618,
+          "leader_score": 0.5194837015854105,
+          "board_count": null,
+          "trade_timing_action": null,
+          "in_council_flag": true,
+          "entered_full_ai_council": false
+        },
+        {
+          "symbol": "600971.SH",
+          "name": "恒源煤电",
+          "research_date": "2026-08-24",
+          "gate": {
+            "passed": false,
+            "reason": "DEEP_BUDGET",
+            "research_tier": "NO_RESEARCH",
+            "rank": 10,
+            "reject_codes": []
+          },
+          "reason_code": "DEEP_BUDGET",
+          "reason_detail": "DEEP_BUDGET",
+          "candidate_score": 0.5513301158374891,
+          "leader_score": 0.3085622357261596,
+          "board_count": null,
+          "trade_timing_action": null,
+          "in_council_flag": true,
+          "entered_full_ai_council": false
+        },
+        {
+          "symbol": "003032.SZ",
+          "name": "传智教育",
+          "research_date": "2026-08-24",
+          "gate": {
+            "passed": false,
+            "reason": "DEEP_BUDGET",
+            "research_tier": "NO_RESEARCH",
+            "rank": 11,
+            "reject_codes": []
+          },
+          "reason_code": "DEEP_BUDGET",
+          "reason_detail": "DEEP_BUDGET",
+          "candidate_score": 0.5426320000214332,
+          "leader_score": 0.6628363783544524,
+          "board_count": null,
+          "trade_timing_action": null,
+          "in_council_flag": true,
+          "entered_full_ai_council": false
+        },
+        {
+          "symbol": "600123.SH",
+          "name": "兰花科创",
+          "research_date": "2026-08-24",
+          "gate": {
+            "passed": false,
+            "reason": "DEEP_BUDGET",
+            "research_tier": "NO_RESEARCH",
+            "rank": 12,
+            "reject_codes": []
+          },
+          "reason_code": "DEEP_BUDGET",
+          "reason_detail": "DEEP_BUDGET",
+          "candidate_score": 0.5115250914367003,
+          "leader_score": 0.21626216600961978,
+          "board_count": null,
+          "trade_timing_action": null,
+          "in_council_flag": true,
+          "entered_full_ai_council": false
+        },
+        {
+          "symbol": "600257.SH",
+          "name": "大湖股份",
+          "research_date": "2026-08-24",
+          "gate": {
+            "passed": false,
+            "reason": "DEEP_BUDGET",
+            "research_tier": "NO_RESEARCH",
+            "rank": 13,
+            "reject_codes": []
+          },
+          "reason_code": "DEEP_BUDGET",
+          "reason_detail": "DEEP_BUDGET",
+          "candidate_score": 0.48170889392232297,
+          "leader_score": 0.13023680786772968,
+          "board_count": null,
+          "trade_timing_action": null,
+          "in_council_flag": true,
+          "entered_full_ai_council": false
+        },
+        {
+          "symbol": "603318.SH",
+          "name": "水发燃气",
+          "research_date": "2026-08-24",
+          "gate": {
+            "passed": false,
+            "reason": "DEEP_BUDGET",
+            "research_tier": "NO_RESEARCH",
+            "rank": 14,
+            "reject_codes": []
+          },
+          "reason_code": "DEEP_BUDGET",
+          "reason_detail": "DEEP_BUDGET",
+          "candidate_score": 0.47186287514131847,
+          "leader_score": 0.07570634070433341,
+          "board_count": null,
+          "trade_timing_action": null,
+          "in_council_flag": true,
+          "entered_full_ai_council": false
+        },
+        {
+          "symbol": "603333.SH",
+          "name": "福华尚纬",
+          "research_date": "2026-08-24",
+          "gate": {
+            "passed": false,
+            "reason": "DEEP_BUDGET",
+            "research_tier": "NO_RESEARCH",
+            "rank": 15,
+            "reject_codes": []
+          },
+          "reason_code": "DEEP_BUDGET",
+          "reason_detail": "DEEP_BUDGET",
+          "candidate_score": 0.4530608826466127,
+          "leader_score": 0.5206501408950838,
+          "board_count": null,
+          "trade_timing_action": null,
+          "in_council_flag": true,
+          "entered_full_ai_council": false
+        },
+        {
+          "symbol": "603980.SH",
+          "name": "吉华集团",
+          "research_date": "2026-08-24",
+          "gate": {
+            "passed": false,
+            "reason": "DEEP_BUDGET",
+            "research_tier": "NO_RESEARCH",
+            "rank": 16,
+            "reject_codes": []
+          },
+          "reason_code": "DEEP_BUDGET",
+          "reason_detail": "DEEP_BUDGET",
+          "candidate_score": 0.45055760404519934,
+          "leader_score": 0.04206934489104559,
+          "board_count": null,
+          "trade_timing_action": null,
+          "in_council_flag": true,
+          "entered_full_ai_council": false
+        },
+        {
+          "symbol": "603709.SH",
+          "name": "中源家居",
+          "research_date": "2026-08-24",
+          "gate": {
+            "passed": false,
+            "reason": "DEEP_BUDGET",
+            "research_tier": "NO_RESEARCH",
+            "rank": 17,
+            "reject_codes": []
+          },
+          "reason_code": "DEEP_BUDGET",
+          "reason_detail": "DEEP_BUDGET",
+          "candidate_score": 0.4428914048848009,
+          "leader_score": 0.08445163300419287,
+          "board_count": null,
+          "trade_timing_action": null,
+          "in_council_flag": true,
+          "entered_full_ai_council": false
+        },
+        {
+          "symbol": "600691.SH",
+          "name": "潞化科技",
+          "research_date": "2026-08-24",
+          "gate": {
+            "passed": false,
+            "reason": "DEEP_BUDGET",
+            "research_tier": "NO_RESEARCH",
+            "rank": 18,
+            "reject_codes": []
+          },
+          "reason_code": "DEEP_BUDGET",
+          "reason_detail": "DEEP_BUDGET",
+          "candidate_score": 0.44279936060026726,
+          "leader_score": -0.0015256363801889883,
+          "board_count": null,
+          "trade_timing_action": null,
+          "in_council_flag": true,
+          "entered_full_ai_council": false
+        },
+        {
+          "symbol": "603536.SH",
+          "name": "惠发食品",
+          "research_date": "2026-08-24",
+          "gate": {
+            "passed": false,
+            "reason": "DEEP_BUDGET",
+            "research_tier": "NO_RESEARCH",
+            "rank": 19,
+            "reject_codes": []
+          },
+          "reason_code": "DEEP_BUDGET",
+          "reason_detail": "DEEP_BUDGET",
+          "candidate_score": 0.42922107914588414,
+          "leader_score": 0.044283217288598825,
+          "board_count": null,
+          "trade_timing_action": null,
+          "in_council_flag": true,
+          "entered_full_ai_council": false
+        },
+        {
+          "symbol": "002963.SZ",
+          "name": "豪尔赛",
+          "research_date": "2026-08-25",
+          "gate": {
+            "passed": true,
+            "reason": "LLM_BUDGET",
+            "research_tier": "DEEP_RESEARCH",
+            "rank": 8,
+            "reject_codes": []
+          },
+          "reason_code": "LLM_BUDGET",
+          "reason_detail": "LLM_BUDGET",
+          "candidate_score": 0.2548154252631497,
+          "leader_score": 0.4970916912280468,
+          "board_count": 1,
+          "trade_timing_action": "WAIT",
+          "in_council_flag": false,
+          "entered_full_ai_council": false
+        },
+        {
+          "symbol": "600371.SH",
+          "name": "万向德农",
+          "research_date": "2026-08-25",
+          "gate": {
+            "passed": true,
+            "reason": "LLM_BUDGET",
+            "research_tier": "DEEP_RESEARCH",
+            "rank": 9,
+            "reject_codes": []
+          },
+          "reason_code": "LLM_BUDGET",
+          "reason_detail": "LLM_BUDGET",
+          "candidate_score": 0.24889343767629582,
+          "leader_score": 0.4694574409798928,
+          "board_count": 1,
+          "trade_timing_action": "WAIT",
+          "in_council_flag": false,
+          "entered_full_ai_council": false
+        },
+        {
+          "symbol": "003018.SZ",
+          "name": "金富科技",
+          "research_date": "2026-08-25",
+          "gate": {
+            "passed": true,
+            "reason": "LLM_BUDGET",
+            "research_tier": "LIGHT_RESEARCH",
+            "rank": 13,
+            "reject_codes": []
+          },
+          "reason_code": "LLM_BUDGET",
+          "reason_detail": "LLM_BUDGET",
+          "candidate_score": 0.2124328873360516,
+          "leader_score": 0.08722321551797046,
+          "board_count": 1,
+          "trade_timing_action": "WAIT",
+          "in_council_flag": false,
+          "entered_full_ai_council": false
+        },
+        {
+          "symbol": "002686.SZ",
+          "name": "亿利达",
+          "research_date": "2026-08-25",
+          "gate": {
+            "passed": true,
+            "reason": "LLM_BUDGET",
+            "research_tier": "LIGHT_RESEARCH",
+            "rank": 14,
+            "reject_codes": []
+          },
+          "reason_code": "LLM_BUDGET",
+          "reason_detail": "LLM_BUDGET",
+          "candidate_score": 0.20214961059381817,
+          "leader_score": 0.33590364931567085,
+          "board_count": 1,
+          "trade_timing_action": "WAIT",
+          "in_council_flag": false,
+          "entered_full_ai_council": false
+        },
+        {
+          "symbol": "002081.SZ",
+          "name": "金 螳 螂",
+          "research_date": "2026-08-25",
+          "gate": {
+            "passed": false,
+            "reason": "DEEP_BUDGET",
+            "research_tier": "NO_RESEARCH",
+            "rank": 10,
+            "reject_codes": []
+          },
+          "reason_code": "DEEP_BUDGET",
+          "reason_detail": "DEEP_BUDGET",
+          "candidate_score": 0.23886986915336186,
+          "leader_score": 0.44081867377151,
+          "board_count": 1,
+          "trade_timing_action": "PASS",
+          "in_council_flag": false,
+          "entered_full_ai_council": false
+        },
+        {
+          "symbol": "603318.SH",
+          "name": "水发燃气",
+          "research_date": "2026-08-25",
+          "gate": {
+            "passed": false,
+            "reason": "DEEP_BUDGET",
+            "research_tier": "NO_RESEARCH",
+            "rank": 11,
+            "reject_codes": []
+          },
+          "reason_code": "DEEP_BUDGET",
+          "reason_detail": "DEEP_BUDGET",
+          "candidate_score": 0.23675453085734682,
+          "leader_score": 0.09957076843595682,
+          "board_count": 1,
+          "trade_timing_action": "WAIT",
+          "in_council_flag": false,
+          "entered_full_ai_council": false
+        },
+        {
+          "symbol": "002949.SZ",
+          "name": "华阳国际",
+          "research_date": "2026-08-25",
+          "gate": {
+            "passed": false,
+            "reason": "DEEP_BUDGET",
+            "research_tier": "NO_RESEARCH",
+            "rank": 12,
+            "reject_codes": []
+          },
+          "reason_code": "DEEP_BUDGET",
+          "reason_detail": "DEEP_BUDGET",
+          "candidate_score": 0.22178609801535099,
+          "leader_score": 0.40272218480576466,
+          "board_count": 1,
+          "trade_timing_action": "WAIT",
+          "in_council_flag": false,
+          "entered_full_ai_council": false
+        }
+      ],
+      "note": "GATE_SKIP is a platform_reports rating for budget/gate rejects — not a full AI Council decision."
+    },
+    "deep_budget": {
+      "max_deep_config": 10,
+      "n_deep_budget": 23,
+      "n_high_quality_blocked": 22,
+      "high_quality_blocked_symbols": [
+        {
+          "symbol": "600397.SH",
+          "research_date": "2026-08-21",
+          "candidate_score": 0.5645661608328318,
+          "leader_score": 0.4851013116527023
+        },
+        {
+          "symbol": "600110.SH",
+          "research_date": "2026-08-21",
+          "candidate_score": 0.5540513880856606,
+          "leader_score": 0.38458454982498264
+        },
+        {
+          "symbol": "603709.SH",
+          "research_date": "2026-08-21",
+          "candidate_score": 0.5038257747087851,
+          "leader_score": 0.25854983250129054
+        },
+        {
+          "symbol": "600123.SH",
+          "research_date": "2026-08-21",
+          "candidate_score": 0.48359695727681423,
+          "leader_score": 0.11503892555280257
+        },
+        {
+          "symbol": "603318.SH",
+          "research_date": "2026-08-21",
+          "candidate_score": 0.46415716479896696,
+          "leader_score": 0.12691562376816934
+        },
+        {
+          "symbol": "603333.SH",
+          "research_date": "2026-08-21",
+          "candidate_score": 0.4622144531755433,
+          "leader_score": 0.5651705464879467
+        },
+        {
+          "symbol": "600691.SH",
+          "research_date": "2026-08-21",
+          "candidate_score": 0.4459714246618571,
+          "leader_score": 0.09325168951006754
+        },
+        {
+          "symbol": "605151.SH",
+          "research_date": "2026-08-21",
+          "candidate_score": 0.4385094949022522,
+          "leader_score": 0.0933604616254824
+        },
+        {
+          "symbol": "603536.SH",
+          "research_date": "2026-08-21",
+          "candidate_score": 0.4309186972671203,
+          "leader_score": 0.07167246838224836
+        },
+        {
+          "symbol": "600257.SH",
+          "research_date": "2026-08-21",
+          "candidate_score": 0.35778825077122656,
+          "leader_score": 0.03415690696540903
+        },
+        {
+          "symbol": "600971.SH",
+          "research_date": "2026-08-24",
+          "candidate_score": 0.5513301158374891,
+          "leader_score": 0.3085622357261596
+        },
+        {
+          "symbol": "003032.SZ",
+          "research_date": "2026-08-24",
+          "candidate_score": 0.5426320000214332,
+          "leader_score": 0.6628363783544524
+        },
+        {
+          "symbol": "600123.SH",
+          "research_date": "2026-08-24",
+          "candidate_score": 0.5115250914367003,
+          "leader_score": 0.21626216600961978
+        },
+        {
+          "symbol": "600257.SH",
+          "research_date": "2026-08-24",
+          "candidate_score": 0.48170889392232297,
+          "leader_score": 0.13023680786772968
+        },
+        {
+          "symbol": "603318.SH",
+          "research_date": "2026-08-24",
+          "candidate_score": 0.47186287514131847,
+          "leader_score": 0.07570634070433341
+        },
+        {
+          "symbol": "603333.SH",
+          "research_date": "2026-08-24",
+          "candidate_score": 0.4530608826466127,
+          "leader_score": 0.5206501408950838
+        },
+        {
+          "symbol": "603980.SH",
+          "research_date": "2026-08-24",
+          "candidate_score": 0.45055760404519934,
+          "leader_score": 0.04206934489104559
+        },
+        {
+          "symbol": "603709.SH",
+          "research_date": "2026-08-24",
+          "candidate_score": 0.4428914048848009,
+          "leader_score": 0.08445163300419287
+        },
+        {
+          "symbol": "600691.SH",
+          "research_date": "2026-08-24",
+          "candidate_score": 0.44279936060026726,
+          "leader_score": -0.0015256363801889883
+        },
+        {
+          "symbol": "603536.SH",
+          "research_date": "2026-08-24",
+          "candidate_score": 0.42922107914588414,
+          "leader_score": 0.044283217288598825
+        },
+        {
+          "symbol": "002081.SZ",
+          "research_date": "2026-08-25",
+          "candidate_score": 0.23886986915336186,
+          "leader_score": 0.44081867377151
+        },
+        {
+          "symbol": "002949.SZ",
+          "research_date": "2026-08-25",
+          "candidate_score": 0.22178609801535099,
+          "leader_score": 0.40272218480576466
+        }
+      ],
+      "score_summary": {
+        "n": 23,
+        "min": 0.221786,
+        "max": 0.564566,
+        "mean": 0.442635
+      },
+      "leader_score_summary": {
+        "n": 23,
+        "min": -0.001526,
+        "max": 0.662836,
+        "mean": 0.228454
+      },
+      "cases": [
+        {
+          "symbol": "600397.SH",
+          "name": "江钨装备",
+          "research_date": "2026-08-21",
+          "candidate_score": 0.5645661608328318,
+          "leader_score": 0.4851013116527023,
+          "board_count": null,
+          "limit_up": false,
+          "trade_timing_action": null,
+          "lifecycle": null,
+          "stage": null,
+          "universe_in_council_flag": true,
+          "entered_full_ai_council": false,
+          "why_not_council": "DEEP_BUDGET: max_deep exhausted before this rank",
+          "gate_rank": 10,
+          "high_quality_leader_candidate": true
+        },
+        {
+          "symbol": "600110.SH",
+          "name": "诺德股份",
+          "research_date": "2026-08-21",
+          "candidate_score": 0.5540513880856606,
+          "leader_score": 0.38458454982498264,
+          "board_count": null,
+          "limit_up": false,
+          "trade_timing_action": null,
+          "lifecycle": null,
+          "stage": null,
+          "universe_in_council_flag": true,
+          "entered_full_ai_council": false,
+          "why_not_council": "DEEP_BUDGET: max_deep exhausted before this rank",
+          "gate_rank": 11,
+          "high_quality_leader_candidate": true
+        },
+        {
+          "symbol": "603709.SH",
+          "name": "中源家居",
+          "research_date": "2026-08-21",
+          "candidate_score": 0.5038257747087851,
+          "leader_score": 0.25854983250129054,
+          "board_count": null,
+          "limit_up": false,
+          "trade_timing_action": null,
+          "lifecycle": null,
+          "stage": null,
+          "universe_in_council_flag": true,
+          "entered_full_ai_council": false,
+          "why_not_council": "DEEP_BUDGET: max_deep exhausted before this rank",
+          "gate_rank": 12,
+          "high_quality_leader_candidate": true
+        },
+        {
+          "symbol": "600123.SH",
+          "name": "兰花科创",
+          "research_date": "2026-08-21",
+          "candidate_score": 0.48359695727681423,
+          "leader_score": 0.11503892555280257,
+          "board_count": null,
+          "limit_up": false,
+          "trade_timing_action": null,
+          "lifecycle": null,
+          "stage": null,
+          "universe_in_council_flag": true,
+          "entered_full_ai_council": false,
+          "why_not_council": "DEEP_BUDGET: max_deep exhausted before this rank",
+          "gate_rank": 13,
+          "high_quality_leader_candidate": true
+        },
+        {
+          "symbol": "603318.SH",
+          "name": "水发燃气",
+          "research_date": "2026-08-21",
+          "candidate_score": 0.46415716479896696,
+          "leader_score": 0.12691562376816934,
+          "board_count": null,
+          "limit_up": false,
+          "trade_timing_action": null,
+          "lifecycle": null,
+          "stage": null,
+          "universe_in_council_flag": true,
+          "entered_full_ai_council": false,
+          "why_not_council": "DEEP_BUDGET: max_deep exhausted before this rank",
+          "gate_rank": 14,
+          "high_quality_leader_candidate": true
+        },
+        {
+          "symbol": "603333.SH",
+          "name": "福华尚纬",
+          "research_date": "2026-08-21",
+          "candidate_score": 0.4622144531755433,
+          "leader_score": 0.5651705464879467,
+          "board_count": null,
+          "limit_up": false,
+          "trade_timing_action": null,
+          "lifecycle": null,
+          "stage": null,
+          "universe_in_council_flag": true,
+          "entered_full_ai_council": false,
+          "why_not_council": "DEEP_BUDGET: max_deep exhausted before this rank",
+          "gate_rank": 15,
+          "high_quality_leader_candidate": true
+        },
+        {
+          "symbol": "600691.SH",
+          "name": "潞化科技",
+          "research_date": "2026-08-21",
+          "candidate_score": 0.4459714246618571,
+          "leader_score": 0.09325168951006754,
+          "board_count": null,
+          "limit_up": false,
+          "trade_timing_action": null,
+          "lifecycle": null,
+          "stage": null,
+          "universe_in_council_flag": true,
+          "entered_full_ai_council": false,
+          "why_not_council": "DEEP_BUDGET: max_deep exhausted before this rank",
+          "gate_rank": 16,
+          "high_quality_leader_candidate": true
+        },
+        {
+          "symbol": "605151.SH",
+          "name": "西上海",
+          "research_date": "2026-08-21",
+          "candidate_score": 0.4385094949022522,
+          "leader_score": 0.0933604616254824,
+          "board_count": null,
+          "limit_up": false,
+          "trade_timing_action": null,
+          "lifecycle": null,
+          "stage": null,
+          "universe_in_council_flag": true,
+          "entered_full_ai_council": false,
+          "why_not_council": "DEEP_BUDGET: max_deep exhausted before this rank",
+          "gate_rank": 17,
+          "high_quality_leader_candidate": true
+        },
+        {
+          "symbol": "603536.SH",
+          "name": "惠发食品",
+          "research_date": "2026-08-21",
+          "candidate_score": 0.4309186972671203,
+          "leader_score": 0.07167246838224836,
+          "board_count": null,
+          "limit_up": false,
+          "trade_timing_action": null,
+          "lifecycle": null,
+          "stage": null,
+          "universe_in_council_flag": true,
+          "entered_full_ai_council": false,
+          "why_not_council": "DEEP_BUDGET: max_deep exhausted before this rank",
+          "gate_rank": 18,
+          "high_quality_leader_candidate": true
+        },
+        {
+          "symbol": "600257.SH",
+          "name": "大湖股份",
+          "research_date": "2026-08-21",
+          "candidate_score": 0.35778825077122656,
+          "leader_score": 0.03415690696540903,
+          "board_count": null,
+          "limit_up": false,
+          "trade_timing_action": null,
+          "lifecycle": null,
+          "stage": null,
+          "universe_in_council_flag": true,
+          "entered_full_ai_council": false,
+          "why_not_council": "DEEP_BUDGET: max_deep exhausted before this rank",
+          "gate_rank": 19,
+          "high_quality_leader_candidate": true
+        },
+        {
+          "symbol": "600971.SH",
+          "name": "恒源煤电",
+          "research_date": "2026-08-24",
+          "candidate_score": 0.5513301158374891,
+          "leader_score": 0.3085622357261596,
+          "board_count": null,
+          "limit_up": false,
+          "trade_timing_action": null,
+          "lifecycle": null,
+          "stage": null,
+          "universe_in_council_flag": true,
+          "entered_full_ai_council": false,
+          "why_not_council": "DEEP_BUDGET: max_deep exhausted before this rank",
+          "gate_rank": 10,
+          "high_quality_leader_candidate": true
+        },
+        {
+          "symbol": "003032.SZ",
+          "name": "传智教育",
+          "research_date": "2026-08-24",
+          "candidate_score": 0.5426320000214332,
+          "leader_score": 0.6628363783544524,
+          "board_count": null,
+          "limit_up": false,
+          "trade_timing_action": null,
+          "lifecycle": null,
+          "stage": null,
+          "universe_in_council_flag": true,
+          "entered_full_ai_council": false,
+          "why_not_council": "DEEP_BUDGET: max_deep exhausted before this rank",
+          "gate_rank": 11,
+          "high_quality_leader_candidate": true
+        },
+        {
+          "symbol": "600123.SH",
+          "name": "兰花科创",
+          "research_date": "2026-08-24",
+          "candidate_score": 0.5115250914367003,
+          "leader_score": 0.21626216600961978,
+          "board_count": null,
+          "limit_up": false,
+          "trade_timing_action": null,
+          "lifecycle": null,
+          "stage": null,
+          "universe_in_council_flag": true,
+          "entered_full_ai_council": false,
+          "why_not_council": "DEEP_BUDGET: max_deep exhausted before this rank",
+          "gate_rank": 12,
+          "high_quality_leader_candidate": true
+        },
+        {
+          "symbol": "600257.SH",
+          "name": "大湖股份",
+          "research_date": "2026-08-24",
+          "candidate_score": 0.48170889392232297,
+          "leader_score": 0.13023680786772968,
+          "board_count": null,
+          "limit_up": false,
+          "trade_timing_action": null,
+          "lifecycle": null,
+          "stage": null,
+          "universe_in_council_flag": true,
+          "entered_full_ai_council": false,
+          "why_not_council": "DEEP_BUDGET: max_deep exhausted before this rank",
+          "gate_rank": 13,
+          "high_quality_leader_candidate": true
+        },
+        {
+          "symbol": "603318.SH",
+          "name": "水发燃气",
+          "research_date": "2026-08-24",
+          "candidate_score": 0.47186287514131847,
+          "leader_score": 0.07570634070433341,
+          "board_count": null,
+          "limit_up": false,
+          "trade_timing_action": null,
+          "lifecycle": null,
+          "stage": null,
+          "universe_in_council_flag": true,
+          "entered_full_ai_council": false,
+          "why_not_council": "DEEP_BUDGET: max_deep exhausted before this rank",
+          "gate_rank": 14,
+          "high_quality_leader_candidate": true
+        },
+        {
+          "symbol": "603333.SH",
+          "name": "福华尚纬",
+          "research_date": "2026-08-24",
+          "candidate_score": 0.4530608826466127,
+          "leader_score": 0.5206501408950838,
+          "board_count": null,
+          "limit_up": false,
+          "trade_timing_action": null,
+          "lifecycle": null,
+          "stage": null,
+          "universe_in_council_flag": true,
+          "entered_full_ai_council": false,
+          "why_not_council": "DEEP_BUDGET: max_deep exhausted before this rank",
+          "gate_rank": 15,
+          "high_quality_leader_candidate": true
+        },
+        {
+          "symbol": "603980.SH",
+          "name": "吉华集团",
+          "research_date": "2026-08-24",
+          "candidate_score": 0.45055760404519934,
+          "leader_score": 0.04206934489104559,
+          "board_count": null,
+          "limit_up": false,
+          "trade_timing_action": null,
+          "lifecycle": null,
+          "stage": null,
+          "universe_in_council_flag": true,
+          "entered_full_ai_council": false,
+          "why_not_council": "DEEP_BUDGET: max_deep exhausted before this rank",
+          "gate_rank": 16,
+          "high_quality_leader_candidate": true
+        },
+        {
+          "symbol": "603709.SH",
+          "name": "中源家居",
+          "research_date": "2026-08-24",
+          "candidate_score": 0.4428914048848009,
+          "leader_score": 0.08445163300419287,
+          "board_count": null,
+          "limit_up": false,
+          "trade_timing_action": null,
+          "lifecycle": null,
+          "stage": null,
+          "universe_in_council_flag": true,
+          "entered_full_ai_council": false,
+          "why_not_council": "DEEP_BUDGET: max_deep exhausted before this rank",
+          "gate_rank": 17,
+          "high_quality_leader_candidate": true
+        },
+        {
+          "symbol": "600691.SH",
+          "name": "潞化科技",
+          "research_date": "2026-08-24",
+          "candidate_score": 0.44279936060026726,
+          "leader_score": -0.0015256363801889883,
+          "board_count": null,
+          "limit_up": false,
+          "trade_timing_action": null,
+          "lifecycle": null,
+          "stage": null,
+          "universe_in_council_flag": true,
+          "entered_full_ai_council": false,
+          "why_not_council": "DEEP_BUDGET: max_deep exhausted before this rank",
+          "gate_rank": 18,
+          "high_quality_leader_candidate": true
+        },
+        {
+          "symbol": "603536.SH",
+          "name": "惠发食品",
+          "research_date": "2026-08-24",
+          "candidate_score": 0.42922107914588414,
+          "leader_score": 0.044283217288598825,
+          "board_count": null,
+          "limit_up": false,
+          "trade_timing_action": null,
+          "lifecycle": null,
+          "stage": null,
+          "universe_in_council_flag": true,
+          "entered_full_ai_council": false,
+          "why_not_council": "DEEP_BUDGET: max_deep exhausted before this rank",
+          "gate_rank": 19,
+          "high_quality_leader_candidate": true
+        },
+        {
+          "symbol": "002081.SZ",
+          "name": "金 螳 螂",
+          "research_date": "2026-08-25",
+          "candidate_score": 0.23886986915336186,
+          "leader_score": 0.44081867377151,
+          "board_count": 1,
+          "limit_up": true,
+          "trade_timing_action": "PASS",
+          "lifecycle": "NEW_LIMIT_UP",
+          "stage": "BREAKDOWN",
+          "universe_in_council_flag": false,
+          "entered_full_ai_council": false,
+          "why_not_council": "DEEP_BUDGET: max_deep exhausted before this rank",
+          "gate_rank": 10,
+          "high_quality_leader_candidate": true
+        },
+        {
+          "symbol": "603318.SH",
+          "name": "水发燃气",
+          "research_date": "2026-08-25",
+          "candidate_score": 0.23675453085734682,
+          "leader_score": 0.09957076843595682,
+          "board_count": 1,
+          "limit_up": true,
+          "trade_timing_action": "WAIT",
+          "lifecycle": "NEW_LIMIT_UP",
+          "stage": "TREND",
+          "universe_in_council_flag": false,
+          "entered_full_ai_council": false,
+          "why_not_council": "DEEP_BUDGET: max_deep exhausted before this rank",
+          "gate_rank": 11,
+          "high_quality_leader_candidate": false
+        },
+        {
+          "symbol": "002949.SZ",
+          "name": "华阳国际",
+          "research_date": "2026-08-25",
+          "candidate_score": 0.22178609801535099,
+          "leader_score": 0.40272218480576466,
+          "board_count": 1,
+          "limit_up": true,
+          "trade_timing_action": "WAIT",
+          "lifecycle": "NEW_LIMIT_UP",
+          "stage": "EXTREME",
+          "universe_in_council_flag": false,
+          "entered_full_ai_council": false,
+          "why_not_council": "DEEP_BUDGET: max_deep exhausted before this rank",
+          "gate_rank": 12,
+          "high_quality_leader_candidate": true
+        }
+      ],
+      "verdict": "22/23 DEEP_BUDGET names look like material candidates (score/leader/board heuristics) blocked solely by max_deep=10 budget — not by weak signals. This is capacity throttling, not a BUY-threshold reject."
+    },
+    "council_breakdown": {
+      "n_platform_reports": 55,
+      "full_ai_council": 26,
+      "gate_skip": 29,
+      "deep_budget": 23,
+      "llm_budget": 6,
+      "full_ai_chairman_llm": 0,
+      "full_ai_chairman_heuristic_or_cache": 0,
+      "rating_counts": {
+        "WATCH": 23,
+        "GATE_SKIP": 29,
+        "AVOID": 2,
+        "NEUTRAL": 1
+      },
+      "watch": 23,
+      "avoid": 2,
+      "neutral": 1,
+      "buy": 0,
+      "note": "GATE_SKIP must not be counted as a completed AI research decision.",
+      "rows_sample": [
+        {
+          "symbol": "002412.SZ",
+          "research_date": "2026-08-21",
+          "kind": "FULL_AI_COUNCIL",
+          "rating": "WATCH",
+          "action": "WAIT_FOR_CONFIRMATION",
+          "gate_reason": null,
+          "chairman_source": null
+        },
+        {
+          "symbol": "603958.SH",
+          "research_date": "2026-08-21",
+          "kind": "FULL_AI_COUNCIL",
+          "rating": "WATCH",
+          "action": "WAIT_FOR_CONFIRMATION",
+          "gate_reason": null,
+          "chairman_source": null
+        },
+        {
+          "symbol": "601700.SH",
+          "research_date": "2026-08-21",
+          "kind": "FULL_AI_COUNCIL",
+          "rating": "WATCH",
+          "action": "WAIT_FOR_CONFIRMATION",
+          "gate_reason": null,
+          "chairman_source": null
+        },
+        {
+          "symbol": "603330.SH",
+          "research_date": "2026-08-21",
+          "kind": "FULL_AI_COUNCIL",
+          "rating": "WATCH",
+          "action": "WAIT_FOR_CONFIRMATION",
+          "gate_reason": null,
+          "chairman_source": null
+        },
+        {
+          "symbol": "603882.SH",
+          "research_date": "2026-08-21",
+          "kind": "FULL_AI_COUNCIL",
+          "rating": "WATCH",
+          "action": "WAIT_FOR_CONFIRMATION",
+          "gate_reason": null,
+          "chairman_source": null
+        },
+        {
+          "symbol": "003032.SZ",
+          "research_date": "2026-08-21",
+          "kind": "FULL_AI_COUNCIL",
+          "rating": "WATCH",
+          "action": "WAIT_FOR_CONFIRMATION",
+          "gate_reason": null,
+          "chairman_source": null
+        },
+        {
+          "symbol": "601212.SH",
+          "research_date": "2026-08-21",
+          "kind": "FULL_AI_COUNCIL",
+          "rating": "WATCH",
+          "action": "WAIT_FOR_CONFIRMATION",
+          "gate_reason": null,
+          "chairman_source": null
+        },
+        {
+          "symbol": "002491.SZ",
+          "research_date": "2026-08-21",
+          "kind": "FULL_AI_COUNCIL",
+          "rating": "WATCH",
+          "action": "WAIT_FOR_CONFIRMATION",
+          "gate_reason": null,
+          "chairman_source": null
+        },
+        {
+          "symbol": "600971.SH",
+          "research_date": "2026-08-21",
+          "kind": "FULL_AI_COUNCIL",
+          "rating": "WATCH",
+          "action": "WAIT_FOR_CONFIRMATION",
+          "gate_reason": null,
+          "chairman_source": null
+        },
+        {
+          "symbol": "603626.SH",
+          "research_date": "2026-08-21",
+          "kind": "FULL_AI_COUNCIL",
+          "rating": "WATCH",
+          "action": "WAIT_FOR_CONFIRMATION",
+          "gate_reason": null,
+          "chairman_source": null
+        },
+        {
+          "symbol": "600397.SH",
+          "research_date": "2026-08-21",
+          "kind": "GATE_SKIP",
+          "rating": "GATE_SKIP",
+          "action": "NO_ACTION",
+          "gate_reason": "DEEP_BUDGET",
+          "chairman_source": null
+        },
+        {
+          "symbol": "600110.SH",
+          "research_date": "2026-08-21",
+          "kind": "GATE_SKIP",
+          "rating": "GATE_SKIP",
+          "action": "NO_ACTION",
+          "gate_reason": "DEEP_BUDGET",
+          "chairman_source": null
+        },
+        {
+          "symbol": "603709.SH",
+          "research_date": "2026-08-21",
+          "kind": "GATE_SKIP",
+          "rating": "GATE_SKIP",
+          "action": "NO_ACTION",
+          "gate_reason": "DEEP_BUDGET",
+          "chairman_source": null
+        },
+        {
+          "symbol": "600123.SH",
+          "research_date": "2026-08-21",
+          "kind": "GATE_SKIP",
+          "rating": "GATE_SKIP",
+          "action": "NO_ACTION",
+          "gate_reason": "DEEP_BUDGET",
+          "chairman_source": null
+        },
+        {
+          "symbol": "603318.SH",
+          "research_date": "2026-08-21",
+          "kind": "GATE_SKIP",
+          "rating": "GATE_SKIP",
+          "action": "NO_ACTION",
+          "gate_reason": "DEEP_BUDGET",
+          "chairman_source": null
+        },
+        {
+          "symbol": "603333.SH",
+          "research_date": "2026-08-21",
+          "kind": "GATE_SKIP",
+          "rating": "GATE_SKIP",
+          "action": "NO_ACTION",
+          "gate_reason": "DEEP_BUDGET",
+          "chairman_source": null
+        },
+        {
+          "symbol": "600691.SH",
+          "research_date": "2026-08-21",
+          "kind": "GATE_SKIP",
+          "rating": "GATE_SKIP",
+          "action": "NO_ACTION",
+          "gate_reason": "DEEP_BUDGET",
+          "chairman_source": null
+        },
+        {
+          "symbol": "605151.SH",
+          "research_date": "2026-08-21",
+          "kind": "GATE_SKIP",
+          "rating": "GATE_SKIP",
+          "action": "NO_ACTION",
+          "gate_reason": "DEEP_BUDGET",
+          "chairman_source": null
+        },
+        {
+          "symbol": "603536.SH",
+          "research_date": "2026-08-21",
+          "kind": "GATE_SKIP",
+          "rating": "GATE_SKIP",
+          "action": "NO_ACTION",
+          "gate_reason": "DEEP_BUDGET",
+          "chairman_source": null
+        },
+        {
+          "symbol": "600257.SH",
+          "research_date": "2026-08-21",
+          "kind": "GATE_SKIP",
+          "rating": "GATE_SKIP",
+          "action": "NO_ACTION",
+          "gate_reason": "DEEP_BUDGET",
+          "chairman_source": null
+        },
+        {
+          "symbol": "002412.SZ",
+          "research_date": "2026-08-24",
+          "kind": "FULL_AI_COUNCIL",
+          "rating": "WATCH",
+          "action": "WAIT_FOR_CONFIRMATION",
+          "gate_reason": null,
+          "chairman_source": null
+        },
+        {
+          "symbol": "603958.SH",
+          "research_date": "2026-08-24",
+          "kind": "FULL_AI_COUNCIL",
+          "rating": "AVOID",
+          "action": "NO_ACTION",
+          "gate_reason": null,
+          "chairman_source": null
+        },
+        {
+          "symbol": "601700.SH",
+          "research_date": "2026-08-24",
+          "kind": "FULL_AI_COUNCIL",
+          "rating": "WATCH",
+          "action": "WAIT_FOR_CONFIRMATION",
+          "gate_reason": null,
+          "chairman_source": null
+        },
+        {
+          "symbol": "603330.SH",
+          "research_date": "2026-08-24",
+          "kind": "FULL_AI_COUNCIL",
+          "rating": "WATCH",
+          "action": "WAIT_FOR_CONFIRMATION",
+          "gate_reason": null,
+          "chairman_source": null
+        },
+        {
+          "symbol": "601212.SH",
+          "research_date": "2026-08-24",
+          "kind": "FULL_AI_COUNCIL",
+          "rating": "WATCH",
+          "action": "WAIT_FOR_CONFIRMATION",
+          "gate_reason": null,
+          "chairman_source": null
+        },
+        {
+          "symbol": "603626.SH",
+          "research_date": "2026-08-24",
+          "kind": "FULL_AI_COUNCIL",
+          "rating": "WATCH",
+          "action": "WAIT_FOR_CONFIRMATION",
+          "gate_reason": null,
+          "chairman_source": null
+        },
+        {
+          "symbol": "000620.SZ",
+          "research_date": "2026-08-24",
+          "kind": "FULL_AI_COUNCIL",
+          "rating": "WATCH",
+          "action": "WAIT_FOR_CONFIRMATION",
+          "gate_reason": null,
+          "chairman_source": null
+        },
+        {
+          "symbol": "600227.SH",
+          "research_date": "2026-08-24",
+          "kind": "FULL_AI_COUNCIL",
+          "rating": "WATCH",
+          "action": "WAIT_FOR_CONFIRMATION",
+          "gate_reason": null,
+          "chairman_source": null
+        },
+        {
+          "symbol": "600397.SH",
+          "research_date": "2026-08-24",
+          "kind": "GATE_SKIP",
+          "rating": "GATE_SKIP",
+          "action": "NO_ACTION",
+          "gate_reason": "LLM_BUDGET",
+          "chairman_source": null
+        },
+        {
+          "symbol": "002491.SZ",
+          "research_date": "2026-08-24",
+          "kind": "GATE_SKIP",
+          "rating": "GATE_SKIP",
+          "action": "NO_ACTION",
+          "gate_reason": "LLM_BUDGET",
+          "chairman_source": null
+        },
+        {
+          "symbol": "600971.SH",
+          "research_date": "2026-08-24",
+          "kind": "GATE_SKIP",
+          "rating": "GATE_SKIP",
+          "action": "NO_ACTION",
+          "gate_reason": "DEEP_BUDGET",
+          "chairman_source": null
+        },
+        {
+          "symbol": "003032.SZ",
+          "research_date": "2026-08-24",
+          "kind": "GATE_SKIP",
+          "rating": "GATE_SKIP",
+          "action": "NO_ACTION",
+          "gate_reason": "DEEP_BUDGET",
+          "chairman_source": null
+        },
+        {
+          "symbol": "600123.SH",
+          "research_date": "2026-08-24",
+          "kind": "GATE_SKIP",
+          "rating": "GATE_SKIP",
+          "action": "NO_ACTION",
+          "gate_reason": "DEEP_BUDGET",
+          "chairman_source": null
+        },
+        {
+          "symbol": "600257.SH",
+          "research_date": "2026-08-24",
+          "kind": "GATE_SKIP",
+          "rating": "GATE_SKIP",
+          "action": "NO_ACTION",
+          "gate_reason": "DEEP_BUDGET",
+          "chairman_source": null
+        },
+        {
+          "symbol": "603318.SH",
+          "research_date": "2026-08-24",
+          "kind": "GATE_SKIP",
+          "rating": "GATE_SKIP",
+          "action": "NO_ACTION",
+          "gate_reason": "DEEP_BUDGET",
+          "chairman_source": null
+        },
+        {
+          "symbol": "603333.SH",
+          "research_date": "2026-08-24",
+          "kind": "GATE_SKIP",
+          "rating": "GATE_SKIP",
+          "action": "NO_ACTION",
+          "gate_reason": "DEEP_BUDGET",
+          "chairman_source": null
+        },
+        {
+          "symbol": "603980.SH",
+          "research_date": "2026-08-24",
+          "kind": "GATE_SKIP",
+          "rating": "GATE_SKIP",
+          "action": "NO_ACTION",
+          "gate_reason": "DEEP_BUDGET",
+          "chairman_source": null
+        },
+        {
+          "symbol": "603709.SH",
+          "research_date": "2026-08-24",
+          "kind": "GATE_SKIP",
+          "rating": "GATE_SKIP",
+          "action": "NO_ACTION",
+          "gate_reason": "DEEP_BUDGET",
+          "chairman_source": null
+        },
+        {
+          "symbol": "600691.SH",
+          "research_date": "2026-08-24",
+          "kind": "GATE_SKIP",
+          "rating": "GATE_SKIP",
+          "action": "NO_ACTION",
+          "gate_reason": "DEEP_BUDGET",
+          "chairman_source": null
+        },
+        {
+          "symbol": "603536.SH",
+          "research_date": "2026-08-24",
+          "kind": "GATE_SKIP",
+          "rating": "GATE_SKIP",
+          "action": "NO_ACTION",
+          "gate_reason": "DEEP_BUDGET",
+          "chairman_source": null
+        }
+      ]
+    },
+    "signal_provenance": {
+      "pipeline": {
+        "ml": {
+          "source": "MLRankingEngine.predict_rows → candidate.ml_prediction/ml_status → snapshot.quant → council quant role",
+          "stages": [
+            "candidate_engine.predict_rows",
+            "candidate_snapshot/attach_signal_contract",
+            "research_snapshot.quant",
+            "council_context.candidate.signals"
+          ]
+        },
+        "profit": {
+          "source": "ProfitInflectionEngine.enrich_candidates → profit_inflection/profit_score → snapshot → council",
+          "stages": [
+            "profit.enrich",
+            "signal_contract",
+            "snapshot",
+            "council"
+          ]
+        },
+        "event": {
+          "source": "EventEngine.enrich_candidates → event_score (ZERO if no events) → snapshot → council",
+          "stages": [
+            "events.enrich",
+            "signal_contract",
+            "snapshot",
+            "council"
+          ]
+        },
+        "news": {
+          "source": "NewsIntelligenceEngine.collect_stock / news_discovery → news_score/news_status → snapshot → council",
+          "stages": [
+            "news.collect",
+            "signal_contract",
+            "snapshot",
+            "council"
+          ]
+        },
+        "valuation": {
+          "source": "value_available flag (fundamentals); role skipped/unavailable when false — not bearish",
+          "stages": [
+            "candidate.value_available",
+            "snapshot.value_available",
+            "council.valuation"
+          ]
+        }
+      },
+      "dated_report_universe_field_status": {
+        "ml": {
+          "REPORT_FIELD_ABSENT": 60
+        },
+        "profit": {
+          "REPORT_FIELD_ABSENT": 60
+        },
+        "event": {
+          "REPORT_FIELD_ABSENT": 60
+        },
+        "news": {
+          "REPORT_FIELD_ABSENT": 60
+        }
+      },
+      "research_snapshot_status": {
+        "ml": {
+          "VALID": 176
+        },
+        "profit": {
+          "VALID": 175,
+          "UNAVAILABLE": 1
+        },
+        "event": {
+          "VALID": 176
+        },
+        "news": {
+          "VALID": 133,
+          "MISSING": 6,
+          "ZERO": 37
+        },
+        "valuation": {
+          "UNAVAILABLE": 176
+        },
+        "n_snapshots": 176
+      },
+      "why_audit_showed_zero": "Dated report candidate_union.universe historically omitted ml/profit/event/news fields (serialization strip). Snapshots often still carry ml_prediction. Audit MISSING on reports ≠ runtime always computed 0. Post-36ffb97 serialize_signal_fields persists statuses on new reports.",
+      "silent_fallback_policy": "Forbidden in code path after SSOT remediations; failures must set *_status FAILED/UNAVAILABLE."
+    },
+    "execution_chain": {
+      "agent.autostart": false,
+      "agent.interval_sec": 1800,
+      "auto_runs_daily_without_manual_start": false,
+      "real_entrypoints": [
+        {
+          "id": "serve_lifespan_autostart",
+          "active": false,
+          "path": "src/ashare/api/app.py lifespan → start_agent(run_now=True)",
+          "note": "Only when agent.autostart=true"
+        },
+        {
+          "id": "api_agent_start",
+          "active": "manual",
+          "path": "POST /api/agent/start",
+          "note": "Starts daemon loop; UI or operator triggers"
+        },
+        {
+          "id": "api_agent_cycle",
+          "active": "manual",
+          "path": "POST /api/agent/cycle",
+          "note": "One-shot cycle"
+        },
+        {
+          "id": "cli_agent",
+          "active": "manual",
+          "path": "python -m ashare.main agent",
+          "note": "One-shot run_cycle"
+        },
+        {
+          "id": "cli_research",
+          "active": "manual",
+          "path": "python -m ashare.main research",
+          "note": "Research/report only"
+        },
+        {
+          "id": "os_cron",
+          "active": false,
+          "path": null,
+          "note": "No in-repo cron/Task Scheduler wiring"
+        }
+      ],
+      "pipeline_when_triggered": [
+        "Universe/screen",
+        "Pool",
+        "CandidateEngine",
+        "ResearchSession (gate → council → chairman)",
+        "CanonicalDecision + RiskFilter",
+        "Paper trade if committee_approve",
+        "persist data/reports/{as_of}.json + production_cycles.jsonl"
+      ],
+      "verdict": "Production does NOT auto-run daily with agent.autostart=false. Observed report days require manual /api/agent/start, CLI, or a prior autostart session."
+    },
+    "risk_limit_up": {
+      "n_limit_up_blocks": 19,
+      "suggested_reason_code": "LIMIT_UP_NO_ENTRY",
+      "interpretation": "All sampled limit_up blocks mean 'current bar is limit-up → no open' (不追涨停). Suggested audit reason_code=LIMIT_UP_NO_ENTRY. Trading logic unchanged in this audit.",
+      "trading_logic_unchanged": true,
+      "cases": [
+        {
+          "symbol": "002412.SZ",
+          "research_date": "2026-08-21",
+          "risk_status": "blocked",
+          "legacy_flags": [
+            "limit_up"
+          ],
+          "suggested_reason_code": "LIMIT_UP_NO_ENTRY",
+          "meaning": "Do not chase sealed limit-up today — not a permanent strategy reject",
+          "trading_logic_changed": false
+        },
+        {
+          "symbol": "603958.SH",
+          "research_date": "2026-08-21",
+          "risk_status": "blocked",
+          "legacy_flags": [
+            "limit_up"
+          ],
+          "suggested_reason_code": "LIMIT_UP_NO_ENTRY",
+          "meaning": "Do not chase sealed limit-up today — not a permanent strategy reject",
+          "trading_logic_changed": false
+        },
+        {
+          "symbol": "603330.SH",
+          "research_date": "2026-08-21",
+          "risk_status": "blocked",
+          "legacy_flags": [
+            "limit_up"
+          ],
+          "suggested_reason_code": "LIMIT_UP_NO_ENTRY",
+          "meaning": "Do not chase sealed limit-up today — not a permanent strategy reject",
+          "trading_logic_changed": false
+        },
+        {
+          "symbol": "002491.SZ",
+          "research_date": "2026-08-21",
+          "risk_status": "blocked",
+          "legacy_flags": [
+            "limit_up"
+          ],
+          "suggested_reason_code": "LIMIT_UP_NO_ENTRY",
+          "meaning": "Do not chase sealed limit-up today — not a permanent strategy reject",
+          "trading_logic_changed": false
+        },
+        {
+          "symbol": "603626.SH",
+          "research_date": "2026-08-21",
+          "risk_status": "blocked",
+          "legacy_flags": [
+            "limit_up"
+          ],
+          "suggested_reason_code": "LIMIT_UP_NO_ENTRY",
+          "meaning": "Do not chase sealed limit-up today — not a permanent strategy reject",
+          "trading_logic_changed": false
+        },
+        {
+          "symbol": "002412.SZ",
+          "research_date": "2026-08-24",
+          "risk_status": "blocked",
+          "legacy_flags": [
+            "limit_up"
+          ],
+          "suggested_reason_code": "LIMIT_UP_NO_ENTRY",
+          "meaning": "Do not chase sealed limit-up today — not a permanent strategy reject",
+          "trading_logic_changed": false
+        },
+        {
+          "symbol": "603958.SH",
+          "research_date": "2026-08-24",
+          "risk_status": "blocked",
+          "legacy_flags": [
+            "limit_up"
+          ],
+          "suggested_reason_code": "LIMIT_UP_NO_ENTRY",
+          "meaning": "Do not chase sealed limit-up today — not a permanent strategy reject",
+          "trading_logic_changed": false
+        },
+        {
+          "symbol": "601700.SH",
+          "research_date": "2026-08-24",
+          "risk_status": "blocked",
+          "legacy_flags": [
+            "limit_up"
+          ],
+          "suggested_reason_code": "LIMIT_UP_NO_ENTRY",
+          "meaning": "Do not chase sealed limit-up today — not a permanent strategy reject",
+          "trading_logic_changed": false
+        },
+        {
+          "symbol": "603330.SH",
+          "research_date": "2026-08-24",
+          "risk_status": "blocked",
+          "legacy_flags": [
+            "limit_up"
+          ],
+          "suggested_reason_code": "LIMIT_UP_NO_ENTRY",
+          "meaning": "Do not chase sealed limit-up today — not a permanent strategy reject",
+          "trading_logic_changed": false
+        },
+        {
+          "symbol": "601212.SH",
+          "research_date": "2026-08-24",
+          "risk_status": "blocked",
+          "legacy_flags": [
+            "limit_up"
+          ],
+          "suggested_reason_code": "LIMIT_UP_NO_ENTRY",
+          "meaning": "Do not chase sealed limit-up today — not a permanent strategy reject",
+          "trading_logic_changed": false
+        },
+        {
+          "symbol": "000620.SZ",
+          "research_date": "2026-08-24",
+          "risk_status": "blocked",
+          "legacy_flags": [
+            "limit_up"
+          ],
+          "suggested_reason_code": "LIMIT_UP_NO_ENTRY",
+          "meaning": "Do not chase sealed limit-up today — not a permanent strategy reject",
+          "trading_logic_changed": false
+        },
+        {
+          "symbol": "002412.SZ",
+          "research_date": "2026-08-25",
+          "risk_status": "blocked",
+          "legacy_flags": [
+            "limit_up"
+          ],
+          "suggested_reason_code": "LIMIT_UP_NO_ENTRY",
+          "meaning": "Do not chase sealed limit-up today — not a permanent strategy reject",
+          "trading_logic_changed": false
+        },
+        {
+          "symbol": "600127.SH",
+          "research_date": "2026-08-25",
+          "risk_status": "blocked",
+          "legacy_flags": [
+            "limit_up"
+          ],
+          "suggested_reason_code": "LIMIT_UP_NO_ENTRY",
+          "meaning": "Do not chase sealed limit-up today — not a permanent strategy reject",
+          "trading_logic_changed": false
+        },
+        {
+          "symbol": "600785.SH",
+          "research_date": "2026-08-25",
+          "risk_status": "blocked",
+          "legacy_flags": [
+            "limit_up"
+          ],
+          "suggested_reason_code": "LIMIT_UP_NO_ENTRY",
+          "meaning": "Do not chase sealed limit-up today — not a permanent strategy reject",
+          "trading_logic_changed": false
+        },
+        {
+          "symbol": "000017.SZ",
+          "research_date": "2026-08-25",
+          "risk_status": "blocked",
+          "legacy_flags": [
+            "limit_up"
+          ],
+          "suggested_reason_code": "LIMIT_UP_NO_ENTRY",
+          "meaning": "Do not chase sealed limit-up today — not a permanent strategy reject",
+          "trading_logic_changed": false
+        },
+        {
+          "symbol": "600508.SH",
+          "research_date": "2026-08-25",
+          "risk_status": "blocked",
+          "legacy_flags": [
+            "limit_up"
+          ],
+          "suggested_reason_code": "LIMIT_UP_NO_ENTRY",
+          "meaning": "Do not chase sealed limit-up today — not a permanent strategy reject",
+          "trading_logic_changed": false
+        },
+        {
+          "symbol": "003040.SZ",
+          "research_date": "2026-08-25",
+          "risk_status": "blocked",
+          "legacy_flags": [
+            "limit_up"
+          ],
+          "suggested_reason_code": "LIMIT_UP_NO_ENTRY",
+          "meaning": "Do not chase sealed limit-up today — not a permanent strategy reject",
+          "trading_logic_changed": false
+        },
+        {
+          "symbol": "600984.SH",
+          "research_date": "2026-08-25",
+          "risk_status": "blocked",
+          "legacy_flags": [
+            "limit_up"
+          ],
+          "suggested_reason_code": "LIMIT_UP_NO_ENTRY",
+          "meaning": "Do not chase sealed limit-up today — not a permanent strategy reject",
+          "trading_logic_changed": false
+        },
+        {
+          "symbol": "002041.SZ",
+          "research_date": "2026-08-25",
+          "risk_status": "blocked",
+          "legacy_flags": [
+            "limit_up"
+          ],
+          "suggested_reason_code": "LIMIT_UP_NO_ENTRY",
+          "meaning": "Do not chase sealed limit-up today — not a permanent strategy reject",
+          "trading_logic_changed": false
+        }
+      ],
+      "legacy_risk_status_counts": {
+        "blocked": 19,
+        "pass": 7,
+        "skipped": 29
+      },
+      "suggested_display": {
+        "blocked_limit_up": 19,
+        "suggested_reason_code": "LIMIT_UP_NO_ENTRY",
+        "pass": 7,
+        "skipped": 29
+      }
+    },
+    "production_health_table": [
+      {
+        "date": "2026-07-27",
+        "scheduler_started": false,
+        "universe_loaded": false,
+        "candidate_count": null,
+        "research_count": null,
+        "council_count": 0,
+        "full_ai_council_count": 0,
+        "gate_skip_count": 0,
+        "buy_count": 0,
+        "final_buy_count": 0,
+        "data_quality": "NO_RUN",
+        "report_persisted": false,
+        "day_status": "NOT_RUN",
+        "n_cycles": 0
+      },
+      {
+        "date": "2026-07-28",
+        "scheduler_started": false,
+        "universe_loaded": false,
+        "candidate_count": null,
+        "research_count": null,
+        "council_count": 0,
+        "full_ai_council_count": 0,
+        "gate_skip_count": 0,
+        "buy_count": 0,
+        "final_buy_count": 0,
+        "data_quality": "NO_RUN",
+        "report_persisted": false,
+        "day_status": "NOT_RUN",
+        "n_cycles": 0
+      },
+      {
+        "date": "2026-07-29",
+        "scheduler_started": false,
+        "universe_loaded": false,
+        "candidate_count": null,
+        "research_count": null,
+        "council_count": 0,
+        "full_ai_council_count": 0,
+        "gate_skip_count": 0,
+        "buy_count": 0,
+        "final_buy_count": 0,
+        "data_quality": "NO_RUN",
+        "report_persisted": false,
+        "day_status": "NOT_RUN",
+        "n_cycles": 0
+      },
+      {
+        "date": "2026-07-30",
+        "scheduler_started": false,
+        "universe_loaded": false,
+        "candidate_count": null,
+        "research_count": null,
+        "council_count": 0,
+        "full_ai_council_count": 0,
+        "gate_skip_count": 0,
+        "buy_count": 0,
+        "final_buy_count": 0,
+        "data_quality": "NO_RUN",
+        "report_persisted": false,
+        "day_status": "NOT_RUN",
+        "n_cycles": 0
+      },
+      {
+        "date": "2026-07-31",
+        "scheduler_started": false,
+        "universe_loaded": false,
+        "candidate_count": null,
+        "research_count": null,
+        "council_count": 0,
+        "full_ai_council_count": 0,
+        "gate_skip_count": 0,
+        "buy_count": 0,
+        "final_buy_count": 0,
+        "data_quality": "NO_RUN",
+        "report_persisted": false,
+        "day_status": "NOT_RUN",
+        "n_cycles": 0
+      },
+      {
+        "date": "2026-08-01",
+        "scheduler_started": false,
+        "universe_loaded": false,
+        "candidate_count": null,
+        "research_count": null,
+        "council_count": 0,
+        "full_ai_council_count": 0,
+        "gate_skip_count": 0,
+        "buy_count": 0,
+        "final_buy_count": 0,
+        "data_quality": "NO_RUN",
+        "report_persisted": false,
+        "day_status": "NOT_RUN",
+        "n_cycles": 0
+      },
+      {
+        "date": "2026-08-02",
+        "scheduler_started": false,
+        "universe_loaded": false,
+        "candidate_count": null,
+        "research_count": null,
+        "council_count": 0,
+        "full_ai_council_count": 0,
+        "gate_skip_count": 0,
+        "buy_count": 0,
+        "final_buy_count": 0,
+        "data_quality": "NO_RUN",
+        "report_persisted": false,
+        "day_status": "NOT_RUN",
+        "n_cycles": 0
+      },
+      {
+        "date": "2026-08-03",
+        "scheduler_started": false,
+        "universe_loaded": false,
+        "candidate_count": null,
+        "research_count": null,
+        "council_count": 0,
+        "full_ai_council_count": 0,
+        "gate_skip_count": 0,
+        "buy_count": 0,
+        "final_buy_count": 0,
+        "data_quality": "NO_RUN",
+        "report_persisted": false,
+        "day_status": "NOT_RUN",
+        "n_cycles": 0
+      },
+      {
+        "date": "2026-08-04",
+        "scheduler_started": false,
+        "universe_loaded": false,
+        "candidate_count": null,
+        "research_count": null,
+        "council_count": 0,
+        "full_ai_council_count": 0,
+        "gate_skip_count": 0,
+        "buy_count": 0,
+        "final_buy_count": 0,
+        "data_quality": "NO_RUN",
+        "report_persisted": false,
+        "day_status": "NOT_RUN",
+        "n_cycles": 0
+      },
+      {
+        "date": "2026-08-05",
+        "scheduler_started": false,
+        "universe_loaded": false,
+        "candidate_count": null,
+        "research_count": null,
+        "council_count": 0,
+        "full_ai_council_count": 0,
+        "gate_skip_count": 0,
+        "buy_count": 0,
+        "final_buy_count": 0,
+        "data_quality": "NO_RUN",
+        "report_persisted": false,
+        "day_status": "NOT_RUN",
+        "n_cycles": 0
+      },
+      {
+        "date": "2026-08-06",
+        "scheduler_started": false,
+        "universe_loaded": false,
+        "candidate_count": null,
+        "research_count": null,
+        "council_count": 0,
+        "full_ai_council_count": 0,
+        "gate_skip_count": 0,
+        "buy_count": 0,
+        "final_buy_count": 0,
+        "data_quality": "NO_RUN",
+        "report_persisted": false,
+        "day_status": "NOT_RUN",
+        "n_cycles": 0
+      },
+      {
+        "date": "2026-08-07",
+        "scheduler_started": false,
+        "universe_loaded": false,
+        "candidate_count": null,
+        "research_count": null,
+        "council_count": 0,
+        "full_ai_council_count": 0,
+        "gate_skip_count": 0,
+        "buy_count": 0,
+        "final_buy_count": 0,
+        "data_quality": "NO_RUN",
+        "report_persisted": false,
+        "day_status": "NOT_RUN",
+        "n_cycles": 0
+      },
+      {
+        "date": "2026-08-08",
+        "scheduler_started": false,
+        "universe_loaded": false,
+        "candidate_count": null,
+        "research_count": null,
+        "council_count": 0,
+        "full_ai_council_count": 0,
+        "gate_skip_count": 0,
+        "buy_count": 0,
+        "final_buy_count": 0,
+        "data_quality": "NO_RUN",
+        "report_persisted": false,
+        "day_status": "NOT_RUN",
+        "n_cycles": 0
+      },
+      {
+        "date": "2026-08-09",
+        "scheduler_started": false,
+        "universe_loaded": false,
+        "candidate_count": null,
+        "research_count": null,
+        "council_count": 0,
+        "full_ai_council_count": 0,
+        "gate_skip_count": 0,
+        "buy_count": 0,
+        "final_buy_count": 0,
+        "data_quality": "NO_RUN",
+        "report_persisted": false,
+        "day_status": "NOT_RUN",
+        "n_cycles": 0
+      },
+      {
+        "date": "2026-08-10",
+        "scheduler_started": false,
+        "universe_loaded": false,
+        "candidate_count": null,
+        "research_count": null,
+        "council_count": 0,
+        "full_ai_council_count": 0,
+        "gate_skip_count": 0,
+        "buy_count": 0,
+        "final_buy_count": 0,
+        "data_quality": "NO_RUN",
+        "report_persisted": false,
+        "day_status": "NOT_RUN",
+        "n_cycles": 0
+      },
+      {
+        "date": "2026-08-11",
+        "scheduler_started": false,
+        "universe_loaded": false,
+        "candidate_count": null,
+        "research_count": null,
+        "council_count": 0,
+        "full_ai_council_count": 0,
+        "gate_skip_count": 0,
+        "buy_count": 0,
+        "final_buy_count": 0,
+        "data_quality": "NO_RUN",
+        "report_persisted": false,
+        "day_status": "NOT_RUN",
+        "n_cycles": 0
+      },
+      {
+        "date": "2026-08-12",
+        "scheduler_started": false,
+        "universe_loaded": false,
+        "candidate_count": null,
+        "research_count": null,
+        "council_count": 0,
+        "full_ai_council_count": 0,
+        "gate_skip_count": 0,
+        "buy_count": 0,
+        "final_buy_count": 0,
+        "data_quality": "NO_RUN",
+        "report_persisted": false,
+        "day_status": "NOT_RUN",
+        "n_cycles": 0
+      },
+      {
+        "date": "2026-08-13",
+        "scheduler_started": false,
+        "universe_loaded": false,
+        "candidate_count": null,
+        "research_count": null,
+        "council_count": 0,
+        "full_ai_council_count": 0,
+        "gate_skip_count": 0,
+        "buy_count": 0,
+        "final_buy_count": 0,
+        "data_quality": "NO_RUN",
+        "report_persisted": false,
+        "day_status": "NOT_RUN",
+        "n_cycles": 0
+      },
+      {
+        "date": "2026-08-14",
+        "scheduler_started": false,
+        "universe_loaded": false,
+        "candidate_count": null,
+        "research_count": null,
+        "council_count": 0,
+        "full_ai_council_count": 0,
+        "gate_skip_count": 0,
+        "buy_count": 0,
+        "final_buy_count": 0,
+        "data_quality": "NO_RUN",
+        "report_persisted": false,
+        "day_status": "NOT_RUN",
+        "n_cycles": 0
+      },
+      {
+        "date": "2026-08-15",
+        "scheduler_started": false,
+        "universe_loaded": false,
+        "candidate_count": null,
+        "research_count": null,
+        "council_count": 0,
+        "full_ai_council_count": 0,
+        "gate_skip_count": 0,
+        "buy_count": 0,
+        "final_buy_count": 0,
+        "data_quality": "NO_RUN",
+        "report_persisted": false,
+        "day_status": "NOT_RUN",
+        "n_cycles": 0
+      },
+      {
+        "date": "2026-08-16",
+        "scheduler_started": false,
+        "universe_loaded": false,
+        "candidate_count": null,
+        "research_count": null,
+        "council_count": 0,
+        "full_ai_council_count": 0,
+        "gate_skip_count": 0,
+        "buy_count": 0,
+        "final_buy_count": 0,
+        "data_quality": "NO_RUN",
+        "report_persisted": false,
+        "day_status": "NOT_RUN",
+        "n_cycles": 0
+      },
+      {
+        "date": "2026-08-17",
+        "scheduler_started": false,
+        "universe_loaded": false,
+        "candidate_count": null,
+        "research_count": null,
+        "council_count": 0,
+        "full_ai_council_count": 0,
+        "gate_skip_count": 0,
+        "buy_count": 0,
+        "final_buy_count": 0,
+        "data_quality": "NO_RUN",
+        "report_persisted": false,
+        "day_status": "NOT_RUN",
+        "n_cycles": 0
+      },
+      {
+        "date": "2026-08-18",
+        "scheduler_started": false,
+        "universe_loaded": false,
+        "candidate_count": null,
+        "research_count": null,
+        "council_count": 0,
+        "full_ai_council_count": 0,
+        "gate_skip_count": 0,
+        "buy_count": 0,
+        "final_buy_count": 0,
+        "data_quality": "NO_RUN",
+        "report_persisted": false,
+        "day_status": "NOT_RUN",
+        "n_cycles": 0
+      },
+      {
+        "date": "2026-08-19",
+        "scheduler_started": false,
+        "universe_loaded": false,
+        "candidate_count": null,
+        "research_count": null,
+        "council_count": 0,
+        "full_ai_council_count": 0,
+        "gate_skip_count": 0,
+        "buy_count": 0,
+        "final_buy_count": 0,
+        "data_quality": "NO_RUN",
+        "report_persisted": false,
+        "day_status": "NOT_RUN",
+        "n_cycles": 0
+      },
+      {
+        "date": "2026-08-20",
+        "scheduler_started": false,
+        "universe_loaded": false,
+        "candidate_count": null,
+        "research_count": null,
+        "council_count": 0,
+        "full_ai_council_count": 0,
+        "gate_skip_count": 0,
+        "buy_count": 0,
+        "final_buy_count": 0,
+        "data_quality": "NO_RUN",
+        "report_persisted": false,
+        "day_status": "NOT_RUN",
+        "n_cycles": 0
+      },
+      {
+        "date": "2026-08-21",
+        "scheduler_started": true,
+        "universe_loaded": true,
+        "candidate_count": 60,
+        "research_count": 20,
+        "council_count": 20,
+        "full_ai_council_count": 10,
+        "gate_skip_count": 10,
+        "buy_count": 0,
+        "final_buy_count": 0,
+        "data_quality": "LEGACY_STRIPPED_FIELDS",
+        "report_persisted": true,
+        "day_status": "HAS_REPORT_OVERWRITTEN",
+        "n_cycles": 2
+      },
+      {
+        "date": "2026-08-22",
+        "scheduler_started": false,
+        "universe_loaded": false,
+        "candidate_count": null,
+        "research_count": null,
+        "council_count": 0,
+        "full_ai_council_count": 0,
+        "gate_skip_count": 0,
+        "buy_count": 0,
+        "final_buy_count": 0,
+        "data_quality": "NO_RUN",
+        "report_persisted": false,
+        "day_status": "NOT_RUN",
+        "n_cycles": 0
+      },
+      {
+        "date": "2026-08-23",
+        "scheduler_started": false,
+        "universe_loaded": false,
+        "candidate_count": null,
+        "research_count": null,
+        "council_count": 0,
+        "full_ai_council_count": 0,
+        "gate_skip_count": 0,
+        "buy_count": 0,
+        "final_buy_count": 0,
+        "data_quality": "NO_RUN",
+        "report_persisted": false,
+        "day_status": "NOT_RUN",
+        "n_cycles": 0
+      },
+      {
+        "date": "2026-08-24",
+        "scheduler_started": true,
+        "universe_loaded": true,
+        "candidate_count": 60,
+        "research_count": 20,
+        "council_count": 20,
+        "full_ai_council_count": 8,
+        "gate_skip_count": 12,
+        "buy_count": 0,
+        "final_buy_count": 0,
+        "data_quality": "LEGACY_STRIPPED_FIELDS",
+        "report_persisted": true,
+        "day_status": "HAS_REPORT_OVERWRITTEN",
+        "n_cycles": 12
+      },
+      {
+        "date": "2026-08-25",
+        "scheduler_started": true,
+        "universe_loaded": true,
+        "candidate_count": 60,
+        "research_count": 20,
+        "council_count": 15,
+        "full_ai_council_count": 8,
+        "gate_skip_count": 7,
+        "buy_count": 0,
+        "final_buy_count": 0,
+        "data_quality": "LEGACY_STRIPPED_FIELDS",
+        "report_persisted": true,
+        "day_status": "HAS_REPORT_OVERWRITTEN",
+        "n_cycles": 6
+      }
+    ],
+    "NO_BUY_REASON_DETAIL": [
+      {
+        "date": "2026-07-27",
+        "NO_BUY_REASON": "SYSTEM_NOT_RUN",
+        "NO_BUY_COUNT": 0,
+        "DATA_COVERAGE": {
+          "report_persisted": false,
+          "day_status": "NOT_RUN",
+          "data_quality": "NO_RUN",
+          "window_coverage_pct": 10.0
+        },
+        "TOP_BLOCKERS": {
+          "NOT_RUN": 1
+        },
+        "final_buy_count": 0
+      },
+      {
+        "date": "2026-07-28",
+        "NO_BUY_REASON": "SYSTEM_NOT_RUN",
+        "NO_BUY_COUNT": 0,
+        "DATA_COVERAGE": {
+          "report_persisted": false,
+          "day_status": "NOT_RUN",
+          "data_quality": "NO_RUN",
+          "window_coverage_pct": 10.0
+        },
+        "TOP_BLOCKERS": {
+          "NOT_RUN": 1
+        },
+        "final_buy_count": 0
+      },
+      {
+        "date": "2026-07-29",
+        "NO_BUY_REASON": "SYSTEM_NOT_RUN",
+        "NO_BUY_COUNT": 0,
+        "DATA_COVERAGE": {
+          "report_persisted": false,
+          "day_status": "NOT_RUN",
+          "data_quality": "NO_RUN",
+          "window_coverage_pct": 10.0
+        },
+        "TOP_BLOCKERS": {
+          "NOT_RUN": 1
+        },
+        "final_buy_count": 0
+      },
+      {
+        "date": "2026-07-30",
+        "NO_BUY_REASON": "SYSTEM_NOT_RUN",
+        "NO_BUY_COUNT": 0,
+        "DATA_COVERAGE": {
+          "report_persisted": false,
+          "day_status": "NOT_RUN",
+          "data_quality": "NO_RUN",
+          "window_coverage_pct": 10.0
+        },
+        "TOP_BLOCKERS": {
+          "NOT_RUN": 1
+        },
+        "final_buy_count": 0
+      },
+      {
+        "date": "2026-07-31",
+        "NO_BUY_REASON": "SYSTEM_NOT_RUN",
+        "NO_BUY_COUNT": 0,
+        "DATA_COVERAGE": {
+          "report_persisted": false,
+          "day_status": "NOT_RUN",
+          "data_quality": "NO_RUN",
+          "window_coverage_pct": 10.0
+        },
+        "TOP_BLOCKERS": {
+          "NOT_RUN": 1
+        },
+        "final_buy_count": 0
+      },
+      {
+        "date": "2026-08-01",
+        "NO_BUY_REASON": "SYSTEM_NOT_RUN",
+        "NO_BUY_COUNT": 0,
+        "DATA_COVERAGE": {
+          "report_persisted": false,
+          "day_status": "NOT_RUN",
+          "data_quality": "NO_RUN",
+          "window_coverage_pct": 10.0
+        },
+        "TOP_BLOCKERS": {
+          "NOT_RUN": 1
+        },
+        "final_buy_count": 0
+      },
+      {
+        "date": "2026-08-02",
+        "NO_BUY_REASON": "SYSTEM_NOT_RUN",
+        "NO_BUY_COUNT": 0,
+        "DATA_COVERAGE": {
+          "report_persisted": false,
+          "day_status": "NOT_RUN",
+          "data_quality": "NO_RUN",
+          "window_coverage_pct": 10.0
+        },
+        "TOP_BLOCKERS": {
+          "NOT_RUN": 1
+        },
+        "final_buy_count": 0
+      },
+      {
+        "date": "2026-08-03",
+        "NO_BUY_REASON": "SYSTEM_NOT_RUN",
+        "NO_BUY_COUNT": 0,
+        "DATA_COVERAGE": {
+          "report_persisted": false,
+          "day_status": "NOT_RUN",
+          "data_quality": "NO_RUN",
+          "window_coverage_pct": 10.0
+        },
+        "TOP_BLOCKERS": {
+          "NOT_RUN": 1
+        },
+        "final_buy_count": 0
+      },
+      {
+        "date": "2026-08-04",
+        "NO_BUY_REASON": "SYSTEM_NOT_RUN",
+        "NO_BUY_COUNT": 0,
+        "DATA_COVERAGE": {
+          "report_persisted": false,
+          "day_status": "NOT_RUN",
+          "data_quality": "NO_RUN",
+          "window_coverage_pct": 10.0
+        },
+        "TOP_BLOCKERS": {
+          "NOT_RUN": 1
+        },
+        "final_buy_count": 0
+      },
+      {
+        "date": "2026-08-05",
+        "NO_BUY_REASON": "SYSTEM_NOT_RUN",
+        "NO_BUY_COUNT": 0,
+        "DATA_COVERAGE": {
+          "report_persisted": false,
+          "day_status": "NOT_RUN",
+          "data_quality": "NO_RUN",
+          "window_coverage_pct": 10.0
+        },
+        "TOP_BLOCKERS": {
+          "NOT_RUN": 1
+        },
+        "final_buy_count": 0
+      },
+      {
+        "date": "2026-08-06",
+        "NO_BUY_REASON": "SYSTEM_NOT_RUN",
+        "NO_BUY_COUNT": 0,
+        "DATA_COVERAGE": {
+          "report_persisted": false,
+          "day_status": "NOT_RUN",
+          "data_quality": "NO_RUN",
+          "window_coverage_pct": 10.0
+        },
+        "TOP_BLOCKERS": {
+          "NOT_RUN": 1
+        },
+        "final_buy_count": 0
+      },
+      {
+        "date": "2026-08-07",
+        "NO_BUY_REASON": "SYSTEM_NOT_RUN",
+        "NO_BUY_COUNT": 0,
+        "DATA_COVERAGE": {
+          "report_persisted": false,
+          "day_status": "NOT_RUN",
+          "data_quality": "NO_RUN",
+          "window_coverage_pct": 10.0
+        },
+        "TOP_BLOCKERS": {
+          "NOT_RUN": 1
+        },
+        "final_buy_count": 0
+      },
+      {
+        "date": "2026-08-08",
+        "NO_BUY_REASON": "SYSTEM_NOT_RUN",
+        "NO_BUY_COUNT": 0,
+        "DATA_COVERAGE": {
+          "report_persisted": false,
+          "day_status": "NOT_RUN",
+          "data_quality": "NO_RUN",
+          "window_coverage_pct": 10.0
+        },
+        "TOP_BLOCKERS": {
+          "NOT_RUN": 1
+        },
+        "final_buy_count": 0
+      },
+      {
+        "date": "2026-08-09",
+        "NO_BUY_REASON": "SYSTEM_NOT_RUN",
+        "NO_BUY_COUNT": 0,
+        "DATA_COVERAGE": {
+          "report_persisted": false,
+          "day_status": "NOT_RUN",
+          "data_quality": "NO_RUN",
+          "window_coverage_pct": 10.0
+        },
+        "TOP_BLOCKERS": {
+          "NOT_RUN": 1
+        },
+        "final_buy_count": 0
+      },
+      {
+        "date": "2026-08-10",
+        "NO_BUY_REASON": "SYSTEM_NOT_RUN",
+        "NO_BUY_COUNT": 0,
+        "DATA_COVERAGE": {
+          "report_persisted": false,
+          "day_status": "NOT_RUN",
+          "data_quality": "NO_RUN",
+          "window_coverage_pct": 10.0
+        },
+        "TOP_BLOCKERS": {
+          "NOT_RUN": 1
+        },
+        "final_buy_count": 0
+      },
+      {
+        "date": "2026-08-11",
+        "NO_BUY_REASON": "SYSTEM_NOT_RUN",
+        "NO_BUY_COUNT": 0,
+        "DATA_COVERAGE": {
+          "report_persisted": false,
+          "day_status": "NOT_RUN",
+          "data_quality": "NO_RUN",
+          "window_coverage_pct": 10.0
+        },
+        "TOP_BLOCKERS": {
+          "NOT_RUN": 1
+        },
+        "final_buy_count": 0
+      },
+      {
+        "date": "2026-08-12",
+        "NO_BUY_REASON": "SYSTEM_NOT_RUN",
+        "NO_BUY_COUNT": 0,
+        "DATA_COVERAGE": {
+          "report_persisted": false,
+          "day_status": "NOT_RUN",
+          "data_quality": "NO_RUN",
+          "window_coverage_pct": 10.0
+        },
+        "TOP_BLOCKERS": {
+          "NOT_RUN": 1
+        },
+        "final_buy_count": 0
+      },
+      {
+        "date": "2026-08-13",
+        "NO_BUY_REASON": "SYSTEM_NOT_RUN",
+        "NO_BUY_COUNT": 0,
+        "DATA_COVERAGE": {
+          "report_persisted": false,
+          "day_status": "NOT_RUN",
+          "data_quality": "NO_RUN",
+          "window_coverage_pct": 10.0
+        },
+        "TOP_BLOCKERS": {
+          "NOT_RUN": 1
+        },
+        "final_buy_count": 0
+      },
+      {
+        "date": "2026-08-14",
+        "NO_BUY_REASON": "SYSTEM_NOT_RUN",
+        "NO_BUY_COUNT": 0,
+        "DATA_COVERAGE": {
+          "report_persisted": false,
+          "day_status": "NOT_RUN",
+          "data_quality": "NO_RUN",
+          "window_coverage_pct": 10.0
+        },
+        "TOP_BLOCKERS": {
+          "NOT_RUN": 1
+        },
+        "final_buy_count": 0
+      },
+      {
+        "date": "2026-08-15",
+        "NO_BUY_REASON": "SYSTEM_NOT_RUN",
+        "NO_BUY_COUNT": 0,
+        "DATA_COVERAGE": {
+          "report_persisted": false,
+          "day_status": "NOT_RUN",
+          "data_quality": "NO_RUN",
+          "window_coverage_pct": 10.0
+        },
+        "TOP_BLOCKERS": {
+          "NOT_RUN": 1
+        },
+        "final_buy_count": 0
+      },
+      {
+        "date": "2026-08-16",
+        "NO_BUY_REASON": "SYSTEM_NOT_RUN",
+        "NO_BUY_COUNT": 0,
+        "DATA_COVERAGE": {
+          "report_persisted": false,
+          "day_status": "NOT_RUN",
+          "data_quality": "NO_RUN",
+          "window_coverage_pct": 10.0
+        },
+        "TOP_BLOCKERS": {
+          "NOT_RUN": 1
+        },
+        "final_buy_count": 0
+      },
+      {
+        "date": "2026-08-17",
+        "NO_BUY_REASON": "SYSTEM_NOT_RUN",
+        "NO_BUY_COUNT": 0,
+        "DATA_COVERAGE": {
+          "report_persisted": false,
+          "day_status": "NOT_RUN",
+          "data_quality": "NO_RUN",
+          "window_coverage_pct": 10.0
+        },
+        "TOP_BLOCKERS": {
+          "NOT_RUN": 1
+        },
+        "final_buy_count": 0
+      },
+      {
+        "date": "2026-08-18",
+        "NO_BUY_REASON": "SYSTEM_NOT_RUN",
+        "NO_BUY_COUNT": 0,
+        "DATA_COVERAGE": {
+          "report_persisted": false,
+          "day_status": "NOT_RUN",
+          "data_quality": "NO_RUN",
+          "window_coverage_pct": 10.0
+        },
+        "TOP_BLOCKERS": {
+          "NOT_RUN": 1
+        },
+        "final_buy_count": 0
+      },
+      {
+        "date": "2026-08-19",
+        "NO_BUY_REASON": "SYSTEM_NOT_RUN",
+        "NO_BUY_COUNT": 0,
+        "DATA_COVERAGE": {
+          "report_persisted": false,
+          "day_status": "NOT_RUN",
+          "data_quality": "NO_RUN",
+          "window_coverage_pct": 10.0
+        },
+        "TOP_BLOCKERS": {
+          "NOT_RUN": 1
+        },
+        "final_buy_count": 0
+      },
+      {
+        "date": "2026-08-20",
+        "NO_BUY_REASON": "SYSTEM_NOT_RUN",
+        "NO_BUY_COUNT": 0,
+        "DATA_COVERAGE": {
+          "report_persisted": false,
+          "day_status": "NOT_RUN",
+          "data_quality": "NO_RUN",
+          "window_coverage_pct": 10.0
+        },
+        "TOP_BLOCKERS": {
+          "NOT_RUN": 1
+        },
+        "final_buy_count": 0
+      },
+      {
+        "date": "2026-08-21",
+        "NO_BUY_REASON": "RATING_NOT_BUY:WATCH",
+        "NO_BUY_COUNT": 20,
+        "DATA_COVERAGE": {
+          "report_persisted": true,
+          "day_status": "HAS_REPORT_OVERWRITTEN",
+          "data_quality": "LEGACY_STRIPPED_FIELDS",
+          "window_coverage_pct": 10.0
+        },
+        "TOP_BLOCKERS": {
+          "RATING_NOT_BUY:WATCH": 10,
+          "GATE_SKIP": 10
+        },
+        "final_buy_count": 0
+      },
+      {
+        "date": "2026-08-22",
+        "NO_BUY_REASON": "SYSTEM_NOT_RUN",
+        "NO_BUY_COUNT": 0,
+        "DATA_COVERAGE": {
+          "report_persisted": false,
+          "day_status": "NOT_RUN",
+          "data_quality": "NO_RUN",
+          "window_coverage_pct": 10.0
+        },
+        "TOP_BLOCKERS": {
+          "NOT_RUN": 1
+        },
+        "final_buy_count": 0
+      },
+      {
+        "date": "2026-08-23",
+        "NO_BUY_REASON": "SYSTEM_NOT_RUN",
+        "NO_BUY_COUNT": 0,
+        "DATA_COVERAGE": {
+          "report_persisted": false,
+          "day_status": "NOT_RUN",
+          "data_quality": "NO_RUN",
+          "window_coverage_pct": 10.0
+        },
+        "TOP_BLOCKERS": {
+          "NOT_RUN": 1
+        },
+        "final_buy_count": 0
+      },
+      {
+        "date": "2026-08-24",
+        "NO_BUY_REASON": "GATE_SKIP",
+        "NO_BUY_COUNT": 20,
+        "DATA_COVERAGE": {
+          "report_persisted": true,
+          "day_status": "HAS_REPORT_OVERWRITTEN",
+          "data_quality": "LEGACY_STRIPPED_FIELDS",
+          "window_coverage_pct": 10.0
+        },
+        "TOP_BLOCKERS": {
+          "GATE_SKIP": 12,
+          "RATING_NOT_BUY:WATCH": 7,
+          "RATING_NOT_BUY:AVOID": 1
+        },
+        "final_buy_count": 0
+      },
+      {
+        "date": "2026-08-25",
+        "NO_BUY_REASON": "GATE_SKIP",
+        "NO_BUY_COUNT": 15,
+        "DATA_COVERAGE": {
+          "report_persisted": true,
+          "day_status": "HAS_REPORT_OVERWRITTEN",
+          "data_quality": "LEGACY_STRIPPED_FIELDS",
+          "window_coverage_pct": 10.0
+        },
+        "TOP_BLOCKERS": {
+          "GATE_SKIP": 7,
+          "RATING_NOT_BUY:WATCH": 6,
+          "RATING_NOT_BUY:AVOID": 1,
+          "RATING_NOT_BUY:NEUTRAL": 1
+        },
+        "final_buy_count": 0
+      }
+    ],
+    "today_verdict": {
+      "focus_date": "2026-08-25",
+      "classification": "AI_DID_NOT_RATE_BUY+BUDGET_GATE_SKIP+AUDIT_FIELD_STRIPPED+SPARSE_CALENDAR_COVERAGE",
+      "NO_BUY_REASON": "GATE_SKIP",
+      "TOP_BLOCKERS": {
+        "GATE_SKIP": 7,
+        "RATING_NOT_BUY:WATCH": 6,
+        "RATING_NOT_BUY:AVOID": 1,
+        "RATING_NOT_BUY:NEUTRAL": 1
+      },
+      "DATA_COVERAGE": {
+        "report_persisted": true,
+        "day_status": "HAS_REPORT_OVERWRITTEN",
+        "data_quality": "LEGACY_STRIPPED_FIELDS",
+        "window_coverage_pct": 10.0
+      }
+    },
+    "answers": {
+      "A_daily_run": "No — coverage_pct=10.0% (3/30 days with dated reports). status_counts={'NOT_RUN': 27, 'HAS_REPORT_OVERWRITTEN': 3}",
+      "B_gate_skip": "GATE_SKIP n=29; categories={'DEEP_BUDGET': 23, 'LLM_BUDGET': 6}. These are budget/gate rejects persisted as rating=GATE_SKIP, not full AI council decisions.",
+      "C_ml_profit_event_news_zero": "Dated report candidate_union.universe historically omitted ml/profit/event/news fields (serialization strip). Snapshots often still carry ml_prediction. Audit MISSING on reports ≠ runtime always computed 0. Post-36ffb97 serialize_signal_fields persists statuses on new reports.",
+      "D_30d_three_reports": "Only 3 active report days because (1) agent not daily-scheduled, (2) same as_of overwrites dated JSON, (3) missing_days=27. See coverage.per_day.",
+      "E_autostart": "Production does NOT auto-run daily with agent.autostart=false. Observed report days require manual /api/agent/start, CLI, or a prior autostart session.",
+      "F_full_council": "full_ai_council=26 / platform_reports=55; gate_skip=29 (deep=23, llm=6)",
+      "G_deep_budget_leaders": "22/23 DEEP_BUDGET names look like material candidates (score/leader/board heuristics) blocked solely by max_deep=10 budget — not by weak signals. This is capacity throttling, not a BUY-threshold reject.",
+      "H_limit_up": "All sampled limit_up blocks mean 'current bar is limit-up → no open' (不追涨停). Suggested audit reason_code=LIMIT_UP_NO_ENTRY. Trading logic unchanged in this audit.",
+      "I_today_zero_buy": {
+        "focus_date": "2026-08-25",
+        "classification": "AI_DID_NOT_RATE_BUY+BUDGET_GATE_SKIP+AUDIT_FIELD_STRIPPED+SPARSE_CALENDAR_COVERAGE",
+        "NO_BUY_REASON": "GATE_SKIP",
+        "TOP_BLOCKERS": {
+          "GATE_SKIP": 7,
+          "RATING_NOT_BUY:WATCH": 6,
+          "RATING_NOT_BUY:AVOID": 1,
+          "RATING_NOT_BUY:NEUTRAL": 1
+        },
+        "DATA_COVERAGE": {
+          "report_persisted": true,
+          "day_status": "HAS_REPORT_OVERWRITTEN",
+          "data_quality": "LEGACY_STRIPPED_FIELDS",
+          "window_coverage_pct": 10.0
+        }
+      }
     }
   }
 }

@@ -888,7 +888,139 @@ def run_buy_pipeline_audit(cfg: dict[str, Any], *, days: int = 7) -> dict[str, A
                 else:
                     avail_stats[k]["VALID"] += 1
     result["signal_availability"] = {k: dict(v) for k, v in avail_stats.items()}
+
+    # --- P0 production observability (no threshold / RiskFilter changes) ---
+    from ashare.services.production_observability import (
+        analyze_calendar_coverage,
+        analyze_council_breakdown,
+        analyze_execution_chain,
+        analyze_risk_limit_up,
+        analyze_signal_provenance,
+        build_answers_p0,
+        build_no_buy_reason_detail,
+        build_production_health_table,
+        extract_deep_budget_cases,
+        extract_gate_skip_cases,
+    )
+
+    # Include ALL cycles in window for coverage (even duplicate cycle_ids matter for overwrite story)
+    cycles_all = [
+        c
+        for c in cycles_raw
+        if _in_window(_parse_day(c.get("as_of") or c.get("recorded_at")), start, end)
+    ]
+    coverage = analyze_calendar_coverage(start=start, end=end, reports=reports, cycles=cycles_all)
+    gate_skip = extract_gate_skip_cases(reports)
+    deep_budget = extract_deep_budget_cases(reports, max_deep=int(gate_cfg.get("max_deep") or 10))
+    council_bd = analyze_council_breakdown(reports)
+    signal_prov = analyze_signal_provenance(reports, snapshots)
+    exec_chain = analyze_execution_chain(cfg)
+    risk_lu = analyze_risk_limit_up(canonical_rows)
+    # Enrich risk_lu count from earlier flag counter
+    if risk_flag_c.get("limit_up"):
+        risk_lu["n_limit_up_blocks"] = int(risk_flag_c.get("limit_up") or 0)
+        risk_lu["legacy_risk_status_counts"] = dict(risk_status_c)
+        risk_lu["suggested_display"] = {
+            "blocked_limit_up": risk_flag_c.get("limit_up"),
+            "suggested_reason_code": "LIMIT_UP_NO_ENTRY",
+            "pass": risk_status_c.get("pass", 0) + risk_status_c.get("PASS", 0),
+            "skipped": risk_status_c.get("skipped", 0) + risk_status_c.get("SKIPPED", 0),
+        }
+    health = build_production_health_table(
+        coverage=coverage, reports=reports, cycles=cycles_all, council=council_bd
+    )
+    no_buy_detail = build_no_buy_reason_detail(health_table=health, reports=reports, coverage=coverage)
+
+    # Today / latest active day verdict for answer I
+    active = coverage.get("active_day_list") or []
+    focus_day = active[-1] if active else end.isoformat()
+    focus_detail = next((x for x in no_buy_detail if x.get("date") == focus_day), None) or (
+        no_buy_detail[-1] if no_buy_detail else {}
+    )
+    today_verdict = {
+        "focus_date": focus_day,
+        "classification": _classify_zero_buy(
+            focus_detail,
+            council_bd,
+            coverage,
+            exec_chain,
+            signal_prov,
+        ),
+        "NO_BUY_REASON": (focus_detail or {}).get("NO_BUY_REASON"),
+        "TOP_BLOCKERS": (focus_detail or {}).get("TOP_BLOCKERS"),
+        "DATA_COVERAGE": (focus_detail or {}).get("DATA_COVERAGE"),
+    }
+
+    p0_obs = {
+        "coverage": coverage,
+        "gate_skip": gate_skip,
+        "deep_budget": deep_budget,
+        "council_breakdown": council_bd,
+        "signal_provenance": signal_prov,
+        "execution_chain": exec_chain,
+        "risk_limit_up": risk_lu,
+        "production_health_table": health,
+        "NO_BUY_REASON_DETAIL": no_buy_detail,
+        "today_verdict": today_verdict,
+    }
+    p0_obs["answers"] = build_answers_p0(p0_obs)
+    result["p0_observability"] = p0_obs
+    result["data_coverage"] = {
+        **(result.get("data_coverage") or {}),
+        "calendar_days": coverage.get("calendar_days"),
+        "active_days": coverage.get("active_days"),
+        "missing_days": coverage.get("missing_days"),
+        "coverage_pct": coverage.get("coverage_pct"),
+        "day_status_counts": coverage.get("status_counts"),
+        "n_production_cycles_raw_in_window": len(cycles_all),
+        "n_production_cycles_deduped": len(cycles),
+    }
+    result["audit_version"] = f"buy_pipeline_audit_p0_v{days}d"
     return result
+
+
+def _classify_zero_buy(
+    detail: dict[str, Any],
+    council: dict[str, Any],
+    coverage: dict[str, Any],
+    exec_chain: dict[str, Any],
+    signal_prov: dict[str, Any],
+) -> str:
+    """Map to user taxonomy for answer I without changing strategy."""
+    reason = str((detail or {}).get("NO_BUY_REASON") or "")
+    blockers = detail.get("TOP_BLOCKERS") or {}
+    cov = (detail or {}).get("DATA_COVERAGE") or {}
+    day_status = str(cov.get("day_status") or "")
+    if reason == "HAS_BUY":
+        return "HAS_BUY"
+    if reason == "SYSTEM_NOT_RUN" or day_status == "NOT_RUN":
+        return "SYSTEM_NOT_RUN_OR_SPARSE"
+    if reason == "NO_PERSISTED_REPORT" or day_status in {"RUN_NO_PERSISTED_REPORT", "RUN_NO_RESEARCH", "RUN_NO_CANDIDATES"}:
+        return "RAN_BUT_NO_USABLE_REPORT"
+    # Focus day had a report: classify by blockers on that day
+    n_gate = sum(int(v) for k, v in blockers.items() if "GATE_SKIP" in str(k) or "DEEP_BUDGET" in str(k) or "LLM_BUDGET" in str(k))
+    n_rating = sum(int(v) for k, v in blockers.items() if str(k).startswith("RATING_NOT_BUY"))
+    n_entry = sum(int(v) for k, v in blockers.items() if "ENTRY" in str(k))
+    n_risk = sum(int(v) for k, v in blockers.items() if "RISK" in str(k) or "LIMIT_UP" in str(k))
+    if n_rating > 0 and council.get("buy", 0) == 0:
+        primary = "AI_DID_NOT_RATE_BUY"
+    elif n_gate > 0 and council.get("full_ai_council", 0) == 0:
+        primary = "BUDGET_GATED_NO_FULL_COUNCIL"
+    elif n_entry > 0:
+        primary = "ENTRY_NOT_READY"
+    elif n_risk > 0:
+        primary = "RISK_BLOCKED"
+    else:
+        primary = "NO_OPPORTUNITY_OR_NO_BUY_RATING"
+    # Annotate secondary factors
+    secondary = []
+    if n_gate:
+        secondary.append("BUDGET_GATE_SKIP")
+    if cov.get("data_quality") == "LEGACY_STRIPPED_FIELDS":
+        secondary.append("AUDIT_FIELD_STRIPPED")
+    if (coverage.get("coverage_pct") or 0) < 50:
+        secondary.append("SPARSE_CALENDAR_COVERAGE")
+    return primary if not secondary else f"{primary}+{'+'.join(secondary)}"
 
 
 def _build_funnel_table(
@@ -1131,18 +1263,129 @@ def _answer_sheet(
 def render_markdown(result: dict[str, Any]) -> str:
     w = result.get("window") or {}
     lines: list[str] = []
-    lines.append("# LongTanRadar 7-Day BUY Pipeline Audit")
+    lines.append("# LongTanRadar BUY Pipeline Audit")
     lines.append("")
     lines.append(f"**Window:** {w.get('start')} → {w.get('end')} ({w.get('days')} days)")
     cov = result.get("data_coverage") or {}
     lines.append(
         f"**Data:** reports={cov.get('n_reports')} {cov.get('dated_reports')}; "
         f"snapshots={cov.get('n_snapshots')}; sessions={cov.get('n_sessions')}; "
-        f"cycles={cov.get('n_production_cycles_deduped')}"
+        f"cycles_deduped={cov.get('n_production_cycles_deduped')}; "
+        f"cycles_raw={cov.get('n_production_cycles_raw_in_window')}"
+    )
+    lines.append(
+        f"**Coverage:** calendar_days={cov.get('calendar_days')} active_days={cov.get('active_days')} "
+        f"missing_days={cov.get('missing_days')} coverage_pct={cov.get('coverage_pct')}% "
+        f"day_status={cov.get('day_status_counts')}"
     )
     lines.append("")
     lines.append("> Read-only audit. No BUY gates / RiskFilter / prompts / thresholds were modified.")
     lines.append("")
+
+    p0 = result.get("p0_observability") or {}
+    if p0:
+        lines.append("## P0 Answers (A–I)")
+        lines.append("")
+        for k, v in (p0.get("answers") or {}).items():
+            lines.append(f"- **{k}:** {v}")
+        lines.append("")
+
+        lines.append("## Execution chain (agent.autostart)")
+        lines.append("")
+        ex = p0.get("execution_chain") or {}
+        lines.append(f"- verdict: {ex.get('verdict')}")
+        for ep in ex.get("real_entrypoints") or []:
+            lines.append(f"- `{ep.get('id')}` active={ep.get('active')} — {ep.get('path')} ({ep.get('note')})")
+        lines.append("")
+
+        lines.append("## Calendar coverage")
+        lines.append("")
+        covp = p0.get("coverage") or {}
+        lines.append(f"- explanation: {covp.get('explanation')}")
+        lines.append(f"- status_counts: `{covp.get('status_counts')}`")
+        lines.append("")
+        lines.append("| Date | Status | Cycles | Report | Note |")
+        lines.append("|---|---|---:|---|---|")
+        for row in covp.get("per_day") or []:
+            lines.append(
+                f"| {row.get('date')} | {row.get('status')} | {row.get('n_cycles')} | "
+                f"{row.get('has_dated_report')} | {row.get('note')} |"
+            )
+        lines.append("")
+
+        lines.append("## GATE_SKIP detail")
+        lines.append("")
+        gs = p0.get("gate_skip") or {}
+        lines.append(f"- n={gs.get('n_gate_skip')} categories=`{gs.get('category_counts')}`")
+        lines.append(f"- note: {gs.get('note')}")
+        lines.append("")
+        lines.append("| Symbol | Date | reason_code | reason_detail | candidate_score | leader_score |")
+        lines.append("|---|---|---|---|---:|---:|")
+        for c in (gs.get("cases") or [])[:40]:
+            lines.append(
+                f"| {c.get('symbol')} | {c.get('research_date')} | {c.get('reason_code')} | "
+                f"{c.get('reason_detail')} | {c.get('candidate_score')} | {c.get('leader_score')} |"
+            )
+        lines.append("")
+
+        lines.append("## DEEP_BUDGET")
+        lines.append("")
+        db = p0.get("deep_budget") or {}
+        lines.append(f"- max_deep={db.get('max_deep_config')} n={db.get('n_deep_budget')} "
+                      f"high_quality_blocked={db.get('n_high_quality_blocked')}")
+        lines.append(f"- verdict: {db.get('verdict')}")
+        lines.append(f"- score_summary: `{db.get('score_summary')}`")
+        lines.append("")
+
+        lines.append("## Council breakdown (full AI vs GATE_SKIP)")
+        lines.append("")
+        cb = p0.get("council_breakdown") or {}
+        lines.append(f"- platform_reports: **{cb.get('n_platform_reports')}**")
+        lines.append(f"- full_ai_council: **{cb.get('full_ai_council')}**")
+        lines.append(f"- GATE_SKIP: **{cb.get('gate_skip')}** (DEEP_BUDGET={cb.get('deep_budget')}, LLM_BUDGET={cb.get('llm_budget')})")
+        lines.append(f"- WATCH={cb.get('watch')} AVOID={cb.get('avoid')} NEUTRAL={cb.get('neutral')} BUY={cb.get('buy')}")
+        lines.append(f"- chairman llm vs heuristic/cache among full AI: llm={cb.get('full_ai_chairman_llm')} heuristic_or_cache={cb.get('full_ai_chairman_heuristic_or_cache')}")
+        lines.append("")
+
+        lines.append("## Signal provenance (ML / Profit / Event / News / Valuation)")
+        lines.append("")
+        sp = p0.get("signal_provenance") or {}
+        lines.append(f"- why audit showed 0: {sp.get('why_audit_showed_zero')}")
+        lines.append(f"- dated_report_universe: `{sp.get('dated_report_universe_field_status')}`")
+        lines.append(f"- research_snapshots: `{sp.get('research_snapshot_status')}`")
+        lines.append("")
+
+        lines.append("## RiskFilter limit_up (display mapping only)")
+        lines.append("")
+        rl = p0.get("risk_limit_up") or {}
+        lines.append(f"- n_limit_up_blocks={rl.get('n_limit_up_blocks')} suggested=`{rl.get('suggested_reason_code')}`")
+        lines.append(f"- {rl.get('interpretation')}")
+        lines.append(f"- trading_logic_unchanged={rl.get('trading_logic_unchanged')}")
+        lines.append("")
+
+        lines.append("## Production Health Table")
+        lines.append("")
+        lines.append(
+            "| Date | scheduler | candidates | research | council | full_ai | gate_skip | buy | final_buy | data_quality | report |"
+        )
+        lines.append("|---|---|---:|---:|---:|---:|---:|---:|---:|---|---|")
+        for h in p0.get("production_health_table") or []:
+            lines.append(
+                f"| {h.get('date')} | {h.get('scheduler_started')} | {h.get('candidate_count')} | "
+                f"{h.get('research_count')} | {h.get('council_count')} | {h.get('full_ai_council_count')} | "
+                f"{h.get('gate_skip_count')} | {h.get('buy_count')} | {h.get('final_buy_count')} | "
+                f"{h.get('data_quality')} | {h.get('report_persisted')} |"
+            )
+        lines.append("")
+
+        lines.append("## NO_BUY_REASON_DETAIL (per day)")
+        lines.append("")
+        for nb in p0.get("NO_BUY_REASON_DETAIL") or []:
+            lines.append(
+                f"- **{nb.get('date')}** NO_BUY_REASON=`{nb.get('NO_BUY_REASON')}` "
+                f"blockers=`{nb.get('TOP_BLOCKERS')}` coverage=`{nb.get('DATA_COVERAGE')}`"
+            )
+        lines.append("")
 
     lines.append("## Config snapshot (execution path)")
     lines.append("")
